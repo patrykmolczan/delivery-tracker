@@ -27,23 +27,15 @@ export function buildLookupMaps(lookups: {
   }
 }
 
-// Fetch projects WITHOUT JOINs — much faster for large datasets.
-// Pass lookupMaps to resolve ID→name client-side.
-export async function fetchProjects(lookupMaps?: LookupMaps): Promise<Project[]> {
-  const { data, error } = await supabase
-    .from('projects')
-    .select(`
-      id, project_owner, analyst, client_name, requestor,
-      date_received, expected_delivery_date, date_delivered,
-      project_summary, job_count, days_to_complete, created_by, created_at,
-      project_type, status_id, client_type_id, country_id, industry_id
-    `)
-    .order('date_received', { ascending: false })
-    .limit(20000)
+const SELECT_COLS = `
+  id, project_owner, analyst, client_name, requestor,
+  date_received, expected_delivery_date, date_delivered,
+  project_summary, job_count, days_to_complete, created_by, created_at,
+  project_type, status_id, client_type_id, country_id, industry_id
+`
 
-  if (error) throw error
-
-  return (data || []).map((row: any) => ({
+function mapRow(row: any, lookupMaps?: LookupMaps): Project {
+  return {
     id: row.id,
     project_owner: row.project_owner,
     analyst: row.analyst,
@@ -66,7 +58,31 @@ export async function fetchProjects(lookupMaps?: LookupMaps): Promise<Project[]>
     project_type: row.project_type || null,
     created_by: row.created_by,
     created_at: row.created_at,
-  }))
+  }
+}
+
+// Fetch projects WITHOUT JOINs using pagination to overcome the 1000-row PostgREST limit.
+// Pass lookupMaps to resolve ID→name client-side.
+export async function fetchProjects(lookupMaps?: LookupMaps): Promise<Project[]> {
+  const PAGE_SIZE = 1000
+  const allRows: any[] = []
+  let from = 0
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('projects')
+      .select(SELECT_COLS)
+      .order('date_received', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1)
+
+    if (error) throw error
+    if (!data || data.length === 0) break
+    allRows.push(...data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+
+  return allRows.map((row: any) => mapRow(row, lookupMaps))
 }
 
 export async function fetchLookups(): Promise<{

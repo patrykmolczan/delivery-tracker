@@ -519,6 +519,10 @@ export const ProjectDetail: React.FC<{
             <Field icon={<Calendar size={14} />} label="Date Delivered" value={formatDate(localProject.date_delivered)} />
             <Field icon={<Clock size={14} />} label="Days to Complete" value={localProject.days_to_complete != null ? `${localProject.days_to_complete} days` : null} />
             <Field icon={<Hash size={14} />} label="Job Count" value={localProject.job_count} />
+            <Field icon={<Hash size={14} />} label="ID #" value={localProject.id_number ?? null} />
+            {localProject.time_allocation != null && (
+              <Field icon={<Clock size={14} />} label="Time Allocation" value={`${localProject.time_allocation} hrs`} />
+            )}
 
             {/* Additional Requests / Tasks */}
             {projectTasks.length > 0 && (

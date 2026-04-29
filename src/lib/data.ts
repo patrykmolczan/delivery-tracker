@@ -50,6 +50,8 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
     industry: lookupMaps?.industryMap.get(row.industry_id) || null,
     industry_id: row.industry_id,
     project_type: row.project_type || null,
+    id_number: row.id_number ?? null,
+    time_allocation: row.time_allocation ?? null,
     created_by: row.created_by,
     created_at: row.created_at,
   }
@@ -103,6 +105,7 @@ export async function createProject(form: ProjectFormData, userId: string): Prom
       : form.country_id,
     industry_id: form.industry_id,
     project_type: form.project_type || null,
+    time_allocation: form.time_allocation ? parseFloat(form.time_allocation as string) : null,
     created_by: userId,
   }
 
@@ -114,6 +117,7 @@ export async function createProject(form: ProjectFormData, userId: string): Prom
       date_received, expected_delivery_date, date_delivered,
       project_summary, job_count, days_to_complete, created_by, created_at,
       project_type, status_id, client_type_id, country_id, industry_id,
+      id_number, time_allocation,
       project_statuses!inner(name),
       client_types(name),
       countries(name),
@@ -156,6 +160,8 @@ export async function createProject(form: ProjectFormData, userId: string): Prom
     industry: (data as any).industries?.name || null,
     industry_id: data.industry_id,
     project_type: (data as any).project_type || null,
+    id_number: (data as any).id_number ?? null,
+    time_allocation: (data as any).time_allocation ?? null,
     created_by: data.created_by,
     created_at: data.created_at,
   }
@@ -179,6 +185,7 @@ export async function updateProject(id: string, form: ProjectFormData): Promise<
       : form.country_id,
     industry_id: form.industry_id,
     project_type: form.project_type || null,
+    time_allocation: form.time_allocation != null ? (form.time_allocation ? parseFloat(form.time_allocation as string) : null) : null,
     updated_at: new Date().toISOString(),
   }
 

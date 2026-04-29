@@ -143,6 +143,7 @@ export const ImportPage: React.FC<Props> = ({ onDone }) => {
         country_id: findId(lookups.countries, countryName),
         industry_id: findId(lookups.industries, industryName),
         project_type: null,
+        time_allocation: '',
         project_countries: [],
         project_tasks: [],
       }

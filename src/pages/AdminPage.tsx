@@ -252,6 +252,13 @@ export const AdminPage: React.FC = () => {
   const [logoSuccess, setLogoSuccess] = useState('')
   const logoFileRef = useRef<HTMLInputElement>(null)
 
+  // Login icon state
+  const [currentLoginIconUrl, setCurrentLoginIconUrl] = useState<string | null>(null)
+  const [loginIconUploading, setLoginIconUploading] = useState(false)
+  const [loginIconError, setLoginIconError] = useState('')
+  const [loginIconSuccess, setLoginIconSuccess] = useState('')
+  const loginIconFileRef = useRef<HTMLInputElement>(null)
+
   // Notification settings state
   const [notifSettings, setNotifSettings] = useState<any[]>([])
   const [notifLoading, setNotifLoading] = useState(false)
@@ -301,6 +308,42 @@ export const AdminPage: React.FC = () => {
     }
   }
 
+  const uploadLoginIcon = async (file: File) => {
+    if (file.size > 2 * 1024 * 1024) {
+      setLoginIconError('File must be under 2MB')
+      return
+    }
+    setLoginIconUploading(true)
+    setLoginIconError('')
+    setLoginIconSuccess('')
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('branding')
+        .upload('login_icon.png', file, { upsert: true, contentType: file.type })
+      if (uploadError) throw uploadError
+      const newUrl = `https://slgtojndmckisjdplhcs.supabase.co/storage/v1/object/public/branding/login_icon.png?v=${Date.now()}`
+      await updateAppSetting('login_icon_url', newUrl)
+      setCurrentLoginIconUrl(newUrl)
+      setLoginIconSuccess('Login icon updated!')
+    } catch (err: any) {
+      setLoginIconError(err.message ?? 'Upload failed')
+    } finally {
+      setLoginIconUploading(false)
+    }
+  }
+
+  const removeLoginIcon = async () => {
+    setLoginIconError('')
+    setLoginIconSuccess('')
+    try {
+      await updateAppSetting('login_icon_url', '')
+      setCurrentLoginIconUrl(null)
+      setLoginIconSuccess('Login icon removed.')
+    } catch (err: any) {
+      setLoginIconError(err.message ?? 'Failed to remove login icon')
+    }
+  }
+
   const fetchUsers = async () => {
     setLoading(true)
     const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
@@ -323,7 +366,10 @@ export const AdminPage: React.FC = () => {
 
   useEffect(() => {
     loadAll()
-    fetchAppSettings().then(s => setCurrentLogoUrl(s.logo_url || null)).catch(() => {})
+    fetchAppSettings().then(s => {
+      setCurrentLogoUrl(s.logo_url || null)
+      setCurrentLoginIconUrl(s.login_icon_url || null)
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -650,6 +696,81 @@ export const AdminPage: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Divider */}
+          <div className="divider my-2" />
+
+          {/* ── Login Page Icon ── */}
+          <h4 className="text-sm font-semibold text-base-content/70 flex items-center gap-2">
+            Login Page Icon
+            <span className="badge badge-ghost badge-sm">optional</span>
+          </h4>
+          <p className="text-xs text-base-content/40 mb-3">
+            Replaces the default icon on the login page. Leave empty to show no icon.
+          </p>
+
+          {loginIconError && (
+            <div className="alert alert-error py-2 mb-3">
+              <AlertCircle size={14} />
+              <span className="text-sm">{loginIconError}</span>
+              <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setLoginIconError('')}><X size={11} /></button>
+            </div>
+          )}
+          {loginIconSuccess && (
+            <div className="alert alert-success py-2 mb-3">
+              <CheckCircle2 size={14} />
+              <span className="text-sm">{loginIconSuccess}</span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-xs text-base-content/50 font-medium">Current Icon</span>
+              {currentLoginIconUrl ? (
+                <div className="p-3 bg-base-100 border border-base-300 rounded-xl">
+                  <img
+                    src={currentLoginIconUrl}
+                    alt="Login Icon"
+                    className="max-h-16 max-w-[160px] object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="p-4 bg-base-100 border border-dashed border-base-300 rounded-xl text-base-content/30 text-xs">
+                  No icon set
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <label className="btn btn-primary btn-sm gap-1.5 cursor-pointer">
+                <Upload size={14} />
+                {loginIconUploading ? 'Uploading…' : 'Upload Icon'}
+                <input
+                  ref={loginIconFileRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/png,image/jpeg"
+                  disabled={loginIconUploading}
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (file) uploadLoginIcon(file)
+                    if (loginIconFileRef.current) loginIconFileRef.current.value = ''
+                  }}
+                />
+              </label>
+              <p className="text-xs text-base-content/40">PNG or JPEG · max 2MB · auto-sized</p>
+              {currentLoginIconUrl && (
+                <button
+                  className="btn btn-ghost btn-sm gap-1.5 text-error/70 hover:text-error hover:bg-error/10"
+                  onClick={removeLoginIcon}
+                  disabled={loginIconUploading}
+                >
+                  <Trash2 size={13} /> Remove Icon
+                </button>
+              )}
+            </div>
+          </div>
+
         </div>
       </div>
 

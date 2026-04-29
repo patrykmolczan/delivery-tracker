@@ -6,7 +6,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import {
   fetchLookups, createProject, updateProject, fetchProjects,
-  buildPredictionStats, predictDeliveryTime,
+  buildLookupMaps, buildPredictionStats, predictDeliveryTime,
   uploadProjectFile, MAX_FILE_SIZE_BYTES, MAX_FILES_PER_PROJECT,
   fetchProjectCountries, fetchProjectTasks, formatFileSize,
   fetchAnalysts, fetchProjectTypes,
@@ -178,12 +178,13 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     }
   }, [isAdmin, profile?.full_name, user?.email, editProject])
 
-  // Load prediction stats in background
+  // Load prediction stats in background — wait for lookups so client_type/industry/status are resolved
   useEffect(() => {
-    fetchProjects()
+    if (!lookups) return
+    fetchProjects(buildLookupMaps(lookups))
       .then(projects => setPredStats(buildPredictionStats(projects)))
       .catch(() => {})
-  }, [])
+  }, [lookups])
 
   // Populate form when editing
   useEffect(() => {
@@ -735,33 +736,47 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
 
                 {/* Selected countries list */}
                 {form.project_countries.length > 0 && (
-                  <div className="mt-2 flex flex-col gap-2">
-                    {form.project_countries.map((c, idx) => (
-                      <div key={c.country_id} className="flex items-center gap-3 px-3 py-2 bg-base-100 border border-base-300 rounded-lg">
-                        <span className="flex-1 font-medium text-sm">{c.country_name}</span>
-                        <input
-                          type="number"
-                          className="input input-bordered input-sm w-28 text-sm"
-                          placeholder="# jobs"
-                          value={c.job_count}
-                          onChange={e => updateCountryJobs(idx, e.target.value)}
-                          min="0"
-                        />
-                        <span className="text-xs text-base-content/40">jobs</span>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-xs text-error hover:bg-error/10"
-                          onClick={() => removeCountry(idx)}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    ))}
-                    {totalJobsFromCountries > 0 && (
-                      <div className="text-xs text-base-content/50 text-right">
-                        Total jobs across all countries: <strong>{totalJobsFromCountries.toLocaleString()}</strong>
-                      </div>
-                    )}
+                  <div className="mt-2 flex flex-col gap-1">
+                    {/* Header row */}
+                    <div className="flex items-center justify-between px-3 py-1">
+                      <span className="text-xs font-semibold text-base-content/60 uppercase tracking-wide">
+                        {form.project_countries.length} {form.project_countries.length === 1 ? 'country' : 'countries'}
+                      </span>
+                      {totalJobsFromCountries > 0 && (
+                        <span className="text-xs text-base-content/50">
+                          Total: <strong>{totalJobsFromCountries.toLocaleString()}</strong> jobs
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Scrollable list — capped at ~8 rows (~320px), scrolls for 9+ */}
+                    <div
+                      className="flex flex-col gap-1.5 overflow-y-auto pr-1"
+                      style={{ maxHeight: form.project_countries.length > 8 ? '320px' : undefined }}
+                    >
+                      {form.project_countries.map((c, idx) => (
+                        <div key={c.country_id} className="flex items-center gap-3 px-3 py-2 bg-base-100 border border-base-300 rounded-lg">
+                          <span className="text-xs text-base-content/40 w-5 text-right shrink-0">{idx + 1}</span>
+                          <span className="flex-1 font-medium text-sm truncate">{c.country_name}</span>
+                          <input
+                            type="number"
+                            className="input input-bordered input-sm w-24 text-sm"
+                            placeholder="# jobs"
+                            value={c.job_count}
+                            onChange={e => updateCountryJobs(idx, e.target.value)}
+                            min="0"
+                          />
+                          <span className="text-xs text-base-content/40 shrink-0">jobs</span>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs text-error hover:bg-error/10 shrink-0"
+                            onClick={() => removeCountry(idx)}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 

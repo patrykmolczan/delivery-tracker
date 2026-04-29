@@ -59,13 +59,13 @@ const ISO2: Record<string, string> = {
   ZA:'South Africa', ES:'Spain', LK:'Sri Lanka', SD:'Sudan',
   SE:'Sweden', CH:'Switzerland', TW:'Taiwan', TZ:'Tanzania',
   TH:'Thailand', TT:'Trinidad and Tobago', TN:'Tunisia', TR:'Turkey',
-  AE:'UAE', GB:'UK', US:'United States', UY:'Uruguay',
+  AE:'UAE', GB:'United Kingdom', UK:'United Kingdom', US:'United States', UY:'Uruguay',
   UZ:'Uzbekistan', VE:'Venezuela', VN:'Vietnam', ZW:'Zimbabwe',
 }
 
 // ─── ISO 3-letter → canonical name ──────────────────────────────────────────
 const ISO3: Record<string, string> = {
-  USA:'United States', GBR:'UK', DEU:'Germany', FRA:'France',
+  USA:'United States', GBR:'United Kingdom', DEU:'Germany', FRA:'France',
   ITA:'Italy', ESP:'Spain', NLD:'Netherlands', AUS:'Australia',
   CAN:'Canada', BRA:'Brazil', IND:'India', CHN:'China',
   JPN:'Japan', KOR:'South Korea', MEX:'Mexico', ARG:'Argentina',
@@ -103,11 +103,11 @@ const ALIASES: Record<string, string> = {
   'u.s.a.': 'United States',
   'u.s.': 'United States',
   'america': 'United States',
-  'great britain': 'UK',
-  'england': 'UK',
-  'united kingdom': 'UK',
-  'u.k.': 'UK',
-  'britain': 'UK',
+  'great britain': 'United Kingdom',
+  'england': 'United Kingdom',
+  'united kingdom': 'United Kingdom',
+  'u.k.': 'United Kingdom',
+  'britain': 'United Kingdom',
   'united arab emirates': 'UAE',
   'u.a.e.': 'UAE',
   'south korea': 'South Korea',
@@ -257,23 +257,26 @@ function resolveCountry(
   const upper = trimmed.toUpperCase()
   const lower = trimmed.toLowerCase()
 
-  // 1. Exact DB match (case-insensitive)
-  const exact = dbCountries.find(c => c.name.toLowerCase() === lower)
-  if (exact) return { id: exact.id, name: exact.name, confidence: 'exact' }
+  // For short codes (2–3 chars), ISO lookups take priority over exact DB match
+  // so "US" → "United States" (id:72) not "US" (id:68), avoiding false duplicates
 
-  // 2. ISO 2-letter code
+  // 1a. ISO 2-letter code (checked FIRST for 2-char inputs)
   if (upper.length === 2 && ISO2[upper]) {
     const canonical = ISO2[upper]
     const match = dbCountries.find(c => c.name.toLowerCase() === canonical.toLowerCase())
     if (match) return { id: match.id, name: match.name, confidence: 'iso2' }
   }
 
-  // 3. ISO 3-letter code
+  // 1b. ISO 3-letter code (checked FIRST for 3-char inputs)
   if (upper.length === 3 && ISO3[upper]) {
     const canonical = ISO3[upper]
     const match = dbCountries.find(c => c.name.toLowerCase() === canonical.toLowerCase())
     if (match) return { id: match.id, name: match.name, confidence: 'iso3' }
   }
+
+  // 2. Exact DB match (case-insensitive) — used for longer inputs and codes not in ISO maps
+  const exact = dbCountries.find(c => c.name.toLowerCase() === lower)
+  if (exact) return { id: exact.id, name: exact.name, confidence: 'exact' }
 
   // 4. Alias map
   if (ALIASES[lower]) {
@@ -435,22 +438,41 @@ function buildResult(
   totalJobs: number,
   dbCountries: DBCountry[]
 ): TemplateParseResult {
-  const countries: ParsedCountry[] = []
-  const unmatched: string[] = []
+  // Resolve all raw names, then deduplicate by resolved key (id or lower-cased name)
+  // so that "US" + "United States" both resolve to "United States" and get merged
+  const mergeMap = new Map<string, ParsedCountry>()
 
   for (const [rawName, jobCount] of Object.entries(countryCounts)) {
     const resolved = resolveCountry(rawName, dbCountries)
-    const entry: ParsedCountry = {
-      rawName,
-      resolvedId: resolved.id,
-      resolvedName: resolved.name,
-      jobCount,
-      confidence: resolved.confidence,
+    // Use id as dedup key when available, otherwise normalised resolved name
+    const dedupeKey = resolved.id != null
+      ? `id:${resolved.id}`
+      : `name:${resolved.name.toLowerCase()}`
+
+    const existing = mergeMap.get(dedupeKey)
+    if (existing) {
+      // Merge: sum job counts; prefer the higher-confidence resolution
+      const confidenceRank = { exact: 5, iso2: 4, iso3: 4, alias: 3, fuzzy: 2, unmatched: 1 }
+      existing.jobCount += jobCount
+      if (confidenceRank[resolved.confidence] > confidenceRank[existing.confidence]) {
+        existing.rawName = rawName
+        existing.confidence = resolved.confidence
+      }
+    } else {
+      mergeMap.set(dedupeKey, {
+        rawName,
+        resolvedId: resolved.id,
+        resolvedName: resolved.name,
+        jobCount,
+        confidence: resolved.confidence,
+      })
     }
-    countries.push(entry)
-    if (resolved.confidence === 'unmatched') {
-      unmatched.push(rawName)
-    }
+  }
+
+  const countries = Array.from(mergeMap.values())
+  const unmatched: string[] = []
+  for (const c of countries) {
+    if (c.confidence === 'unmatched') unmatched.push(c.rawName)
   }
 
   // Sort: matched first, then unmatched; within each group sort by jobCount desc
@@ -498,7 +520,7 @@ export async function parseTemplateFile(
         reject(err)
       }
     }
-    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.onerror = () => reject(new Error(`Failed to read file: ${reader.error?.message ?? reader.error?.code ?? 'unknown FileReader error'}`))
     reader.readAsArrayBuffer(file)
   })
 }

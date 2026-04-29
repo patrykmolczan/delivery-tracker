@@ -45,6 +45,7 @@ export interface Project {
   project_tasks?: ProjectTask[]
   created_by?: string | null
   created_at?: string | null
+  notifications_enabled?: boolean
 }
 
 // Input type for multi-country form entries

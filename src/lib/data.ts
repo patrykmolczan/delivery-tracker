@@ -1204,3 +1204,24 @@ export async function fetchDeliveryFileDownloads(fileId: string): Promise<Delive
   if (error) return []
   return (data || []) as DeliveryFileDownload[]
 }
+
+// ── Notification Settings ────────────────────────────────────────────────────
+export async function fetchNotificationSettings() {
+  const { data } = await supabase.from('notification_settings').select('*').order('label')
+  return data || []
+}
+
+export async function updateNotificationSetting(id: string, enabled: boolean) {
+  const { error } = await supabase.from('notification_settings').update({ setting_value: enabled }).eq('id', id)
+  if (error) throw new Error(`Failed to update: ${error.message}`)
+}
+
+export async function updateProjectNotificationsEnabled(projectId: string, enabled: boolean) {
+  const { error } = await supabase.from('projects').update({ notifications_enabled: enabled }).eq('id', projectId)
+  if (error) throw new Error(`Failed to update: ${error.message}`)
+}
+
+export async function fetchProjectOwnerEmail(userId: string): Promise<string | null> {
+  const { data } = await supabase.from('profiles').select('email').eq('id', userId).single()
+  return (data as any)?.email || null
+}

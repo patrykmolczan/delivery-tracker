@@ -3,7 +3,7 @@ import {
   X, Calendar, User, Building2, MapPin, Factory, Hash, Clock,
   FileText, Edit2, History, CheckCircle2, Loader2,
   Paperclip, Upload, Download, Trash2, AlertCircle, File,
-  Globe, ListTodo, Tag, PackageOpen, Eye,
+  Globe, ListTodo, Tag, PackageOpen, Eye, Bell, BellOff,
 } from 'lucide-react'
 import type { Project, ProjectCountry, ProjectTask } from '../types'
 import {
@@ -21,6 +21,12 @@ import {
 import type { AuditEntry, ProjectFile, DeliveryFile, DeliveryFileDownload } from '../lib/data'
 import type { LookupItem } from '../types'
 import { useAuth } from '../contexts/AuthContext'
+import {
+  fetchNotificationSettings,
+  updateProjectNotificationsEnabled,
+  fetchProjectOwnerEmail,
+} from '../lib/data'
+import { sendNotification } from '../lib/notifications'
 
 interface FieldProps {
   icon: React.ReactNode
@@ -87,6 +93,11 @@ export const ProjectDetail: React.FC<{
   const [historyLoading, setHistoryLoading] = useState(false)
   const [localProject, setLocalProject] = useState<Project>(project)
 
+  // ── Notification state ────────────────────────────────────────────────────
+  const [notifSettings, setNotifSettings] = useState<Record<string, boolean>>({})
+  const [notifToggling, setNotifToggling] = useState(false)
+  const [notifSent, setNotifSent] = useState(false)
+
   // ── Countries & Tasks state ──────────────────────────────────────────────────
   const [projectCountries, setProjectCountries] = useState<ProjectCountry[]>([])
   const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([])
@@ -127,6 +138,14 @@ export const ProjectDetail: React.FC<{
 
   useEffect(() => {
     fetchLookups().then(l => setStatuses(l.statuses)).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetchNotificationSettings().then((settings: any[]) => {
+      const map: Record<string, boolean> = {}
+      settings.forEach((s: any) => { map[s.setting_key] = s.setting_value })
+      setNotifSettings(map)
+    }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -171,6 +190,19 @@ export const ProjectDetail: React.FC<{
     setStatusError(null)
   }
 
+  const handleNotificationToggle = async () => {
+    const newVal = !(localProject.notifications_enabled ?? true)
+    setNotifToggling(true)
+    try {
+      await updateProjectNotificationsEnabled(localProject.id, newVal)
+      setLocalProject(prev => ({ ...prev, notifications_enabled: newVal }))
+    } catch (err) {
+      console.error('Failed to toggle notifications:', err)
+    } finally {
+      setNotifToggling(false)
+    }
+  }
+
   const handleSaveStatus = async () => {
     if (!selectedStatusId || selectedStatusId === localProject.status_id) return
     setSavingStatus(true)
@@ -195,6 +227,27 @@ export const ProjectDetail: React.FC<{
       setTimeout(() => setStatusSuccess(false), 3000)
       // Reload history to show the change
       if (tab === 'history') loadHistory()
+      // ── Fire notification ────────────────────────────────────────────────
+      const notifEnabled = updated.notifications_enabled ?? true
+      const ownerId = localProject.created_by
+      if (notifEnabled && ownerId) {
+        const isCompleted = selectedStatusName === 'Completed' || selectedStatusName === 'Ready to Deliver'
+        const globalKey = isCompleted ? 'notify_on_completed' : 'notify_on_status_change'
+        if (notifSettings[globalKey] !== false) {
+          fetchProjectOwnerEmail(ownerId).then(email => {
+            if (!email) return
+            sendNotification({
+              type: isCompleted ? 'completed' : 'status_changed',
+              to: email,
+              project: updated,
+              newStatus: selectedStatusName,
+            }).then(() => {
+              setNotifSent(true)
+              setTimeout(() => setNotifSent(false), 4000)
+            })
+          }).catch(() => {})
+        }
+      }
     } catch (err: any) {
       setStatusError(err.message || 'Failed to update status')
     } finally {
@@ -260,6 +313,20 @@ export const ProjectDetail: React.FC<{
     try {
       const newFile = await uploadDeliveryFile(localProject.id, file, user.id)
       setDeliveryFiles(prev => [newFile, ...prev])
+      // ── Fire delivery file notification ─────────────────────────────────
+      const notifEnabled = localProject.notifications_enabled ?? true
+      const ownerId = localProject.created_by
+      if (notifEnabled && ownerId && notifSettings['notify_on_delivery_file_upload'] !== false) {
+        fetchProjectOwnerEmail(ownerId).then(email => {
+          if (!email) return
+          sendNotification({
+            type: 'delivery_file',
+            to: email,
+            project: localProject,
+            files: [{ file_name: newFile.file_name, file_size: newFile.file_size, description: newFile.description || undefined }],
+          })
+        }).catch(() => {})
+      }
     } catch (err: any) {
       setDeliveryUploadError(err.message || 'Upload failed')
     } finally {
@@ -468,6 +535,39 @@ export const ProjectDetail: React.FC<{
               {statusError && (
                 <div className="mt-2 text-xs text-error">{statusError}</div>
               )}
+              {/* Per-project notification toggle — admin only */}
+              <div className="mt-3 pt-3 border-t border-base-300">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {(localProject.notifications_enabled ?? true)
+                      ? <Bell size={13} className="text-success" />
+                      : <BellOff size={13} className="text-base-content/30" />
+                    }
+                    <div>
+                      <div className="text-xs font-medium text-base-content">Email Notifications</div>
+                      <div className="text-xs text-base-content/40">
+                        {(localProject.notifications_enabled ?? true)
+                          ? 'Requestor gets notified on updates'
+                          : 'Notifications disabled for this project'
+                        }
+                      </div>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    className="toggle toggle-sm toggle-success"
+                    checked={localProject.notifications_enabled ?? true}
+                    onChange={handleNotificationToggle}
+                    disabled={notifToggling}
+                  />
+                </div>
+                {notifSent && (
+                  <div className="mt-2 text-xs text-info flex items-center gap-1.5">
+                    <Bell size={11} />
+                    Notification sent to requestor
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

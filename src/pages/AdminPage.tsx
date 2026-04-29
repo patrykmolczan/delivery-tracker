@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   UserPlus, Shield, User, CheckCircle2, Edit2, Save, X, AlertCircle,
   Loader2, RefreshCw, Key, Users, Plus, Trash2, Tag, Layers, Upload, Download,
-  Search, ChevronLeft, ChevronRight, UserX, UserCheck,
+  Search, ChevronLeft, ChevronRight, UserX, UserCheck, Bell, Mail,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import {
   fetchAnalysts, createAnalyst, updateAnalyst, deactivateAnalyst,
   fetchClientTypesAdmin, createClientType, updateClientType, deactivateClientType,
   fetchProjectTypes, createProjectType, updateProjectType, deactivateProjectType,
+  fetchNotificationSettings, updateNotificationSetting,
 } from '../lib/data'
 import type { Analyst, ClientType, ProjectType } from '../lib/data'
 import type { UserProfile } from '../types'
@@ -243,6 +244,11 @@ export const AdminPage: React.FC = () => {
   const [ptLoading, setPtLoading] = useState(false)
   const [ptError, setPtError] = useState<string | null>(null)
 
+  // Notification settings state
+  const [notifSettings, setNotifSettings] = useState<any[]>([])
+  const [notifLoading, setNotifLoading] = useState(false)
+  const [notifSaving, setNotifSaving] = useState<string | null>(null)
+
   // User management state
   const [userSearch, setUserSearch] = useState('')
   const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
@@ -272,6 +278,26 @@ export const AdminPage: React.FC = () => {
   }
 
   useEffect(() => { loadAll() }, [])
+
+  useEffect(() => {
+    setNotifLoading(true)
+    fetchNotificationSettings()
+      .then(data => setNotifSettings(data))
+      .catch(() => {})
+      .finally(() => setNotifLoading(false))
+  }, [])
+
+  const handleNotifToggle = async (id: string, current: boolean) => {
+    setNotifSaving(id)
+    try {
+      await updateNotificationSetting(id, !current)
+      setNotifSettings(prev => prev.map(s => s.id === id ? { ...s, setting_value: !current } : s))
+    } catch {
+      alert('Failed to update setting')
+    } finally {
+      setNotifSaving(null)
+    }
+  }
 
   useEffect(() => {
     setUserPage(1)
@@ -778,6 +804,90 @@ export const AdminPage: React.FC = () => {
               )}
             </>
           )}
+        </div>
+      </div>
+
+      {/* ── Notification Settings ─────────────────────────────────────────── */}
+      <div className="card bg-base-100 shadow-sm border border-base-300">
+        <div className="card-body">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
+              <Bell size={16} className="text-violet-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-base-content">Notification Settings</h3>
+              <p className="text-xs text-base-content/50">Control which events trigger email notifications to requestors</p>
+            </div>
+          </div>
+
+          {notifLoading ? (
+            <div className="flex items-center gap-2 text-sm text-base-content/40 py-4">
+              <Loader2 size={16} className="animate-spin" /> Loading…
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {notifSettings.map(setting => {
+                const icons: Record<string, React.ReactNode> = {
+                  notify_on_status_change: <span className="text-base">🔄</span>,
+                  notify_on_completed: <span className="text-base">✅</span>,
+                  notify_on_delivery_file_upload: <span className="text-base">📁</span>,
+                  notify_daily_summary: <span className="text-base">📊</span>,
+                  notify_project_owner: <span className="text-base">👤</span>,
+                }
+                const descriptions: Record<string, string> = {
+                  notify_on_status_change: 'Requestor receives an email when project status is changed',
+                  notify_on_completed: 'Requestor receives a completion email when project is marked Completed',
+                  notify_on_delivery_file_upload: 'Requestor receives an email when a delivery file is uploaded to their project',
+                  notify_daily_summary: 'Admin receives a daily digest of all project activity (coming soon)',
+                  notify_project_owner: 'Also send notifications to the project owner in addition to requestor',
+                }
+                return (
+                  <div
+                    key={setting.id}
+                    className={`flex items-center justify-between p-3.5 rounded-xl border transition-colors ${
+                      setting.setting_value
+                        ? 'bg-success/5 border-success/20'
+                        : 'bg-base-200 border-base-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${
+                        setting.setting_value ? 'bg-success/15' : 'bg-base-300'
+                      }`}>
+                        {icons[setting.setting_key] || <Bell size={14} />}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-base-content">{setting.label || setting.setting_key}</div>
+                        <div className="text-xs text-base-content/50 mt-0.5">{descriptions[setting.setting_key] || setting.description || ''}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-medium ${setting.setting_value ? 'text-success' : 'text-base-content/30'}`}>
+                        {setting.setting_value ? 'ON' : 'OFF'}
+                      </span>
+                      {notifSaving === setting.id ? (
+                        <Loader2 size={16} className="animate-spin text-base-content/40" />
+                      ) : (
+                        <input
+                          type="checkbox"
+                          className="toggle toggle-sm toggle-success"
+                          checked={setting.setting_value}
+                          onChange={() => handleNotifToggle(setting.id, setting.setting_value)}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          <div className="mt-4 p-3 bg-base-200 rounded-xl flex items-start gap-2">
+            <Mail size={13} className="text-base-content/40 mt-0.5 shrink-0" />
+            <p className="text-xs text-base-content/50 leading-relaxed">
+              Emails are sent via <strong>Resend</strong>. To switch to Office 365, set <code className="bg-base-300 px-1 rounded text-xs">EMAIL_PROVIDER=graph</code> in Vercel environment variables and configure Azure App Registration credentials.
+            </p>
+          </div>
         </div>
       </div>
 

@@ -457,11 +457,33 @@ export async function uploadProjectFile(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const storagePath = `${projectId}/${Date.now()}_${safeName}`
 
-  const { error: uploadError } = await supabase.storage
-    .from('project-files')
-    .upload(storagePath, file, { cacheControl: '3600', upsert: false })
+  // Direct fetch upload (more reliable than SDK in production builds)
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Not authenticated — please log in again')
 
-  if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+  const contentType = file.type || 'application/octet-stream'
+
+  const uploadRes = await fetch(
+    `${supabaseUrl}/storage/v1/object/project-files/${storagePath}`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': supabaseAnonKey,
+        'Content-Type': contentType,
+        'x-upsert': 'false',
+        'cache-control': '3600',
+      },
+      body: file,
+    }
+  )
+
+  if (!uploadRes.ok) {
+    const errText = await uploadRes.text().catch(() => uploadRes.statusText)
+    throw new Error(`Upload failed: ${errText}`)
+  }
 
   const { data, error: dbError } = await supabase
     .from('project_files')

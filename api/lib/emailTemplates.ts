@@ -1,5 +1,19 @@
 const APP_URL = process.env.VITE_APP_URL || 'https://delivery-tracker-ashen.vercel.app'
 
+async function getLogoUrl(): Promise<string> {
+  try {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://slgtojndmckisjdplhcs.supabase.co'
+    const anonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNsZ3Rvam5kbWNraXNqZHBsaGNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0MTQ2NTIsImV4cCI6MjA5Mjk5MDY1Mn0.LeYQgQvz3WToE5zcbiETQYw5vJENu_DLFVxqd5jW-Vc'
+    const res = await fetch(`${supabaseUrl}/rest/v1/app_settings?key=eq.logo_url&select=value`, {
+      headers: { 'apikey': anonKey, 'Authorization': `Bearer ${anonKey}` }
+    })
+    const data = await res.json()
+    return data?.[0]?.value ?? ''
+  } catch {
+    return ''
+  }
+}
+
 interface EmailPayload {
   to: string | string[]
   subject: string
@@ -39,7 +53,8 @@ function ctaButton(url: string, label: string, bgColor: string): string {
 }
 
 // ─── Template 1: Project Completed ───────────────────────────────────────────
-export function buildCompletionEmail(to: string, project: any): EmailPayload {
+export async function buildCompletionEmail(to: string, project: any): Promise<EmailPayload> {
+  const logoUrl = await getLogoUrl()
   const rows = [
     infoRow('Country', project.country),
     infoRow('Project Type', project.project_type),
@@ -61,6 +76,9 @@ export function buildCompletionEmail(to: string, project: any): EmailPayload {
     <tr>
       <td align="center" style="padding:48px 16px;">
         <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:580px;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);">
+
+          <!-- Logo header -->
+          ${logoUrl ? `<tr><td style="text-align:center;padding:24px 0 16px;background:#ffffff;"><img src="${logoUrl}" alt="Company Logo" style="max-height:60px;width:auto;object-fit:contain;" /></td></tr>` : ''}
 
           <!-- Green header -->
           <tr>
@@ -121,7 +139,8 @@ export function buildCompletionEmail(to: string, project: any): EmailPayload {
 }
 
 // ─── Template 2: Delivery File Ready ─────────────────────────────────────────
-export function buildDeliveryFileEmail(to: string, project: any, files: any[]): EmailPayload {
+export async function buildDeliveryFileEmail(to: string, project: any, files: any[]): Promise<EmailPayload> {
+  const logoUrl = await getLogoUrl()
   const fileRows = files.map(f => `
     <tr>
       <td style="padding:10px 16px;border-bottom:1px solid #e2e8f0;background:#fff;">
@@ -158,6 +177,9 @@ export function buildDeliveryFileEmail(to: string, project: any, files: any[]): 
     <tr>
       <td align="center" style="padding:48px 16px;">
         <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:580px;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);">
+
+          <!-- Logo header -->
+          ${logoUrl ? `<tr><td style="text-align:center;padding:24px 0 16px;background:#ffffff;"><img src="${logoUrl}" alt="Company Logo" style="max-height:60px;width:auto;object-fit:contain;" /></td></tr>` : ''}
 
           <!-- Indigo header -->
           <tr>
@@ -224,7 +246,8 @@ export function buildDeliveryFileEmail(to: string, project: any, files: any[]): 
 }
 
 // ─── Template 3: Status Changed ──────────────────────────────────────────────
-export function buildStatusChangeEmail(to: string, project: any, newStatus: string): EmailPayload {
+export async function buildStatusChangeEmail(to: string, project: any, newStatus: string): Promise<EmailPayload> {
+  const logoUrl = await getLogoUrl()
   const statusColors: Record<string, { bg: string; text: string; border: string }> = {
     'In Process': { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
     'On Hold':    { bg: '#fffbeb', text: '#b45309', border: '#fcd34d' },
@@ -254,6 +277,9 @@ export function buildStatusChangeEmail(to: string, project: any, newStatus: stri
     <tr>
       <td align="center" style="padding:48px 16px;">
         <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:580px;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.10);">
+
+          <!-- Logo header -->
+          ${logoUrl ? `<tr><td style="text-align:center;padding:24px 0 16px;background:#ffffff;"><img src="${logoUrl}" alt="Company Logo" style="max-height:60px;width:auto;object-fit:contain;" /></td></tr>` : ''}
 
           <!-- Slate header -->
           <tr>

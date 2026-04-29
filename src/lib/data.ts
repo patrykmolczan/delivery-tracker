@@ -1245,3 +1245,24 @@ export async function fetchProjectOwnerEmail(userId: string): Promise<string | n
   const { data } = await supabase.from('profiles').select('email').eq('id', userId).single()
   return (data as any)?.email || null
 }
+
+// ── App Settings ──────────────────────────────────────────────
+export async function fetchAppSettings(): Promise<Record<string, string>> {
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('key, value');
+  if (error) throw error;
+  const result: Record<string, string> = {};
+  for (const row of data ?? []) {
+    if (row.value != null) result[row.key] = row.value;
+  }
+  return result;
+}
+
+export async function updateAppSetting(key: string, value: string): Promise<void> {
+  const { error } = await supabase
+    .from('app_settings')
+    .update({ value, updated_at: new Date().toISOString() })
+    .eq('key', key);
+  if (error) throw error;
+}

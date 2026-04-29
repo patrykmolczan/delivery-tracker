@@ -14,6 +14,7 @@ import {
   fetchProjects, fetchStatusCounts, fetchOwnerCounts, buildLookupMaps, fetchLookups,
   fetchFilterOptions, computeKPIs, filterProjects, sortProjects
 } from './lib/data'
+import { useLogo } from './hooks/useLogo'
 import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode } from './types'
 import {
   LayoutDashboard, Table2, RefreshCw, LogOut, Truck, Loader2,
@@ -31,6 +32,7 @@ const NAV_ITEMS: Array<{ id: ViewMode; label: string; icon: React.ReactNode; adm
 
 const Dashboard: React.FC = () => {
   const { user, profile, isAdmin, signOut } = useAuth()
+  const { logoUrl } = useLogo()
   const [projects, setProjects] = useState<Project[]>([])
   const [statusCounts, setStatusCounts] = useState<StatusCount[]>([])
   const [ownerCounts, setOwnerCounts] = useState<OwnerCount[]>([])
@@ -125,9 +127,18 @@ const Dashboard: React.FC = () => {
         {/* Logo */}
         <div className="p-4 border-b border-base-300 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 bg-primary/10 rounded-lg">
-              <Truck size={18} className="text-primary" />
-            </div>
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt="Logo"
+                className="h-8 w-auto object-contain mr-1"
+                style={{ maxHeight: '32px' }}
+              />
+            ) : (
+              <div className="p-1.5 bg-primary/10 rounded-lg">
+                <Truck size={18} className="text-primary" />
+              </div>
+            )}
             <div>
               <p className="font-bold text-sm text-base-content">Delivery Tracker</p>
               <p className="text-xs text-base-content/40">Procurement & HR</p>

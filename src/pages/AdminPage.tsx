@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   UserPlus, Shield, User, CheckCircle2, Edit2, Save, X, AlertCircle,
   Loader2, RefreshCw, Key, Users, Plus, Trash2, Tag, Layers, Upload, Download,
-  Search, ChevronLeft, ChevronRight, UserX, UserCheck, Bell, Mail,
+  Search, ChevronLeft, ChevronRight, UserX, UserCheck, Bell, Mail, Image,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import {
@@ -10,6 +10,7 @@ import {
   fetchClientTypesAdmin, createClientType, updateClientType, deactivateClientType,
   fetchProjectTypes, createProjectType, updateProjectType, deactivateProjectType,
   fetchNotificationSettings, updateNotificationSetting,
+  fetchAppSettings, updateAppSetting,
 } from '../lib/data'
 import type { Analyst, ClientType, ProjectType } from '../lib/data'
 import type { UserProfile } from '../types'
@@ -244,6 +245,13 @@ export const AdminPage: React.FC = () => {
   const [ptLoading, setPtLoading] = useState(false)
   const [ptError, setPtError] = useState<string | null>(null)
 
+  // Branding state
+  const [currentLogoUrl, setCurrentLogoUrl] = useState<string | null>(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoError, setLogoError] = useState('')
+  const [logoSuccess, setLogoSuccess] = useState('')
+  const logoFileRef = useRef<HTMLInputElement>(null)
+
   // Notification settings state
   const [notifSettings, setNotifSettings] = useState<any[]>([])
   const [notifLoading, setNotifLoading] = useState(false)
@@ -256,6 +264,42 @@ export const AdminPage: React.FC = () => {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
   const [bulkDeactivating, setBulkDeactivating] = useState(false)
   const USERS_PER_PAGE = 25
+
+  const uploadLogo = async (file: File) => {
+    if (file.size > 2 * 1024 * 1024) {
+      setLogoError('File must be under 2MB')
+      return
+    }
+    setLogoUploading(true)
+    setLogoError('')
+    setLogoSuccess('')
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('branding')
+        .upload('logo.png', file, { upsert: true, contentType: file.type })
+      if (uploadError) throw uploadError
+      const newUrl = `https://slgtojndmckisjdplhcs.supabase.co/storage/v1/object/public/branding/logo.png?v=${Date.now()}`
+      await updateAppSetting('logo_url', newUrl)
+      setCurrentLogoUrl(newUrl)
+      setLogoSuccess('Logo updated successfully!')
+    } catch (err: any) {
+      setLogoError(err.message ?? 'Upload failed')
+    } finally {
+      setLogoUploading(false)
+    }
+  }
+
+  const removeLogo = async () => {
+    setLogoError('')
+    setLogoSuccess('')
+    try {
+      await updateAppSetting('logo_url', '')
+      setCurrentLogoUrl(null)
+      setLogoSuccess('Logo removed.')
+    } catch (err: any) {
+      setLogoError(err.message ?? 'Failed to remove logo')
+    }
+  }
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -277,7 +321,10 @@ export const AdminPage: React.FC = () => {
     fetchProjectTypes().then(list => { setProjectTypes(list); setPtLoading(false) }).catch(e => { setPtError(e.message); setPtLoading(false) })
   }
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => {
+    loadAll()
+    fetchAppSettings().then(s => setCurrentLogoUrl(s.logo_url || null)).catch(() => {})
+  }, [])
 
   useEffect(() => {
     setNotifLoading(true)
@@ -530,6 +577,81 @@ export const AdminPage: React.FC = () => {
       {success && (
         <div className="alert alert-success"><CheckCircle2 size={18} /><span>{success}</span></div>
       )}
+
+      {/* ── Branding Section ──────────────────────────────────────────────────── */}
+      <div className="card bg-base-200 border border-base-300">
+        <div className="card-body">
+          <h3 className="card-title text-base flex items-center gap-2">
+            <Image size={18} className="text-primary" /> Branding
+          </h3>
+          <p className="text-xs text-base-content/50 mb-3">Upload a company logo to display on the login page, dashboard, and email notifications.</p>
+
+          {logoError && (
+            <div className="alert alert-error py-2 mb-3">
+              <AlertCircle size={14} />
+              <span className="text-sm">{logoError}</span>
+              <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setLogoError('')}><X size={11} /></button>
+            </div>
+          )}
+          {logoSuccess && (
+            <div className="alert alert-success py-2 mb-3">
+              <CheckCircle2 size={14} />
+              <span className="text-sm">{logoSuccess}</span>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-6">
+            {/* Current logo preview */}
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-xs text-base-content/50 font-medium">Current Logo</span>
+              {currentLogoUrl ? (
+                <div className="p-3 bg-base-100 border border-base-300 rounded-xl">
+                  <img
+                    src={currentLogoUrl}
+                    alt="Current Logo"
+                    className="max-h-20 max-w-xs object-contain"
+                    style={{ maxHeight: '80px' }}
+                  />
+                </div>
+              ) : (
+                <div className="p-4 bg-base-100 border border-dashed border-base-300 rounded-xl text-base-content/30 text-xs">
+                  No logo set
+                </div>
+              )}
+            </div>
+
+            {/* Upload controls */}
+            <div className="flex flex-col gap-3">
+              <label className="btn btn-primary btn-sm gap-1.5 cursor-pointer">
+                <Upload size={14} />
+                {logoUploading ? 'Uploading…' : 'Upload New Logo'}
+                <input
+                  ref={logoFileRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                  disabled={logoUploading}
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (file) uploadLogo(file)
+                    if (logoFileRef.current) logoFileRef.current.value = ''
+                  }}
+                />
+              </label>
+              <p className="text-xs text-base-content/40">PNG, JPEG, SVG or WebP · max 2MB</p>
+              {currentLogoUrl && (
+                <button
+                  className="btn btn-ghost btn-sm gap-1.5 text-error/70 hover:text-error hover:bg-error/10"
+                  onClick={removeLogo}
+                  disabled={logoUploading}
+                >
+                  <Trash2 size={13} /> Remove Logo
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Create User Form */}
       <div className="card bg-base-200 border border-base-300">

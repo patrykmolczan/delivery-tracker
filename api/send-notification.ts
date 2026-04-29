@@ -27,13 +27,13 @@ export default async function handler(req: any, res: any) {
     let payload
     switch (type) {
       case 'completed':
-        payload = buildCompletionEmail(to, project)
+        payload = await buildCompletionEmail(to, project)
         break
       case 'delivery_file':
-        payload = buildDeliveryFileEmail(to, project, files || [])
+        payload = await buildDeliveryFileEmail(to, project, files || [])
         break
       case 'status_changed':
-        payload = buildStatusChangeEmail(to, project, newStatus || project.status)
+        payload = await buildStatusChangeEmail(to, project, newStatus || project.status)
         break
       default:
         return res.status(400).json({ error: `Unknown notification type: ${type}` })

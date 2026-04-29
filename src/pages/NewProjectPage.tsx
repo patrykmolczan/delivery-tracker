@@ -16,6 +16,7 @@ import type {
   ProjectCountryInput, ProjectTaskInput,
 } from '../types'
 import type { ProjectType } from '../lib/data'
+import { parseTemplateFile, type DBCountry } from '../lib/templateParser'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -262,7 +263,64 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
 
   const isValid = (isAdmin ? !!form.project_owner : true) && !!form.client_name && !!form.date_received && !!form.status_id
 
+  // ── Template parse state ─────────────────────────────────────────────────────
+  const [isParsing, setIsParsing] = useState(false)
+  const [parseResult, setParseResult] = useState<{ warnings: string[]; fuzzyMatches: string[]; unmatchedCount: number } | null>(null)
+  const parseInputRef = useRef<HTMLInputElement>(null)
+
   // ── Country builder ──────────────────────────────────────────────────────────
+
+  // ── Template file parser ──────────────────────────────────────────────────────
+  const handleTemplateParse = async (file: File) => {
+    if (!lookups) return
+    setIsParsing(true)
+    setParseResult(null)
+    try {
+      const dbCountries: DBCountry[] = lookups.countries.map(c => ({ id: c.id, name: c.name }))
+      const result = await parseTemplateFile(file, form.project_type || '', dbCountries)
+
+      if (result.countries.length > 0 || result.totalJobs > 0) {
+        // Build new project_countries list from parsed results
+        const newCountries = result.countries
+          .filter(pc => pc.resolvedId !== null)
+          .map(pc => ({
+            country_id: pc.resolvedId!,
+            country_name: pc.resolvedName,
+            job_count: pc.jobCount.toString(),
+          }))
+
+        // Merge with any existing countries (don't overwrite ones user already added)
+        const existing = form.project_countries.filter(
+          ec => !newCountries.some(nc => nc.country_id === ec.country_id)
+        )
+        setForm(f => ({
+          ...f,
+          project_countries: [...existing, ...newCountries],
+          // Pre-fill total job count if not already set
+          job_count: f.job_count || result.totalJobs.toString(),
+        }))
+      }
+
+      const fuzzyMatches = result.countries
+        .filter(pc => pc.confidence === 'fuzzy' || pc.confidence === 'alias')
+        .map(pc => `"${pc.rawName}" → ${pc.resolvedName}`)
+
+      setParseResult({
+        warnings: result.parseWarnings,
+        fuzzyMatches,
+        unmatchedCount: result.unmatched.length,
+      })
+    } catch (err) {
+      setParseResult({
+        warnings: [`Failed to parse file: ${err instanceof Error ? err.message : 'Unknown error'}`],
+        fuzzyMatches: [],
+        unmatchedCount: 0,
+      })
+    } finally {
+      setIsParsing(false)
+      if (parseInputRef.current) parseInputRef.current.value = ''
+    }
+  }
 
   const addCountry = () => {
     if (!countryPickId) return
@@ -585,6 +643,66 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
           <div className="card bg-base-200 border border-base-300">
             <div className="card-body gap-4">
               <Section icon={<Globe size={16} />} title="Countries & Job Counts">
+                {/* ── Parse from template ── */}
+                <div className="mb-3 p-3 bg-base-200 rounded-lg border border-base-300">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-lg">📊</span>
+                      <div>
+                        <p className="text-sm font-semibold text-base-content">Auto-fill from template file</p>
+                        <p className="text-xs text-base-content/60">Upload a filled-in Rate Card, Right Sourcing, or Magnit VMS file to auto-populate countries &amp; job counts</p>
+                      </div>
+                    </div>
+                    <input
+                      ref={parseInputRef}
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      className="hidden"
+                      onChange={e => {
+                        const f = e.target.files?.[0]
+                        if (f) handleTemplateParse(f)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => parseInputRef.current?.click()}
+                      disabled={isParsing}
+                      className="btn btn-sm btn-outline btn-primary shrink-0"
+                    >
+                      {isParsing ? (
+                        <><span className="loading loading-spinner loading-xs" /> Parsing…</>
+                      ) : (
+                        <><span>📂</span> Choose File</>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Parse result feedback */}
+                  {parseResult && (
+                    <div className="mt-2 space-y-1">
+                      {parseResult.warnings.map((w, i) => (
+                        <div key={i} className="alert alert-warning py-1 px-3 text-xs">{w}</div>
+                      ))}
+                      {parseResult.fuzzyMatches.length > 0 && (
+                        <div className="alert alert-info py-1 px-3 text-xs">
+                          <span className="font-semibold">Auto-corrected:</span>{' '}
+                          {parseResult.fuzzyMatches.join(' · ')}
+                        </div>
+                      )}
+                      {parseResult.unmatchedCount > 0 && (
+                        <div className="alert alert-warning py-1 px-3 text-xs">
+                          ⚠️ {parseResult.unmatchedCount} country name(s) could not be matched — please add them manually below.
+                        </div>
+                      )}
+                      {parseResult.warnings.length === 0 && parseResult.unmatchedCount === 0 && (
+                        <div className="alert alert-success py-1 px-3 text-xs">
+                          ✅ Countries and job counts pre-filled from your file. Review below and adjust as needed.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* Country picker row */}
                 <div className="flex gap-2 flex-wrap">
                   <select

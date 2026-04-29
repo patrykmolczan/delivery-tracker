@@ -26,6 +26,28 @@ const EMPTY_FORM: ProjectFormData = {
   industry_id: null,
 }
 
+// ⚠️ IMPORTANT: Field must be defined OUTSIDE the parent component.
+// If defined inside, React treats it as a new component type on every render,
+// causing inputs to unmount/remount and lose focus after each keystroke.
+interface FieldProps {
+  label: string
+  required?: boolean
+  error?: string
+  children: React.ReactNode
+}
+
+const Field: React.FC<FieldProps> = ({ label, required, error, children }) => (
+  <div className="form-control gap-1">
+    <label className="label py-0">
+      <span className="label-text font-medium text-sm">
+        {label}{required && <span className="text-error ml-0.5">*</span>}
+      </span>
+    </label>
+    {children}
+    {error && <span className="text-error text-xs">{error}</span>}
+  </div>
+)
+
 export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel }) => {
   const { user } = useAuth()
   const [form, setForm] = useState<ProjectFormData>(EMPTY_FORM)
@@ -98,18 +120,6 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
       setSaving(false)
     }
   }
-
-  const Field = ({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) => (
-    <div className="form-control gap-1">
-      <label className="label py-0">
-        <span className="label-text font-medium text-sm">
-          {label}{required && <span className="text-error ml-0.5">*</span>}
-        </span>
-      </label>
-      {children}
-      {error && <span className="text-error text-xs">{error}</span>}
-    </div>
-  )
 
   if (!lookups && !error) return (
     <div className="flex items-center justify-center h-64">

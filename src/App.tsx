@@ -154,8 +154,8 @@ const Dashboard: React.FC = () => {
         <div className="p-3 border-t border-base-300">
           <div className="flex items-center gap-3 px-2 py-2">
             <div className="avatar placeholder flex-shrink-0">
-              <div className="bg-primary/20 text-primary rounded-full w-8">
-                <span className="text-xs font-bold">
+              <div className="bg-primary/20 text-primary rounded-full w-8 flex items-center justify-center">
+                <span className="text-xs font-bold leading-none">
                   {(profile?.full_name?.[0] || user?.email?.[0] || 'U').toUpperCase()}
                 </span>
               </div>
@@ -267,7 +267,8 @@ const Dashboard: React.FC = () => {
                 onSort={setSort}
                 onSelectProject={setSelectedProject}
                 selectedId={selectedProject?.id || null}
-                onEdit={isAdmin ? handleEditProject : undefined}
+                onEdit={handleEditProject}
+                canEditProject={(p) => isAdmin || p.created_by === user?.id}
               />
             </div>
           )}
@@ -311,7 +312,7 @@ const Dashboard: React.FC = () => {
         <ProjectDetail
           project={selectedProject}
           onClose={() => setSelectedProject(null)}
-          onEdit={isAdmin ? () => handleEditProject(selectedProject) : undefined}
+          onEdit={(isAdmin || selectedProject?.created_by === user?.id) ? () => handleEditProject(selectedProject!) : undefined}
           onStatusUpdated={(updated) => {
             setSelectedProject(updated)
             setProjects(prev => prev.map(p => p.id === updated.id ? updated : p))

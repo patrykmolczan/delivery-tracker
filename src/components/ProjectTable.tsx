@@ -11,6 +11,7 @@ interface ProjectTableProps {
   onSelectProject: (project: Project) => void
   selectedId: string | null
   onEdit?: (project: Project) => void
+  canEditProject?: (project: Project) => boolean
 }
 
 const ROW_HEIGHT = 44
@@ -38,6 +39,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   onSelectProject,
   selectedId,
   onEdit,
+  canEditProject,
 }) => {
   const parentRef = useRef<HTMLDivElement>(null)
 
@@ -238,12 +240,14 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                         </td>
                         {onEdit && (
                           <td onClick={e => e.stopPropagation()} className="whitespace-nowrap">
-                            <button
-                              className="btn btn-ghost btn-xs gap-1"
-                              onClick={() => onEdit(p)}
-                            >
-                              <Edit2 size={12} /> Edit
-                            </button>
+                            {(!canEditProject || canEditProject(p)) && (
+                              <button
+                                className="btn btn-ghost btn-xs gap-1"
+                                onClick={() => onEdit(p)}
+                              >
+                                <Edit2 size={12} /> Edit
+                              </button>
+                            )}
                           </td>
                         )}
                       </tr>

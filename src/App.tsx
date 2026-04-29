@@ -209,12 +209,14 @@ const Dashboard: React.FC = () => {
             {isAdmin && (
               <span className="badge badge-primary badge-sm">Admin</span>
             )}
-            <button
-              className="btn btn-primary btn-sm gap-1.5 hidden sm:flex"
-              onClick={() => { setEditProject(null); navigate('new-project') }}
-            >
-              <Plus size={14} /> New Project
-            </button>
+            {view !== 'table' && (
+              <button
+                className="btn btn-primary btn-sm gap-1.5 hidden sm:flex"
+                onClick={() => { setEditProject(null); navigate('new-project') }}
+              >
+                <Plus size={14} /> New Project
+              </button>
+            )}
           </div>
         </div>
 

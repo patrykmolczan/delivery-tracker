@@ -465,18 +465,19 @@ export async function uploadProjectFile(
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
   const contentType = file.type || 'application/octet-stream'
 
+  // Read file as blob to ensure consistent content-type handling
+  const fileBlob = new Blob([await file.arrayBuffer()], { type: contentType })
+
   const uploadRes = await fetch(
     `${supabaseUrl}/storage/v1/object/project-files/${storagePath}`,
     {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
-        'apikey': supabaseAnonKey,
         'Content-Type': contentType,
         'x-upsert': 'false',
-        'cache-control': '3600',
       },
-      body: file,
+      body: fileBlob,
     }
   )
 

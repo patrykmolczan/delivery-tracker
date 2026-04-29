@@ -142,6 +142,9 @@ export const ImportPage: React.FC<Props> = ({ onDone }) => {
         status_id: findId(lookups.statuses, statusName) ?? lookups.statuses.find(s => s.name === 'In Process')?.id ?? null,
         country_id: findId(lookups.countries, countryName),
         industry_id: findId(lookups.industries, industryName),
+        project_type: null,
+        project_countries: [],
+        project_tasks: [],
       }
     }).filter(r => r.project_owner && r.client_name && r.date_received)
   }

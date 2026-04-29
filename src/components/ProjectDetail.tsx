@@ -3,14 +3,16 @@ import {
   X, Calendar, User, Building2, MapPin, Factory, Hash, Clock,
   FileText, Edit2, History, CheckCircle2, Loader2,
   Paperclip, Upload, Download, Trash2, AlertCircle, File,
+  Globe, ListTodo, Tag,
 } from 'lucide-react'
-import type { Project } from '../types'
+import type { Project, ProjectCountry, ProjectTask } from '../types'
 import {
   formatDate, getStatusColor,
   updateProjectStatus, fetchProjectHistory,
   fetchLookups,
   fetchProjectFiles, uploadProjectFile, deleteProjectFile, getProjectFileUrl,
   formatFileSize, MAX_FILES_PER_PROJECT,
+  fetchProjectCountries, fetchProjectTasks,
 } from '../lib/data'
 import type { AuditEntry, ProjectFile } from '../lib/data'
 import type { LookupItem } from '../types'
@@ -80,6 +82,15 @@ export const ProjectDetail: React.FC<{
   const [history, setHistory] = useState<AuditEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [localProject, setLocalProject] = useState<Project>(project)
+
+  // ── Countries & Tasks state ──────────────────────────────────────────────────
+  const [projectCountries, setProjectCountries] = useState<ProjectCountry[]>([])
+  const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([])
+
+  useEffect(() => {
+    fetchProjectCountries(project.id).then(setProjectCountries).catch(() => {})
+    fetchProjectTasks(project.id).then(setProjectTasks).catch(() => {})
+  }, [project.id])
 
   // ── Files state ─────────────────────────────────────────────────────────────
   const [files, setFiles] = useState<ProjectFile[]>([])
@@ -333,7 +344,30 @@ export const ProjectDetail: React.FC<{
             <Field icon={<Building2 size={14} />} label="Client Type" value={localProject.client_type} />
             <Field icon={<Building2 size={14} />} label="Client Name" value={localProject.client_name} />
             <Field icon={<Factory size={14} />} label="Industry" value={localProject.industry} />
-            <Field icon={<MapPin size={14} />} label="Country" value={localProject.country} />
+            <Field icon={<Tag size={14} />} label="Project Type" value={localProject.project_type} />
+
+            {/* Multi-country breakdown */}
+            {projectCountries.length > 1 ? (
+              <div className="flex items-start gap-3 py-2">
+                <span className="mt-0.5 opacity-40"><Globe size={14} /></span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-base-content/50 uppercase tracking-wider mb-1">Countries</div>
+                  <div className="flex flex-col gap-1">
+                    {projectCountries.map(c => (
+                      <div key={c.country_id} className="flex items-center justify-between text-sm">
+                        <span>{c.country_name}</span>
+                        {c.job_count != null && (
+                          <span className="text-xs text-base-content/40 ml-2">{c.job_count.toLocaleString()} jobs</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <Field icon={<MapPin size={14} />} label="Country" value={localProject.country} />
+            )}
+
             <div className="divider my-1"></div>
             <div className="text-xs font-semibold uppercase tracking-wider text-base-content/40 pt-2 pb-1">Timeline</div>
             <Field icon={<Calendar size={14} />} label="Date Received" value={formatDate(localProject.date_received)} />
@@ -341,6 +375,25 @@ export const ProjectDetail: React.FC<{
             <Field icon={<Calendar size={14} />} label="Date Delivered" value={formatDate(localProject.date_delivered)} />
             <Field icon={<Clock size={14} />} label="Days to Complete" value={localProject.days_to_complete != null ? `${localProject.days_to_complete} days` : null} />
             <Field icon={<Hash size={14} />} label="Job Count" value={localProject.job_count} />
+
+            {/* Additional Requests / Tasks */}
+            {projectTasks.length > 0 && (
+              <>
+                <div className="divider my-1"></div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-base-content/40 pt-2 pb-1">Additional Requests</div>
+                <div className="flex flex-col gap-2 mt-1">
+                  {projectTasks.map((task, i) => (
+                    <div key={task.id || i} className="flex items-start gap-2 p-2.5 bg-base-200 rounded-lg">
+                      <ListTodo size={13} className="mt-0.5 text-primary/60 shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium">{task.title}</p>
+                        {task.description && <p className="text-xs text-base-content/50 mt-0.5">{task.description}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

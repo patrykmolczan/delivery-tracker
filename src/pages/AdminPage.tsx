@@ -57,7 +57,7 @@ export const AdminPage: React.FC = () => {
 
   const startEdit = (user: UserProfile) => {
     setEditId(user.id)
-    setEditForm({ full_name: user.full_name, role: user.role, is_active: user.is_active })
+    setEditForm({ full_name: user.full_name, role: user.role, is_active: user.is_active ?? true })
   }
 
   const cancelEdit = () => {

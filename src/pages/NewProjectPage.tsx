@@ -1,13 +1,32 @@
-import React, { useState, useEffect } from 'react'
-import { Save, X, CheckCircle2, AlertCircle } from 'lucide-react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import {
+  Save, X, CheckCircle2, AlertCircle, Plus, Trash2, Edit2, Check,
+  Globe, ListTodo, Paperclip, Zap, Download, FileText,
+} from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { fetchLookups, createProject, updateProject } from '../lib/data'
-import type { LookupItem, Project, ProjectFormData } from '../types'
+import {
+  fetchLookups, createProject, updateProject, fetchProjects,
+  buildPredictionStats, predictDeliveryTime,
+  uploadProjectFile, MAX_FILE_SIZE_BYTES, MAX_FILES_PER_PROJECT,
+  fetchProjectCountries, fetchProjectTasks, formatFileSize,
+} from '../lib/data'
+import type {
+  LookupItem, Project, ProjectFormData,
+  ProjectCountryInput, ProjectTaskInput,
+} from '../types'
 
-interface Props {
-  editProject?: Project | null
-  onSaved: (project: Project) => void
-  onCancel: () => void
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PROJECT_TYPES = [
+  'Pay Intel (Rate Card)',
+  'Pay Intel (Right Sourcing)',
+  'Magnit VMS',
+] as const
+
+const TEMPLATE_MAP: Record<string, { file: string; label: string }> = {
+  'Pay Intel (Rate Card)':    { file: '/templates/Pay_Intel_Template_RateCard.xlsx',    label: 'Pay Intel Rate Card Template.xlsx' },
+  'Pay Intel (Right Sourcing)': { file: '/templates/Pay_Intel_Template_RightSourcing.xlsx', label: 'Pay Intel Right Sourcing Template.xlsx' },
+  'Magnit VMS':               { file: '/templates/Magnit_VMS_Template.xls',            label: 'Magnit VMS Template.xls' },
 }
 
 const EMPTY_FORM: ProjectFormData = {
@@ -24,29 +43,88 @@ const EMPTY_FORM: ProjectFormData = {
   status_id: null,
   country_id: null,
   industry_id: null,
+  project_type: null,
+  project_countries: [],
+  project_tasks: [],
 }
 
-// ⚠️ IMPORTANT: Field must be defined OUTSIDE the parent component.
-// If defined inside, React treats it as a new component type on every render,
-// causing inputs to unmount/remount and lose focus after each keystroke.
+// ─── Sub-components (defined outside parent to prevent focus loss) ─────────────
+
 interface FieldProps {
   label: string
   required?: boolean
   error?: string
   children: React.ReactNode
+  hint?: string
 }
 
-const Field: React.FC<FieldProps> = ({ label, required, error, children }) => (
+const Field: React.FC<FieldProps> = ({ label, required, error, children, hint }) => (
   <div className="form-control gap-1">
     <label className="label py-0">
       <span className="label-text font-medium text-sm">
         {label}{required && <span className="text-error ml-0.5">*</span>}
       </span>
+      {hint && <span className="label-text-alt text-base-content/40 text-xs">{hint}</span>}
     </label>
     {children}
     {error && <span className="text-error text-xs">{error}</span>}
   </div>
 )
+
+interface SectionProps {
+  icon: React.ReactNode
+  title: string
+  children: React.ReactNode
+}
+
+const Section: React.FC<SectionProps> = ({ icon, title, children }) => (
+  <div>
+    <div className="flex items-center gap-2 mb-3">
+      <span className="text-primary/70">{icon}</span>
+      <h3 className="text-sm font-semibold text-base-content/60 uppercase tracking-wider">{title}</h3>
+    </div>
+    {children}
+  </div>
+)
+
+// ─── ETA Badge ────────────────────────────────────────────────────────────────
+
+interface ETABadgeProps {
+  estimate: number
+  confidence: string
+  breakdown: string
+}
+
+const ETABadge: React.FC<ETABadgeProps> = ({ estimate, confidence, breakdown }) => {
+  const color = confidence === 'High' ? 'border-success/40 bg-success/5 text-success'
+    : confidence === 'Medium' ? 'border-warning/40 bg-warning/5 text-warning'
+    : 'border-info/40 bg-info/5 text-info'
+  const dot = confidence === 'High' ? 'bg-success' : confidence === 'Medium' ? 'bg-warning' : 'bg-info'
+
+  return (
+    <div className={`rounded-xl border p-4 ${color} flex items-start gap-3`}>
+      <Zap size={18} className="mt-0.5 shrink-0" />
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-bold text-lg">~{estimate} business days</span>
+          <span className={`inline-flex items-center gap-1 text-xs font-medium rounded-full px-2 py-0.5 ${color} border`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${dot}`}></span>
+            {confidence} confidence
+          </span>
+        </div>
+        <p className="text-xs opacity-70 mt-0.5 truncate">{breakdown}</p>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+interface Props {
+  editProject?: Project | null
+  onSaved: (project: Project) => void
+  onCancel: () => void
+}
 
 export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel }) => {
   const { user } = useAuth()
@@ -57,6 +135,27 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   const [success, setSuccess] = useState(false)
   const [touched, setTouched] = useState<Record<string, boolean>>({})
 
+  // ETA prediction
+  const [predStats, setPredStats] = useState<ReturnType<typeof buildPredictionStats> | null>(null)
+  const [eta, setEta] = useState<{ estimate: number; confidence: string; breakdown: string } | null>(null)
+
+  // Country builder state
+  const [countryPickId, setCountryPickId] = useState<string>('')
+  const [countryPickJobs, setCountryPickJobs] = useState<string>('')
+
+  // Task builder state
+  const [taskTitle, setTaskTitle] = useState('')
+  const [taskDesc, setTaskDesc] = useState('')
+  const [editingTaskIdx, setEditingTaskIdx] = useState<number | null>(null)
+  const [editTaskTitle, setEditTaskTitle] = useState('')
+  const [editTaskDesc, setEditTaskDesc] = useState('')
+
+  // Staged files (for upload after project creation)
+  const [stagedFiles, setStagedFiles] = useState<File[]>([])
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Load lookups
   useEffect(() => {
     fetchLookups()
       .then(setLookups)
@@ -66,30 +165,82 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
       })
   }, [])
 
+  // Load prediction stats in background
   useEffect(() => {
-    if (editProject && lookups) {
-      setForm({
-        project_owner: editProject.project_owner || '',
-        analyst: editProject.analyst || '',
-        client_type_id: editProject.client_type_id ?? null,
-        client_name: editProject.client_name || '',
-        requestor: editProject.requestor || '',
-        date_received: editProject.date_received || '',
-        expected_delivery_date: editProject.expected_delivery_date || '',
-        date_delivered: editProject.date_delivered || '',
-        project_summary: editProject.project_summary || '',
-        job_count: editProject.job_count?.toString() || '',
-        status_id: editProject.status_id ?? null,
-        country_id: editProject.country_id ?? null,
-        industry_id: editProject.industry_id ?? null,
-      })
-    }
+    fetchProjects()
+      .then(projects => setPredStats(buildPredictionStats(projects)))
+      .catch(() => {})
+  }, [])
+
+  // Populate form when editing
+  useEffect(() => {
+    if (!editProject || !lookups) return
+    setForm({
+      project_owner: editProject.project_owner || '',
+      analyst: editProject.analyst || '',
+      client_type_id: editProject.client_type_id ?? null,
+      client_name: editProject.client_name || '',
+      requestor: editProject.requestor || '',
+      date_received: editProject.date_received || '',
+      expected_delivery_date: editProject.expected_delivery_date || '',
+      date_delivered: editProject.date_delivered || '',
+      project_summary: editProject.project_summary || '',
+      job_count: editProject.job_count?.toString() || '',
+      status_id: editProject.status_id ?? null,
+      country_id: editProject.country_id ?? null,
+      industry_id: editProject.industry_id ?? null,
+      project_type: editProject.project_type ?? null,
+      project_countries: [],
+      project_tasks: [],
+    })
+
+    // Load existing countries and tasks
+    fetchProjectCountries(editProject.id).then(countries => {
+      const inputs: ProjectCountryInput[] = countries.map(c => ({
+        country_id: c.country_id,
+        country_name: c.country_name,
+        job_count: c.job_count?.toString() || '',
+      }))
+      // If no multi-country rows but project has a country, seed from legacy
+      if (inputs.length === 0 && editProject.country_id && editProject.country) {
+        inputs.push({ country_id: editProject.country_id, country_name: editProject.country, job_count: editProject.job_count?.toString() || '' })
+      }
+      setForm(f => ({ ...f, project_countries: inputs }))
+    }).catch(() => {
+      // Fall back to legacy single country
+      if (editProject.country_id && editProject.country) {
+        setForm(f => ({ ...f, project_countries: [{ country_id: editProject.country_id!, country_name: editProject.country!, job_count: editProject.job_count?.toString() || '' }] }))
+      }
+    })
+
+    fetchProjectTasks(editProject.id).then(tasks => {
+      const inputs: ProjectTaskInput[] = tasks.map(t => ({ id: t.id, title: t.title, description: t.description || '' }))
+      setForm(f => ({ ...f, project_tasks: inputs }))
+    }).catch(() => {})
   }, [editProject, lookups])
 
-  const set = (field: keyof ProjectFormData, value: any) => {
+  // Recompute ETA when relevant fields change
+  useEffect(() => {
+    if (!predStats || !form.client_type_id || !form.industry_id) {
+      setEta(null)
+      return
+    }
+    const clientTypeName = lookups?.clientTypes.find(c => c.id === form.client_type_id)?.name
+    const industryName = lookups?.industries.find(i => i.id === form.industry_id)?.name
+    const countryName = form.project_countries.length > 0
+      ? form.project_countries[0].country_name
+      : lookups?.countries.find(c => c.id === form.country_id)?.name
+    const jobCount = form.job_count ? parseInt(form.job_count) : undefined
+
+    setEta(predictDeliveryTime(predStats, clientTypeName, industryName, countryName, jobCount))
+  }, [predStats, form.client_type_id, form.industry_id, form.project_countries, form.country_id, form.job_count, lookups])
+
+  const set = useCallback((field: keyof ProjectFormData, value: any) => {
     setForm(f => ({ ...f, [field]: value }))
     setTouched(t => ({ ...t, [field]: true }))
-  }
+  }, [])
+
+  // ── Validation ───────────────────────────────────────────────────────────────
 
   const errors: Record<string, string> = {}
   if (touched.project_owner && !form.project_owner) errors.project_owner = 'Required'
@@ -99,27 +250,134 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
 
   const isValid = form.project_owner && form.client_name && form.date_received && form.status_id
 
+  // ── Country builder ──────────────────────────────────────────────────────────
+
+  const addCountry = () => {
+    if (!countryPickId) return
+    const id = parseInt(countryPickId)
+    if (form.project_countries.some(c => c.country_id === id)) return
+    const country = lookups!.countries.find(c => c.id === id)
+    if (!country) return
+    setForm(f => ({
+      ...f,
+      project_countries: [...f.project_countries, { country_id: id, country_name: country.name, job_count: countryPickJobs }],
+    }))
+    setCountryPickId('')
+    setCountryPickJobs('')
+  }
+
+  const removeCountry = (idx: number) => {
+    setForm(f => ({ ...f, project_countries: f.project_countries.filter((_, i) => i !== idx) }))
+  }
+
+  const updateCountryJobs = (idx: number, jobs: string) => {
+    setForm(f => ({
+      ...f,
+      project_countries: f.project_countries.map((c, i) => i === idx ? { ...c, job_count: jobs } : c),
+    }))
+  }
+
+  // ── Task builder ─────────────────────────────────────────────────────────────
+
+  const addTask = () => {
+    if (!taskTitle.trim()) return
+    setForm(f => ({ ...f, project_tasks: [...f.project_tasks, { title: taskTitle.trim(), description: taskDesc.trim() }] }))
+    setTaskTitle('')
+    setTaskDesc('')
+  }
+
+  const removeTask = (idx: number) => {
+    setForm(f => ({ ...f, project_tasks: f.project_tasks.filter((_, i) => i !== idx) }))
+  }
+
+  const startEditTask = (idx: number) => {
+    setEditingTaskIdx(idx)
+    setEditTaskTitle(form.project_tasks[idx].title)
+    setEditTaskDesc(form.project_tasks[idx].description)
+  }
+
+  const saveEditTask = () => {
+    if (editingTaskIdx === null || !editTaskTitle.trim()) return
+    setForm(f => ({
+      ...f,
+      project_tasks: f.project_tasks.map((t, i) =>
+        i === editingTaskIdx ? { ...t, title: editTaskTitle.trim(), description: editTaskDesc.trim() } : t
+      ),
+    }))
+    setEditingTaskIdx(null)
+  }
+
+  // ── File staging ─────────────────────────────────────────────────────────────
+
+  const stageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      alert(`"${file.name}" is ${formatFileSize(file.size)} — max 2 MB per file`)
+      return
+    }
+    const totalSlots = stagedFiles.length + (editProject ? 0 : 0)
+    if (totalSlots >= MAX_FILES_PER_PROJECT) {
+      alert('Maximum 5 files per project')
+      return
+    }
+    if (stagedFiles.some(f => f.name === file.name)) {
+      alert('A file with that name is already staged')
+      return
+    }
+    setStagedFiles(prev => [...prev, file])
+  }
+
+  const removeStagedFile = (idx: number) => {
+    setStagedFiles(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  // ── Submit ────────────────────────────────────────────────────────────────────
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isValid || !user) return
     setSaving(true)
     setError(null)
+    setUploadProgress(null)
+
     try {
+      let savedProject: Project
+
       if (editProject) {
         await updateProject(editProject.id, form)
-        setSuccess(true)
-        setTimeout(() => onSaved({ ...editProject, ...form } as any), 800)
+        savedProject = { ...editProject, ...form } as any
+        // Upload any newly staged files
+        if (stagedFiles.length > 0) {
+          for (let i = 0; i < stagedFiles.length; i++) {
+            setUploadProgress(`Uploading file ${i + 1} of ${stagedFiles.length}…`)
+            await uploadProjectFile(editProject.id, stagedFiles[i], user.id)
+          }
+        }
       } else {
-        const created = await createProject(form, user.id)
-        setSuccess(true)
-        setTimeout(() => onSaved(created), 800)
+        savedProject = await createProject(form, user.id)
+        // Upload staged files now that we have a project ID
+        if (stagedFiles.length > 0) {
+          for (let i = 0; i < stagedFiles.length; i++) {
+            setUploadProgress(`Uploading file ${i + 1} of ${stagedFiles.length}…`)
+            await uploadProjectFile(savedProject.id, stagedFiles[i], user.id)
+          }
+        }
       }
+
+      setUploadProgress(null)
+      setSuccess(true)
+      setTimeout(() => onSaved(savedProject), 800)
     } catch (err: any) {
       setError(err.message || 'Failed to save project')
+      setUploadProgress(null)
     } finally {
       setSaving(false)
     }
   }
+
+  // ── Loading states ────────────────────────────────────────────────────────────
 
   if (!lookups && !error) return (
     <div className="flex items-center justify-center h-64">
@@ -128,14 +386,21 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   )
   if (!lookups && error) return (
     <div className="flex items-center justify-center h-64">
-      <div className="alert alert-error max-w-md">
-        <span>{error}</span>
-      </div>
+      <div className="alert alert-error max-w-md"><span>{error}</span></div>
     </div>
   )
 
+  const availableCountries = lookups!.countries.filter(
+    c => !form.project_countries.some(pc => pc.country_id === c.id)
+  )
+  const totalJobsFromCountries = form.project_countries.reduce(
+    (sum, c) => sum + (c.job_count ? parseInt(c.job_count) || 0 : 0), 0
+  )
+
+  // ── Render ────────────────────────────────────────────────────────────────────
+
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto pb-10">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -151,195 +416,450 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
         </button>
       </div>
 
-      {/* Success Banner */}
       {success && (
         <div className="alert alert-success mb-4 animate-pulse">
           <CheckCircle2 size={18} />
           <span>Project {editProject ? 'updated' : 'created'} successfully!</span>
         </div>
       )}
-
-      {/* Error Banner */}
       {error && (
         <div className="alert alert-error mb-4">
           <AlertCircle size={18} />
           <span>{error}</span>
         </div>
       )}
+      {uploadProgress && (
+        <div className="alert alert-info mb-4">
+          <span className="loading loading-spinner loading-xs"></span>
+          <span>{uploadProgress}</span>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} noValidate>
-        <div className="card bg-base-200 border border-base-300">
-          <div className="card-body gap-6">
+        <div className="flex flex-col gap-5">
 
-            {/* Section: People */}
-            <div>
-              <h3 className="text-sm font-semibold text-base-content/60 uppercase tracking-wider mb-3">
-                People
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Project Owner" required error={errors.project_owner}>
-                  <input
-                    className={`input input-bordered w-full ${errors.project_owner ? 'input-error' : ''}`}
-                    value={form.project_owner}
-                    onChange={e => set('project_owner', e.target.value)}
-                    onBlur={() => setTouched(t => ({ ...t, project_owner: true }))}
-                    placeholder="e.g. Jane Smith"
-                  />
-                </Field>
-                <Field label="Analyst">
-                  <input
-                    className="input input-bordered w-full"
-                    value={form.analyst}
-                    onChange={e => set('analyst', e.target.value)}
-                    placeholder="e.g. John Doe"
-                  />
-                </Field>
-                <Field label="Requestor">
-                  <input
-                    className="input input-bordered w-full"
-                    value={form.requestor}
-                    onChange={e => set('requestor', e.target.value)}
-                    placeholder="e.g. HR Manager"
-                  />
-                </Field>
-              </div>
+          {/* ── Card 1: People ─────────────────────────────────────────────── */}
+          <div className="card bg-base-200 border border-base-300">
+            <div className="card-body gap-4">
+              <Section icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} title="People">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Field label="Project Owner" required error={errors.project_owner}>
+                    <input
+                      className={`input input-bordered w-full ${errors.project_owner ? 'input-error' : ''}`}
+                      value={form.project_owner}
+                      onChange={e => set('project_owner', e.target.value)}
+                      onBlur={() => setTouched(t => ({ ...t, project_owner: true }))}
+                      placeholder="e.g. Jane Smith"
+                    />
+                  </Field>
+                  <Field label="Analyst">
+                    <input
+                      className="input input-bordered w-full"
+                      value={form.analyst}
+                      onChange={e => set('analyst', e.target.value)}
+                      placeholder="e.g. John Doe"
+                    />
+                  </Field>
+                  <Field label="Requestor">
+                    <input
+                      className="input input-bordered w-full"
+                      value={form.requestor}
+                      onChange={e => set('requestor', e.target.value)}
+                      placeholder="e.g. HR Manager"
+                    />
+                  </Field>
+                </div>
+              </Section>
             </div>
+          </div>
 
-            {/* Section: Client */}
-            <div>
-              <h3 className="text-sm font-semibold text-base-content/60 uppercase tracking-wider mb-3">
-                Client
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Client Name" required error={errors.client_name}>
-                  <input
-                    className={`input input-bordered w-full ${errors.client_name ? 'input-error' : ''}`}
-                    value={form.client_name}
-                    onChange={e => set('client_name', e.target.value)}
-                    onBlur={() => setTouched(t => ({ ...t, client_name: true }))}
-                    placeholder="e.g. Acme Corp"
-                  />
-                </Field>
-                <Field label="Client Type">
-                  <select
-                    className="select select-bordered w-full"
-                    value={form.client_type_id ?? ''}
-                    onChange={e => set('client_type_id', e.target.value ? parseInt(e.target.value) : null)}
+          {/* ── Card 2: Client & Project Type ──────────────────────────────── */}
+          <div className="card bg-base-200 border border-base-300">
+            <div className="card-body gap-4">
+              <Section icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>} title="Client">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Client Name" required error={errors.client_name}>
+                    <input
+                      className={`input input-bordered w-full ${errors.client_name ? 'input-error' : ''}`}
+                      value={form.client_name}
+                      onChange={e => set('client_name', e.target.value)}
+                      onBlur={() => setTouched(t => ({ ...t, client_name: true }))}
+                      placeholder="e.g. Acme Corp"
+                    />
+                  </Field>
+                  <Field label="Client Type">
+                    <select
+                      className="select select-bordered w-full"
+                      value={form.client_type_id ?? ''}
+                      onChange={e => set('client_type_id', e.target.value ? parseInt(e.target.value) : null)}
+                    >
+                      <option value="">— Select client type —</option>
+                      {lookups!.clientTypes.map(ct => (
+                        <option key={ct.id} value={ct.id}>{ct.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Industry">
+                    <select
+                      className="select select-bordered w-full"
+                      value={form.industry_id ?? ''}
+                      onChange={e => set('industry_id', e.target.value ? parseInt(e.target.value) : null)}
+                    >
+                      <option value="">— Select industry —</option>
+                      {lookups!.industries.map(i => (
+                        <option key={i.id} value={i.id}>{i.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  {/* Project Type with template download */}
+                  <Field label="Project Type" hint="Download template below">
+                    <select
+                      className="select select-bordered w-full"
+                      value={form.project_type ?? ''}
+                      onChange={e => set('project_type', e.target.value || null)}
+                    >
+                      <option value="">— Select project type —</option>
+                      {PROJECT_TYPES.map(pt => (
+                        <option key={pt} value={pt}>{pt}</option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
+                {/* Template download strip */}
+                {form.project_type && TEMPLATE_MAP[form.project_type] && (
+                  <a
+                    href={TEMPLATE_MAP[form.project_type].file}
+                    download={TEMPLATE_MAP[form.project_type].label}
+                    className="inline-flex items-center gap-2 mt-2 px-3 py-2 rounded-lg border border-primary/30 bg-primary/5 text-primary text-sm hover:bg-primary/10 transition-colors w-fit"
                   >
-                    <option value="">— Select client type —</option>
-                    {lookups!.clientTypes.map(ct => (
-                      <option key={ct.id} value={ct.id}>{ct.name}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Country">
+                    <FileText size={14} />
+                    <span>Download {TEMPLATE_MAP[form.project_type].label}</span>
+                    <Download size={13} className="ml-1 opacity-60" />
+                  </a>
+                )}
+              </Section>
+            </div>
+          </div>
+
+          {/* ── Card 3: Countries ──────────────────────────────────────────── */}
+          <div className="card bg-base-200 border border-base-300">
+            <div className="card-body gap-4">
+              <Section icon={<Globe size={16} />} title="Countries & Job Counts">
+                {/* Country picker row */}
+                <div className="flex gap-2 flex-wrap">
                   <select
-                    className="select select-bordered w-full"
-                    value={form.country_id ?? ''}
-                    onChange={e => set('country_id', e.target.value ? parseInt(e.target.value) : null)}
+                    className="select select-bordered flex-1 min-w-[180px]"
+                    value={countryPickId}
+                    onChange={e => setCountryPickId(e.target.value)}
                   >
-                    <option value="">— Select country —</option>
-                    {lookups!.countries.map(c => (
+                    <option value="">— Add a country —</option>
+                    {availableCountries.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
-                </Field>
-                <Field label="Industry">
-                  <select
-                    className="select select-bordered w-full"
-                    value={form.industry_id ?? ''}
-                    onChange={e => set('industry_id', e.target.value ? parseInt(e.target.value) : null)}
-                  >
-                    <option value="">— Select industry —</option>
-                    {lookups!.industries.map(i => (
-                      <option key={i.id} value={i.id}>{i.name}</option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-            </div>
-
-            {/* Section: Project Details */}
-            <div>
-              <h3 className="text-sm font-semibold text-base-content/60 uppercase tracking-wider mb-3">
-                Project Details
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Status" required error={errors.status_id}>
-                  <select
-                    className={`select select-bordered w-full ${errors.status_id ? 'select-error' : ''}`}
-                    value={form.status_id ?? ''}
-                    onChange={e => set('status_id', e.target.value ? parseInt(e.target.value) : null)}
-                    onBlur={() => setTouched(t => ({ ...t, status_id: true }))}
-                  >
-                    <option value="">— Select status —</option>
-                    {lookups!.statuses.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Job Count">
                   <input
                     type="number"
-                    className="input input-bordered w-full"
-                    value={form.job_count}
-                    onChange={e => set('job_count', e.target.value)}
-                    placeholder="e.g. 150"
+                    className="input input-bordered w-32"
+                    placeholder="Jobs (opt)"
+                    value={countryPickJobs}
+                    onChange={e => setCountryPickJobs(e.target.value)}
                     min="0"
                   />
-                </Field>
-              </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm gap-1 self-end mb-0.5"
+                    onClick={addCountry}
+                    disabled={!countryPickId}
+                  >
+                    <Plus size={14} /> Add
+                  </button>
+                </div>
 
-              <div className="mt-4">
-                <Field label="Project Summary">
-                  <textarea
-                    className="textarea textarea-bordered w-full h-24 resize-none"
-                    value={form.project_summary}
-                    onChange={e => set('project_summary', e.target.value)}
-                    placeholder="Describe the project scope, requirements, or notes..."
-                  />
-                </Field>
-              </div>
+                {/* Selected countries list */}
+                {form.project_countries.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-2">
+                    {form.project_countries.map((c, idx) => (
+                      <div key={c.country_id} className="flex items-center gap-3 px-3 py-2 bg-base-100 border border-base-300 rounded-lg">
+                        <span className="flex-1 font-medium text-sm">{c.country_name}</span>
+                        <input
+                          type="number"
+                          className="input input-bordered input-sm w-28 text-sm"
+                          placeholder="# jobs"
+                          value={c.job_count}
+                          onChange={e => updateCountryJobs(idx, e.target.value)}
+                          min="0"
+                        />
+                        <span className="text-xs text-base-content/40">jobs</span>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs text-error hover:bg-error/10"
+                          onClick={() => removeCountry(idx)}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                    {totalJobsFromCountries > 0 && (
+                      <div className="text-xs text-base-content/50 text-right">
+                        Total jobs across all countries: <strong>{totalJobsFromCountries.toLocaleString()}</strong>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {form.project_countries.length === 0 && (
+                  <p className="text-xs text-base-content/40 mt-1">No countries added yet — add at least one above.</p>
+                )}
+              </Section>
             </div>
-
-            {/* Section: Dates */}
-            <div>
-              <h3 className="text-sm font-semibold text-base-content/60 uppercase tracking-wider mb-3">
-                Dates
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Field label="Date Received" required error={errors.date_received}>
-                  <input
-                    type="date"
-                    className={`input input-bordered w-full ${errors.date_received ? 'input-error' : ''}`}
-                    value={form.date_received}
-                    onChange={e => set('date_received', e.target.value)}
-                    onBlur={() => setTouched(t => ({ ...t, date_received: true }))}
-                  />
-                </Field>
-                <Field label="Expected Delivery">
-                  <input
-                    type="date"
-                    className="input input-bordered w-full"
-                    value={form.expected_delivery_date}
-                    onChange={e => set('expected_delivery_date', e.target.value)}
-                  />
-                </Field>
-                <Field label="Date Delivered">
-                  <input
-                    type="date"
-                    className="input input-bordered w-full"
-                    value={form.date_delivered}
-                    onChange={e => set('date_delivered', e.target.value)}
-                  />
-                </Field>
-              </div>
-            </div>
-
           </div>
-        </div>
 
-        {/* Actions */}
+          {/* ── Card 4: Project Details & Dates ───────────────────────────── */}
+          <div className="card bg-base-200 border border-base-300">
+            <div className="card-body gap-5">
+              <Section icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>} title="Project Details">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Status" required error={errors.status_id}>
+                    <select
+                      className={`select select-bordered w-full ${errors.status_id ? 'select-error' : ''}`}
+                      value={form.status_id ?? ''}
+                      onChange={e => set('status_id', e.target.value ? parseInt(e.target.value) : null)}
+                      onBlur={() => setTouched(t => ({ ...t, status_id: true }))}
+                    >
+                      <option value="">— Select status —</option>
+                      {lookups!.statuses.map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Total Job Count" hint={form.project_countries.length > 0 ? `${totalJobsFromCountries} from countries` : undefined}>
+                    <input
+                      type="number"
+                      className="input input-bordered w-full"
+                      value={form.job_count}
+                      onChange={e => set('job_count', e.target.value)}
+                      placeholder={totalJobsFromCountries > 0 ? totalJobsFromCountries.toString() : 'e.g. 150'}
+                      min="0"
+                    />
+                  </Field>
+                </div>
+                <div className="mt-4">
+                  <Field label="Project Summary">
+                    <textarea
+                      className="textarea textarea-bordered w-full h-24 resize-none"
+                      value={form.project_summary}
+                      onChange={e => set('project_summary', e.target.value)}
+                      placeholder="Describe the project scope, requirements, or notes…"
+                    />
+                  </Field>
+                </div>
+              </Section>
+
+              <div className="divider my-0 opacity-40"></div>
+
+              <Section icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>} title="Dates">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <Field label="Date Received" required error={errors.date_received}>
+                    <input
+                      type="date"
+                      className={`input input-bordered w-full ${errors.date_received ? 'input-error' : ''}`}
+                      value={form.date_received}
+                      onChange={e => set('date_received', e.target.value)}
+                      onBlur={() => setTouched(t => ({ ...t, date_received: true }))}
+                    />
+                  </Field>
+                  <Field label="Expected Delivery">
+                    <input
+                      type="date"
+                      className="input input-bordered w-full"
+                      value={form.expected_delivery_date}
+                      onChange={e => set('expected_delivery_date', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Date Delivered">
+                    <input
+                      type="date"
+                      className="input input-bordered w-full"
+                      value={form.date_delivered}
+                      onChange={e => set('date_delivered', e.target.value)}
+                    />
+                  </Field>
+                </div>
+              </Section>
+            </div>
+          </div>
+
+          {/* ── Card 5: Additional Requests (Tasks) ─────────────────────── */}
+          <div className="card bg-base-200 border border-base-300">
+            <div className="card-body gap-4">
+              <Section icon={<ListTodo size={16} />} title="Additional Requests">
+                {/* Add task row */}
+                <div className="flex gap-2 flex-wrap">
+                  <input
+                    className="input input-bordered flex-1 min-w-[200px]"
+                    placeholder="e.g. PDF version of delivery, CC: Jane Smith on delivery…"
+                    value={taskTitle}
+                    onChange={e => setTaskTitle(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTask() } }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm gap-1 self-end mb-0.5"
+                    onClick={addTask}
+                    disabled={!taskTitle.trim()}
+                  >
+                    <Plus size={14} /> Add Request
+                  </button>
+                </div>
+
+                {/* Optional description for new task */}
+                {taskTitle && (
+                  <input
+                    className="input input-bordered input-sm w-full"
+                    placeholder="Additional details (optional)…"
+                    value={taskDesc}
+                    onChange={e => setTaskDesc(e.target.value)}
+                  />
+                )}
+
+                {/* Task list */}
+                {form.project_tasks.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-2">
+                    {form.project_tasks.map((task, idx) => (
+                      <div key={idx} className="flex items-start gap-3 px-3 py-2.5 bg-base-100 border border-base-300 rounded-lg">
+                        {editingTaskIdx === idx ? (
+                          <div className="flex-1 flex flex-col gap-2">
+                            <input
+                              className="input input-bordered input-sm w-full"
+                              value={editTaskTitle}
+                              onChange={e => setEditTaskTitle(e.target.value)}
+                              autoFocus
+                            />
+                            <input
+                              className="input input-bordered input-sm w-full"
+                              placeholder="Details (optional)…"
+                              value={editTaskDesc}
+                              onChange={e => setEditTaskDesc(e.target.value)}
+                            />
+                            <div className="flex gap-2">
+                              <button type="button" className="btn btn-success btn-xs gap-1" onClick={saveEditTask}>
+                                <Check size={12} /> Save
+                              </button>
+                              <button type="button" className="btn btn-ghost btn-xs" onClick={() => setEditingTaskIdx(null)}>
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium">{task.title}</p>
+                              {task.description && <p className="text-xs text-base-content/50 mt-0.5">{task.description}</p>}
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs text-primary hover:bg-primary/10"
+                              onClick={() => startEditTask(idx)}
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs text-error hover:bg-error/10"
+                              onClick={() => removeTask(idx)}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {form.project_tasks.length === 0 && (
+                  <p className="text-xs text-base-content/40 mt-1">
+                    No requests added yet. Examples: "PDF version", "Include Excel export", "CC: John Smith on delivery"
+                  </p>
+                )}
+              </Section>
+            </div>
+          </div>
+
+          {/* ── Card 6: File Attachments ──────────────────────────────────── */}
+          <div className="card bg-base-200 border border-base-300">
+            <div className="card-body gap-4">
+              <Section icon={<Paperclip size={16} />} title="File Attachments">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-base-content/50">
+                    Attach templates, requirements, or reference files · max 2 MB each · up to {MAX_FILES_PER_PROJECT} files
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm gap-1.5"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={stagedFiles.length >= MAX_FILES_PER_PROJECT}
+                  >
+                    <Paperclip size={13} />
+                    {stagedFiles.length >= MAX_FILES_PER_PROJECT ? 'File limit reached' : 'Attach File'}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept=".xlsx,.xls,.csv,.pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                    onChange={stageFile}
+                  />
+                </div>
+
+                {stagedFiles.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {stagedFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center gap-3 px-3 py-2 bg-base-100 border border-base-300 rounded-lg">
+                        <FileText size={15} className="text-primary/60 shrink-0" />
+                        <span className="flex-1 text-sm font-medium truncate">{file.name}</span>
+                        <span className="text-xs text-base-content/40">{formatFileSize(file.size)}</span>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs text-error hover:bg-error/10"
+                          onClick={() => removeStagedFile(idx)}
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                    <p className="text-xs text-base-content/40">
+                      {stagedFiles.length}/{MAX_FILES_PER_PROJECT} files staged — will upload when you save
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-base-content/40">No files attached</p>
+                )}
+              </Section>
+            </div>
+          </div>
+
+          {/* ── AI ETA Card ───────────────────────────────────────────────── */}
+          {eta && !editProject && (
+            <div className="card bg-base-200 border border-base-300">
+              <div className="card-body py-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap size={15} className="text-primary/70" />
+                  <span className="text-sm font-semibold text-base-content/60 uppercase tracking-wider">AI Delivery Estimate</span>
+                </div>
+                <ETABadge {...eta} />
+                <p className="text-xs text-base-content/40 mt-2">
+                  Based on {predStats?.overall.count ?? 0} completed projects. This is an estimate — actual delivery time may vary.
+                </p>
+              </div>
+            </div>
+          )}
+
+        </div>{/* end flex col */}
+
+        {/* ── Actions ──────────────────────────────────────────────────────── */}
         <div className="flex justify-end gap-3 mt-6">
           <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>
           <button
@@ -348,7 +868,9 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
             disabled={!isValid || saving || success}
           >
             {!saving && <Save size={16} />}
-            {saving ? 'Saving…' : editProject ? 'Update Project' : 'Create Project'}
+            {saving
+              ? (uploadProgress ? 'Uploading…' : 'Saving…')
+              : editProject ? 'Update Project' : 'Create Project'}
           </button>
         </div>
       </form>

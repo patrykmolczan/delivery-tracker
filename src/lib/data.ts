@@ -1,5 +1,10 @@
 import { supabase } from './supabase'
-import type { Project, KPIData, StatusCount, OwnerCount, FilterState, SortState, LookupItem, ProjectFormData } from '../types'
+import type {
+  Project, KPIData, StatusCount, OwnerCount, FilterState, SortState,
+  LookupItem, ProjectFormData, ProjectCountry, ProjectCountryInput, ProjectTask,
+} from '../types'
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
 
 export async function fetchProjects(): Promise<Project[]> {
   const { data, error } = await supabase
@@ -8,7 +13,7 @@ export async function fetchProjects(): Promise<Project[]> {
       id, project_owner, analyst, client_name, requestor,
       date_received, expected_delivery_date, date_delivered,
       project_summary, job_count, days_to_complete, created_by, created_at,
-      status_id, client_type_id, country_id, industry_id,
+      project_type, status_id, client_type_id, country_id, industry_id,
       project_statuses!inner(name),
       client_types(name),
       countries(name),
@@ -38,16 +43,17 @@ export async function fetchProjects(): Promise<Project[]> {
     country_id: row.country_id,
     industry: row.industries?.name || null,
     industry_id: row.industry_id,
+    project_type: row.project_type || null,
     created_by: row.created_by,
     created_at: row.created_at,
   }))
 }
 
 export async function fetchLookups(): Promise<{
-  statuses: LookupItem[];
-  clientTypes: LookupItem[];
-  industries: LookupItem[];
-  countries: LookupItem[];
+  statuses: LookupItem[]
+  clientTypes: LookupItem[]
+  industries: LookupItem[]
+  countries: LookupItem[]
 }> {
   const [{ data: statuses }, { data: clientTypes }, { data: industries }, { data: countries }] =
     await Promise.all([
@@ -78,8 +84,11 @@ export async function createProject(form: ProjectFormData, userId: string): Prom
     project_summary: form.project_summary || null,
     job_count: form.job_count ? parseInt(form.job_count) : null,
     status_id: form.status_id,
-    country_id: form.country_id,
+    country_id: form.project_countries.length > 0
+      ? form.project_countries[0].country_id
+      : form.country_id,
     industry_id: form.industry_id,
+    project_type: form.project_type || null,
     created_by: userId,
   }
 
@@ -90,7 +99,7 @@ export async function createProject(form: ProjectFormData, userId: string): Prom
       id, project_owner, analyst, client_name, requestor,
       date_received, expected_delivery_date, date_delivered,
       project_summary, job_count, days_to_complete, created_by, created_at,
-      status_id, client_type_id, country_id, industry_id,
+      project_type, status_id, client_type_id, country_id, industry_id,
       project_statuses!inner(name),
       client_types(name),
       countries(name),
@@ -99,6 +108,18 @@ export async function createProject(form: ProjectFormData, userId: string): Prom
     .single()
 
   if (error) throw error
+
+  const projectId = data.id
+
+  // Sync multi-country entries
+  if (form.project_countries.length > 0) {
+    await syncProjectCountries(projectId, form.project_countries)
+  }
+
+  // Sync task items
+  if (form.project_tasks.length > 0) {
+    await syncProjectTasks(projectId, form.project_tasks, userId)
+  }
 
   return {
     id: data.id,
@@ -120,6 +141,7 @@ export async function createProject(form: ProjectFormData, userId: string): Prom
     country_id: data.country_id,
     industry: (data as any).industries?.name || null,
     industry_id: data.industry_id,
+    project_type: (data as any).project_type || null,
     created_by: data.created_by,
     created_at: data.created_at,
   }
@@ -138,17 +160,22 @@ export async function updateProject(id: string, form: ProjectFormData): Promise<
     project_summary: form.project_summary || null,
     job_count: form.job_count ? parseInt(form.job_count) : null,
     status_id: form.status_id,
-    country_id: form.country_id,
+    country_id: form.project_countries.length > 0
+      ? form.project_countries[0].country_id
+      : form.country_id,
     industry_id: form.industry_id,
+    project_type: form.project_type || null,
     updated_at: new Date().toISOString(),
   }
 
-  const { error } = await supabase
-    .from('projects')
-    .update(updateData)
-    .eq('id', id)
-
+  const { error } = await supabase.from('projects').update(updateData).eq('id', id)
   if (error) throw error
+
+  // Sync multi-country entries (full replace)
+  await syncProjectCountries(id, form.project_countries)
+
+  // Sync task items (full replace by id)
+  await syncProjectTasks(id, form.project_tasks)
 }
 
 export async function deleteProject(id: string): Promise<void> {
@@ -178,13 +205,116 @@ export async function updateProjectStatus(
   }
   if (markDelivered) {
     updateData.date_delivered = dateDelivered
-    // days_to_complete is a GENERATED ALWAYS column — DB computes it from date_delivered - date_received automatically
   }
 
   const { error } = await supabase.from('projects').update(updateData).eq('id', id)
   if (error) throw error
   return { date_delivered: dateDelivered, days_to_complete: daysToComplete }
 }
+
+// ─── Project Countries ─────────────────────────────────────────────────────────
+
+export async function fetchProjectCountries(projectId: string): Promise<ProjectCountry[]> {
+  const { data, error } = await supabase
+    .from('project_countries')
+    .select('*, countries(name)')
+    .eq('project_id', projectId)
+    .order('sort_order')
+
+  if (error) {
+    console.warn('project_countries fetch error:', error.message)
+    return []
+  }
+
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    project_id: row.project_id,
+    country_id: row.country_id,
+    country_name: row.countries?.name || '',
+    job_count: row.job_count,
+    sort_order: row.sort_order,
+  }))
+}
+
+export async function syncProjectCountries(
+  projectId: string,
+  entries: ProjectCountryInput[]
+): Promise<void> {
+  // Delete all existing and re-insert (simplest correct approach)
+  await supabase.from('project_countries').delete().eq('project_id', projectId)
+
+  if (entries.length === 0) return
+
+  const rows = entries.map((e, i) => ({
+    project_id: projectId,
+    country_id: e.country_id,
+    job_count: e.job_count ? parseInt(e.job_count) : null,
+    sort_order: i,
+  }))
+
+  const { error } = await supabase.from('project_countries').insert(rows)
+  if (error) throw new Error(`Failed to save countries: ${error.message}`)
+}
+
+// ─── Project Tasks ─────────────────────────────────────────────────────────────
+
+export async function fetchProjectTasks(projectId: string): Promise<ProjectTask[]> {
+  const { data, error } = await supabase
+    .from('project_tasks')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('sort_order')
+
+  if (error) {
+    console.warn('project_tasks fetch error:', error.message)
+    return []
+  }
+
+  return (data || []) as ProjectTask[]
+}
+
+export async function syncProjectTasks(
+  projectId: string,
+  tasks: Array<{ id?: string; title: string; description: string }>,
+  userId?: string
+): Promise<void> {
+  // Get existing task IDs
+  const { data: existing } = await supabase
+    .from('project_tasks')
+    .select('id')
+    .eq('project_id', projectId)
+
+  const existingIds = new Set((existing || []).map((r: any) => r.id))
+  const incomingIds = new Set(tasks.filter(t => t.id).map(t => t.id!))
+
+  // Delete tasks that were removed
+  const toDelete = [...existingIds].filter(id => !incomingIds.has(id))
+  if (toDelete.length > 0) {
+    await supabase.from('project_tasks').delete().in('id', toDelete)
+  }
+
+  // Upsert all incoming tasks
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i]
+    if (task.id && existingIds.has(task.id)) {
+      // Update existing
+      await supabase.from('project_tasks')
+        .update({ title: task.title, description: task.description, sort_order: i, updated_at: new Date().toISOString() })
+        .eq('id', task.id)
+    } else {
+      // Insert new
+      await supabase.from('project_tasks').insert({
+        project_id: projectId,
+        title: task.title,
+        description: task.description || null,
+        sort_order: i,
+        created_by: userId || null,
+      })
+    }
+  }
+}
+
+// ─── Audit Log ─────────────────────────────────────────────────────────────────
 
 export interface AuditEntry {
   id: string
@@ -212,6 +342,8 @@ export async function fetchProjectHistory(projectId: string): Promise<AuditEntry
   }
   return (data || []) as AuditEntry[]
 }
+
+// ─── CSV Import ────────────────────────────────────────────────────────────────
 
 export async function importProjectsBatch(
   rows: ProjectFormData[],
@@ -249,6 +381,8 @@ export async function importProjectsBatch(
 
   return { success, errors }
 }
+
+// ─── Aggregates ───────────────────────────────────────────────────────────────
 
 export async function fetchStatusCounts(): Promise<StatusCount[]> {
   const projects = await fetchProjects()
@@ -323,7 +457,7 @@ export function filterProjects(projects: Project[], filters: FilterState): Proje
       const s = filters.search.toLowerCase()
       const searchable = [
         p.project_owner, p.analyst, p.client_name, p.client_type,
-        p.requestor, p.project_summary, p.country, p.industry, p.status
+        p.requestor, p.project_summary, p.country, p.industry, p.status, p.project_type
       ].filter(Boolean).join(' ').toLowerCase()
       if (!searchable.includes(s)) return false
     }
@@ -448,7 +582,6 @@ export async function uploadProjectFile(
     throw new Error(`File size ${formatFileSize(file.size)} exceeds the 2 MB limit`)
   }
 
-  // Guard: check current count before uploading
   const existing = await fetchProjectFiles(projectId)
   if (existing.length >= MAX_FILES_PER_PROJECT) {
     throw new Error(`Maximum of ${MAX_FILES_PER_PROJECT} files per project reached`)
@@ -457,14 +590,11 @@ export async function uploadProjectFile(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const storagePath = `${projectId}/${Date.now()}_${safeName}`
 
-  // Direct fetch upload (more reliable than SDK in production builds)
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.access_token) throw new Error('Not authenticated — please log in again')
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
   const contentType = file.type || 'application/octet-stream'
-
-  // Read file as blob to ensure consistent content-type handling
   const fileBlob = new Blob([await file.arrayBuffer()], { type: contentType })
 
   const uploadRes = await fetch(
@@ -499,7 +629,6 @@ export async function uploadProjectFile(
     .single()
 
   if (dbError) {
-    // Clean up orphaned storage object if DB write fails
     await supabase.storage.from('project-files').remove([storagePath])
     throw new Error(`Database error: ${dbError.message}`)
   }
@@ -525,28 +654,26 @@ export async function deleteProjectFile(
   storagePath: string,
   _userId: string
 ): Promise<void> {
-  // Hard delete from DB — uploader/admin can delete via RLS policy
   const { error: dbError } = await supabase
     .from('project_files')
     .delete()
     .eq('id', fileId)
 
   if (dbError) throw new Error(`Delete failed: ${dbError.message}`)
-
-  // Remove the object from storage (best-effort; don't fail if already gone)
   await supabase.storage.from('project-files').remove([storagePath]).catch(() => {})
 }
 
 export async function getProjectFileUrl(storagePath: string): Promise<string> {
   const { data, error } = await supabase.storage
     .from('project-files')
-    .createSignedUrl(storagePath, 3600) // valid for 1 hour
+    .createSignedUrl(storagePath, 3600)
 
   if (error || !data) throw new Error('Could not generate download link')
   return data.signedUrl
 }
 
-// ─── AI Prediction Utilities ──────────────────────────────────────────────────
+// ─── AI Prediction Utilities ───────────────────────────────────────────────────
+
 export interface PredictionStats {
   overall: { avg: number; median: number; count: number }
   byClientType: Record<string, { avg: number; count: number }>

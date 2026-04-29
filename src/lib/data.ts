@@ -523,18 +523,18 @@ export async function uploadProjectFile(
 export async function deleteProjectFile(
   fileId: string,
   storagePath: string,
-  userId: string
+  _userId: string
 ): Promise<void> {
-  // Soft-delete in DB so history is preserved
+  // Hard delete from DB — uploader/admin can delete via RLS policy
   const { error: dbError } = await supabase
     .from('project_files')
-    .update({ deleted_at: new Date().toISOString(), deleted_by: userId })
+    .delete()
     .eq('id', fileId)
 
   if (dbError) throw new Error(`Delete failed: ${dbError.message}`)
 
-  // Remove the actual object from storage
-  await supabase.storage.from('project-files').remove([storagePath])
+  // Remove the object from storage (best-effort; don't fail if already gone)
+  await supabase.storage.from('project-files').remove([storagePath]).catch(() => {})
 }
 
 export async function getProjectFileUrl(storagePath: string): Promise<string> {

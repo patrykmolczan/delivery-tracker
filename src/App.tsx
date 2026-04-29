@@ -141,7 +141,7 @@ const Dashboard: React.FC = () => {
             )}
             <div>
               <p className="font-bold text-sm text-base-content">Delivery Tracker</p>
-              <p className="text-xs text-base-content/40">Procurement & HR</p>
+              <p className="text-xs text-base-content/40">Project Dashboard</p>
             </div>
           </div>
           <button className="btn btn-ghost btn-xs lg:hidden" onClick={() => setSidebarOpen(false)}>

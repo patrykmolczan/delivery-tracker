@@ -52,6 +52,7 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
     project_type: row.project_type || null,
     id_number: row.id_number ?? null,
     time_allocation: row.time_allocation ?? null,
+    notifications_enabled: row.notifications_enabled ?? true,
     created_by: row.created_by,
     created_at: row.created_at,
   }
@@ -430,18 +431,24 @@ export function fetchOwnerCounts(projects: Project[]): OwnerCount[] {
 
 // Accept already-loaded projects to derive owners; fetch lookup dropdowns from DB
 export async function fetchFilterOptions(projects: Project[]) {
-  const [{ data: clientTypes }, { data: industries }, { data: countries }, { data: statuses }] =
+  const [{ data: clientTypes }, { data: industries }, { data: countries }, { data: statuses }, { data: analystRows }] =
     await Promise.all([
       supabase.from('client_types').select('name').eq('is_active', true).order('name'),
       supabase.from('industries').select('name').eq('is_active', true).order('name'),
       supabase.from('countries').select('name').eq('is_active', true).order('name'),
       supabase.from('project_statuses').select('name').eq('is_active', true).order('display_order'),
+      supabase.from('analysts').select('name').eq('is_active', true).order('name'),
     ])
 
   const owners = [...new Set(projects.map(p => p.project_owner).filter(Boolean))].sort() as string[]
+  // Also include unique analyst values from actual project data (catches historical data not in analysts table)
+  const analystsFromDB = (analystRows || []).map((r: any) => r.name) as string[]
+  const analystsFromProjects = [...new Set(projects.map(p => p.analyst).filter(Boolean))].sort() as string[]
+  const analysts = [...new Set([...analystsFromDB, ...analystsFromProjects])].sort()
 
   return {
     owners,
+    analysts,
     clientTypes: (clientTypes || []).map((r: any) => r.name),
     industries: (industries || []).map((r: any) => r.name),
     countries: (countries || []).map((r: any) => r.name),
@@ -483,6 +490,7 @@ export function filterProjects(projects: Project[], filters: FilterState): Proje
     }
     if (filters.status && p.status !== filters.status) return false
     if (filters.owner && p.project_owner !== filters.owner) return false
+    if (filters.analyst && p.analyst !== filters.analyst) return false
     if (filters.clientType && p.client_type !== filters.clientType) return false
     if (filters.industry && p.industry !== filters.industry) return false
     if (filters.country && p.country !== filters.country) return false

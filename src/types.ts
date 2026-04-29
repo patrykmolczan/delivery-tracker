@@ -115,6 +115,7 @@ export interface FilterState {
   search: string
   status: string
   owner: string
+  analyst: string
   clientType: string
   industry: string
   country: string

@@ -1,9 +1,20 @@
-import React, { useState, useEffect } from 'react'
-import { X, Calendar, User, Building2, MapPin, Factory, Hash, Clock, FileText, Edit2, History, CheckCircle2, Loader2 } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import {
+  X, Calendar, User, Building2, MapPin, Factory, Hash, Clock,
+  FileText, Edit2, History, CheckCircle2, Loader2,
+  Paperclip, Upload, Download, Trash2, AlertCircle, File,
+} from 'lucide-react'
 import type { Project } from '../types'
-import { formatDate, getStatusColor, updateProjectStatus, fetchProjectHistory, fetchLookups } from '../lib/data'
-import type { AuditEntry } from '../lib/data'
+import {
+  formatDate, getStatusColor,
+  updateProjectStatus, fetchProjectHistory,
+  fetchLookups,
+  fetchProjectFiles, uploadProjectFile, deleteProjectFile, getProjectFileUrl,
+  formatFileSize, MAX_FILE_SIZE_BYTES, MAX_FILES_PER_PROJECT,
+} from '../lib/data'
+import type { AuditEntry, ProjectFile } from '../lib/data'
 import type { LookupItem } from '../types'
+import { useAuth } from '../contexts/AuthContext'
 
 interface FieldProps {
   icon: React.ReactNode
@@ -42,13 +53,24 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+function fileIcon(fileType: string) {
+  if (fileType.includes('spreadsheet') || fileType.includes('excel') || fileType.includes('csv'))
+    return <File size={16} className="text-green-600" />
+  if (fileType.includes('pdf'))
+    return <File size={16} className="text-red-500" />
+  if (fileType.includes('word') || fileType.includes('document'))
+    return <File size={16} className="text-blue-500" />
+  return <File size={16} className="text-base-content/50" />
+}
+
 export const ProjectDetail: React.FC<{
   project: Project
   onClose: () => void
   onEdit?: () => void
   onStatusUpdated?: (updatedProject: Project) => void
 }> = ({ project, onClose, onEdit, onStatusUpdated }) => {
-  const [tab, setTab] = useState<'details' | 'history'>('details')
+  const { user } = useAuth()
+  const [tab, setTab] = useState<'details' | 'history' | 'files'>('details')
   const [statuses, setStatuses] = useState<LookupItem[]>([])
   const [selectedStatusId, setSelectedStatusId] = useState<number | null>(project.status_id ?? null)
   const [selectedStatusName, setSelectedStatusName] = useState<string>(project.status)
@@ -58,6 +80,15 @@ export const ProjectDetail: React.FC<{
   const [history, setHistory] = useState<AuditEntry[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [localProject, setLocalProject] = useState<Project>(project)
+
+  // ── Files state ─────────────────────────────────────────────────────────────
+  const [files, setFiles] = useState<ProjectFile[]>([])
+  const [filesLoading, setFilesLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Completed / Ready to Deliver statuses auto-fill delivered date
   const DELIVERED_STATUSES = ['Completed', 'Ready to Deliver']
@@ -82,8 +113,16 @@ export const ProjectDetail: React.FC<{
     setHistoryLoading(false)
   }
 
+  const loadFiles = async () => {
+    setFilesLoading(true)
+    const list = await fetchProjectFiles(localProject.id)
+    setFiles(list)
+    setFilesLoading(false)
+  }
+
   useEffect(() => {
     if (tab === 'history') loadHistory()
+    if (tab === 'files') loadFiles()
   }, [tab, localProject.id])
 
   const handleStatusChange = (statusId: number, statusName: string) => {
@@ -124,6 +163,55 @@ export const ProjectDetail: React.FC<{
     }
   }
 
+  // ── File handlers ────────────────────────────────────────────────────────────
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user?.id) return
+    setUploadError(null)
+    setUploading(true)
+    try {
+      const newFile = await uploadProjectFile(localProject.id, file, user.id)
+      setFiles(prev => [newFile, ...prev])
+    } catch (err: any) {
+      setUploadError(err.message || 'Upload failed')
+    } finally {
+      setUploading(false)
+      // Reset input so same file can be re-selected after an error
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleDelete = async (f: ProjectFile) => {
+    if (!user?.id) return
+    if (!window.confirm(`Delete "${f.file_name}"? This cannot be undone.`)) return
+    setDeletingId(f.id)
+    try {
+      await deleteProjectFile(f.id, f.storage_path, user.id)
+      setFiles(prev => prev.filter(x => x.id !== f.id))
+    } catch (err: any) {
+      alert(`Delete failed: ${err.message}`)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleDownload = async (f: ProjectFile) => {
+    setDownloadingId(f.id)
+    try {
+      const url = await getProjectFileUrl(f.storage_path)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = f.file_name
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    } catch (err: any) {
+      alert(`Download failed: ${err.message}`)
+    } finally {
+      setDownloadingId(null)
+    }
+  }
+
   const isOverdue = () => {
     if (['Completed', 'Cancelled'].includes(localProject.status)) return false
     if (!localProject.expected_delivery_date) return false
@@ -156,16 +244,26 @@ export const ProjectDetail: React.FC<{
       {/* Tabs */}
       <div className="flex border-b border-base-300 bg-base-200">
         <button
-          className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${tab === 'details' ? 'border-b-2 border-primary text-primary' : 'text-base-content/50 hover:text-base-content'}`}
+          className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-colors ${tab === 'details' ? 'border-b-2 border-primary text-primary' : 'text-base-content/50 hover:text-base-content'}`}
           onClick={() => setTab('details')}
         >
-          <FileText size={14} /> Details
+          <FileText size={13} /> Details
         </button>
         <button
-          className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${tab === 'history' ? 'border-b-2 border-primary text-primary' : 'text-base-content/50 hover:text-base-content'}`}
+          className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-colors ${tab === 'history' ? 'border-b-2 border-primary text-primary' : 'text-base-content/50 hover:text-base-content'}`}
           onClick={() => setTab('history')}
         >
-          <History size={14} /> History
+          <History size={13} /> History
+        </button>
+        <button
+          className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-colors ${tab === 'files' ? 'border-b-2 border-primary text-primary' : 'text-base-content/50 hover:text-base-content'}`}
+          onClick={() => setTab('files')}
+        >
+          <Paperclip size={13} />
+          Files
+          {files.length > 0 && (
+            <span className="badge badge-xs badge-primary ml-0.5">{files.length}</span>
+          )}
         </button>
       </div>
 
@@ -300,6 +398,119 @@ export const ProjectDetail: React.FC<{
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Files Tab */}
+      {tab === 'files' && (
+        <div className="flex-1 overflow-y-auto flex flex-col">
+          {/* Upload bar */}
+          <div className="p-4 border-b border-base-300 bg-base-50">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-semibold uppercase tracking-wider text-base-content/40">
+                Attachments
+              </div>
+              <div className="text-xs text-base-content/40">
+                {files.length}/{MAX_FILES_PER_PROJECT} files · max 2 MB each
+              </div>
+            </div>
+
+            {/* Upload error */}
+            {uploadError && (
+              <div className="flex items-start gap-2 p-2 mb-2 rounded-lg bg-error/10 text-error text-xs">
+                <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                <span>{uploadError}</span>
+              </div>
+            )}
+
+            {/* Upload button */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept=".xlsx,.xls,.csv,.pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.zip"
+              onChange={handleFileSelect}
+            />
+            <button
+              className={`btn btn-sm btn-outline btn-primary w-full gap-2 ${uploading ? 'loading' : ''}`}
+              onClick={() => { setUploadError(null); fileInputRef.current?.click() }}
+              disabled={uploading || files.length >= MAX_FILES_PER_PROJECT}
+            >
+              {!uploading && <Upload size={14} />}
+              {uploading ? 'Uploading…' : files.length >= MAX_FILES_PER_PROJECT ? 'File limit reached' : 'Upload File'}
+            </button>
+
+            <p className="text-xs text-base-content/30 mt-1.5 text-center">
+              Supports: Excel, CSV, PDF, Word, images, ZIP
+            </p>
+          </div>
+
+          {/* File list */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {filesLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <Loader2 size={24} className="animate-spin text-primary" />
+              </div>
+            ) : files.length === 0 ? (
+              <div className="text-center py-12">
+                <Paperclip size={32} className="mx-auto text-base-content/20 mb-2" />
+                <p className="text-sm text-base-content/40">No files attached yet</p>
+                <p className="text-xs text-base-content/30 mt-1">Upload Excel, CSV, or other documents</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {files.map(f => (
+                  <div
+                    key={f.id}
+                    className="flex items-center gap-3 p-3 border border-base-300 rounded-lg bg-base-50 hover:bg-base-100 transition-colors group"
+                  >
+                    {/* File type icon */}
+                    <div className="shrink-0">{fileIcon(f.file_type)}</div>
+
+                    {/* File info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-base-content truncate" title={f.file_name}>
+                        {f.file_name}
+                      </div>
+                      <div className="text-xs text-base-content/40 mt-0.5">
+                        {formatFileSize(f.file_size)}
+                        {f.uploader_name && <> · <span className="text-base-content/50">{f.uploader_name}</span></>}
+                      </div>
+                      <div className="text-xs text-base-content/30 mt-0.5" title={new Date(f.created_at).toLocaleString()}>
+                        {timeAgo(f.created_at)}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        className="btn btn-ghost btn-xs btn-circle tooltip tooltip-left"
+                        data-tip="Download"
+                        onClick={() => handleDownload(f)}
+                        disabled={downloadingId === f.id}
+                      >
+                        {downloadingId === f.id
+                          ? <Loader2 size={13} className="animate-spin" />
+                          : <Download size={13} />
+                        }
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-xs btn-circle text-error/70 hover:text-error hover:bg-error/10 tooltip tooltip-left"
+                        data-tip="Delete"
+                        onClick={() => handleDelete(f)}
+                        disabled={deletingId === f.id}
+                      >
+                        {deletingId === f.id
+                          ? <Loader2 size={13} className="animate-spin" />
+                          : <Trash2 size={13} />
+                        }
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

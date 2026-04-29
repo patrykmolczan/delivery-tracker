@@ -384,6 +384,146 @@ export function getStatusHex(status: string): string {
   return colors[status] || '#6b7280'
 }
 
+// ─── Project Files ─────────────────────────────────────────────────────────────
+
+export const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024   // 2 MB
+export const MAX_FILES_PER_PROJECT = 5
+
+export interface ProjectFile {
+  id: string
+  project_id: string
+  file_name: string
+  file_size: number
+  file_type: string
+  storage_path: string
+  uploaded_by: string
+  created_at: string
+  deleted_at: string | null
+  deleted_by: string | null
+  uploader_name: string | null
+  uploader_email: string | null
+}
+
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+export async function fetchProjectFiles(projectId: string): Promise<ProjectFile[]> {
+  const { data, error } = await supabase
+    .from('project_files')
+    .select('*, profiles!uploaded_by(full_name, email)')
+    .eq('project_id', projectId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.warn('project_files fetch error:', error.message)
+    return []
+  }
+
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    project_id: row.project_id,
+    file_name: row.file_name,
+    file_size: row.file_size,
+    file_type: row.file_type,
+    storage_path: row.storage_path,
+    uploaded_by: row.uploaded_by,
+    created_at: row.created_at,
+    deleted_at: row.deleted_at,
+    deleted_by: row.deleted_by,
+    uploader_name: row.profiles?.full_name || null,
+    uploader_email: row.profiles?.email || null,
+  }))
+}
+
+export async function uploadProjectFile(
+  projectId: string,
+  file: File,
+  userId: string
+): Promise<ProjectFile> {
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error(`File size ${formatFileSize(file.size)} exceeds the 2 MB limit`)
+  }
+
+  // Guard: check current count before uploading
+  const existing = await fetchProjectFiles(projectId)
+  if (existing.length >= MAX_FILES_PER_PROJECT) {
+    throw new Error(`Maximum of ${MAX_FILES_PER_PROJECT} files per project reached`)
+  }
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const storagePath = `${projectId}/${Date.now()}_${safeName}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('project-files')
+    .upload(storagePath, file, { cacheControl: '3600', upsert: false })
+
+  if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`)
+
+  const { data, error: dbError } = await supabase
+    .from('project_files')
+    .insert({
+      project_id: projectId,
+      file_name: file.name,
+      file_size: file.size,
+      file_type: file.type || 'application/octet-stream',
+      storage_path: storagePath,
+      uploaded_by: userId,
+    })
+    .select('*, profiles!uploaded_by(full_name, email)')
+    .single()
+
+  if (dbError) {
+    // Clean up orphaned storage object if DB write fails
+    await supabase.storage.from('project-files').remove([storagePath])
+    throw new Error(`Database error: ${dbError.message}`)
+  }
+
+  return {
+    id: data.id,
+    project_id: data.project_id,
+    file_name: data.file_name,
+    file_size: data.file_size,
+    file_type: data.file_type,
+    storage_path: data.storage_path,
+    uploaded_by: data.uploaded_by,
+    created_at: data.created_at,
+    deleted_at: data.deleted_at,
+    deleted_by: data.deleted_by,
+    uploader_name: (data as any).profiles?.full_name || null,
+    uploader_email: (data as any).profiles?.email || null,
+  }
+}
+
+export async function deleteProjectFile(
+  fileId: string,
+  storagePath: string,
+  userId: string
+): Promise<void> {
+  // Soft-delete in DB so history is preserved
+  const { error: dbError } = await supabase
+    .from('project_files')
+    .update({ deleted_at: new Date().toISOString(), deleted_by: userId })
+    .eq('id', fileId)
+
+  if (dbError) throw new Error(`Delete failed: ${dbError.message}`)
+
+  // Remove the actual object from storage
+  await supabase.storage.from('project-files').remove([storagePath])
+}
+
+export async function getProjectFileUrl(storagePath: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from('project-files')
+    .createSignedUrl(storagePath, 3600) // valid for 1 hour
+
+  if (error || !data) throw new Error('Could not generate download link')
+  return data.signedUrl
+}
+
 // ─── AI Prediction Utilities ──────────────────────────────────────────────────
 export interface PredictionStats {
   overall: { avg: number; median: number; count: number }

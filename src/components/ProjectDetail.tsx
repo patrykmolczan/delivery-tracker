@@ -3,7 +3,7 @@ import {
   X, Calendar, User, Building2, MapPin, Factory, Hash, Clock,
   FileText, Edit2, History, CheckCircle2, Loader2,
   Paperclip, Upload, Download, Trash2, AlertCircle, File,
-  Globe, ListTodo, Tag,
+  Globe, ListTodo, Tag, PackageOpen, Eye,
 } from 'lucide-react'
 import type { Project, ProjectCountry, ProjectTask } from '../types'
 import {
@@ -13,8 +13,12 @@ import {
   fetchProjectFiles, uploadProjectFile, deleteProjectFile, getProjectFileUrl,
   formatFileSize, MAX_FILES_PER_PROJECT,
   fetchProjectCountries, fetchProjectTasks,
+  fetchDeliveryFiles, uploadDeliveryFile, deleteDeliveryFile,
+  updateDeliveryFile, getDeliveryFileUrl, trackDeliveryDownload,
+  fetchDeliveryFileDownloads,
+  MAX_DELIVERY_FILES,
 } from '../lib/data'
-import type { AuditEntry, ProjectFile } from '../lib/data'
+import type { AuditEntry, ProjectFile, DeliveryFile, DeliveryFileDownload } from '../lib/data'
 import type { LookupItem } from '../types'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -72,7 +76,7 @@ export const ProjectDetail: React.FC<{
   onStatusUpdated?: (updatedProject: Project) => void
 }> = ({ project, onClose, onEdit, onStatusUpdated }) => {
   const { user, isAdmin } = useAuth()
-  const [tab, setTab] = useState<'details' | 'history' | 'files'>('details')
+  const [tab, setTab] = useState<'details' | 'history' | 'files' | 'delivery'>('details')
   const [statuses, setStatuses] = useState<LookupItem[]>([])
   const [selectedStatusId, setSelectedStatusId] = useState<number | null>(project.status_id ?? null)
   const [selectedStatusName, setSelectedStatusName] = useState<string>(project.status)
@@ -100,6 +104,22 @@ export const ProjectDetail: React.FC<{
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // ── Delivery Files state ─────────────────────────────────────────────────────
+  const [deliveryFiles, setDeliveryFiles] = useState<DeliveryFile[]>([])
+  const [deliveryLoading, setDeliveryLoading] = useState(false)
+  const [deliveryUploading, setDeliveryUploading] = useState(false)
+  const [deliveryUploadError, setDeliveryUploadError] = useState<string | null>(null)
+  const [deliveryDeletingId, setDeliveryDeletingId] = useState<string | null>(null)
+  const [deliveryDownloadingId, setDeliveryDownloadingId] = useState<string | null>(null)
+  const [deliveryEditingId, setDeliveryEditingId] = useState<string | null>(null)
+  const [deliveryEditName, setDeliveryEditName] = useState('')
+  const [deliveryEditDesc, setDeliveryEditDesc] = useState('')
+  const [deliveryEditSaving, setDeliveryEditSaving] = useState(false)
+  const [expandedDownloadsId, setExpandedDownloadsId] = useState<string | null>(null)
+  const [downloadHistory, setDownloadHistory] = useState<DeliveryFileDownload[]>([])
+  const [downloadHistoryLoading, setDownloadHistoryLoading] = useState(false)
+  const deliveryFileInputRef = useRef<HTMLInputElement>(null)
 
   // Completed / Ready to Deliver statuses auto-fill delivered date
   const DELIVERED_STATUSES = ['Completed', 'Ready to Deliver']
@@ -131,9 +151,17 @@ export const ProjectDetail: React.FC<{
     setFilesLoading(false)
   }
 
+  const loadDeliveryFiles = async () => {
+    setDeliveryLoading(true)
+    const list = await fetchDeliveryFiles(localProject.id)
+    setDeliveryFiles(list)
+    setDeliveryLoading(false)
+  }
+
   useEffect(() => {
     if (tab === 'history') loadHistory()
     if (tab === 'files') loadFiles()
+    if (tab === 'delivery') loadDeliveryFiles()
   }, [tab, localProject.id])
 
   const handleStatusChange = (statusId: number, statusName: string) => {
@@ -223,6 +251,110 @@ export const ProjectDetail: React.FC<{
     }
   }
 
+  // ── Delivery File handlers ───────────────────────────────────────────────────
+  const handleDeliveryFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user?.id) return
+    setDeliveryUploadError(null)
+    setDeliveryUploading(true)
+    try {
+      const newFile = await uploadDeliveryFile(localProject.id, file, user.id)
+      setDeliveryFiles(prev => [newFile, ...prev])
+    } catch (err: any) {
+      setDeliveryUploadError(err.message || 'Upload failed')
+    } finally {
+      setDeliveryUploading(false)
+      if (deliveryFileInputRef.current) deliveryFileInputRef.current.value = ''
+    }
+  }
+
+  const handleDeliveryDelete = async (f: DeliveryFile) => {
+    if (!window.confirm(`Delete delivery file "${f.file_name}"? This cannot be undone.`)) return
+    setDeliveryDeletingId(f.id)
+    try {
+      await deleteDeliveryFile(f.id, f.storage_path)
+      setDeliveryFiles(prev => prev.filter(x => x.id !== f.id))
+    } catch (err: any) {
+      alert(`Delete failed: ${err.message}`)
+    } finally {
+      setDeliveryDeletingId(null)
+    }
+  }
+
+  const handleDeliveryDownload = async (f: DeliveryFile) => {
+    setDeliveryDownloadingId(f.id)
+    try {
+      const url = await getDeliveryFileUrl(f.storage_path)
+      // Track download
+      await trackDeliveryDownload(
+        f.id,
+        localProject.id,
+        user?.id || null,
+        user?.email || null,
+        (user as any)?.user_metadata?.full_name || user?.email || null
+      )
+      // Update count locally
+      setDeliveryFiles(prev => prev.map(x =>
+        x.id === f.id ? { ...x, download_count: (x.download_count || 0) + 1 } : x
+      ))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = f.file_name
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    } catch (err: any) {
+      alert(`Download failed: ${err.message}`)
+    } finally {
+      setDeliveryDownloadingId(null)
+    }
+  }
+
+  const startDeliveryEdit = (f: DeliveryFile) => {
+    setDeliveryEditingId(f.id)
+    setDeliveryEditName(f.file_name)
+    setDeliveryEditDesc(f.description || '')
+  }
+
+  const cancelDeliveryEdit = () => {
+    setDeliveryEditingId(null)
+    setDeliveryEditName('')
+    setDeliveryEditDesc('')
+  }
+
+  const saveDeliveryEdit = async (f: DeliveryFile) => {
+    if (!deliveryEditName.trim()) return
+    setDeliveryEditSaving(true)
+    try {
+      await updateDeliveryFile(f.id, {
+        file_name: deliveryEditName.trim(),
+        description: deliveryEditDesc.trim() || undefined,
+      })
+      setDeliveryFiles(prev => prev.map(x =>
+        x.id === f.id
+          ? { ...x, file_name: deliveryEditName.trim(), description: deliveryEditDesc.trim() || null }
+          : x
+      ))
+      cancelDeliveryEdit()
+    } catch (err: any) {
+      alert(`Save failed: ${err.message}`)
+    } finally {
+      setDeliveryEditSaving(false)
+    }
+  }
+
+  const toggleDownloadHistory = async (fileId: string) => {
+    if (expandedDownloadsId === fileId) {
+      setExpandedDownloadsId(null)
+      return
+    }
+    setExpandedDownloadsId(fileId)
+    setDownloadHistoryLoading(true)
+    const history = await fetchDeliveryFileDownloads(fileId)
+    setDownloadHistory(history)
+    setDownloadHistoryLoading(false)
+  }
+
   const isOverdue = () => {
     if (['Completed', 'Cancelled'].includes(localProject.status)) return false
     if (!localProject.expected_delivery_date) return false
@@ -274,6 +406,16 @@ export const ProjectDetail: React.FC<{
           Files
           {files.length > 0 && (
             <span className="badge badge-xs badge-primary ml-0.5">{files.length}</span>
+          )}
+        </button>
+        <button
+          className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-colors ${tab === 'delivery' ? 'border-b-2 border-primary text-primary' : 'text-base-content/50 hover:text-base-content'}`}
+          onClick={() => setTab('delivery')}
+        >
+          <PackageOpen size={13} />
+          Delivery
+          {deliveryFiles.length > 0 && (
+            <span className="badge badge-xs badge-secondary ml-0.5">{deliveryFiles.length}</span>
           )}
         </button>
       </div>
@@ -561,6 +703,212 @@ export const ProjectDetail: React.FC<{
                         }
                       </button>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Delivery Files Tab */}
+      {tab === 'delivery' && (
+        <div className="flex-1 overflow-y-auto flex flex-col">
+          {/* Header + upload (admin only) */}
+          <div className="p-4 border-b border-base-300 bg-base-50">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-base-content/40">
+                  Delivery Files
+                </div>
+                <div className="text-xs text-base-content/30 mt-0.5">
+                  Files delivered to the requestor
+                </div>
+              </div>
+              <div className="text-xs text-base-content/40">
+                {deliveryFiles.length}/{MAX_DELIVERY_FILES} · max 2 MB
+              </div>
+            </div>
+
+            {deliveryUploadError && (
+              <div className="flex items-start gap-2 p-2 mb-2 rounded-lg bg-error/10 text-error text-xs">
+                <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                <span>{deliveryUploadError}</span>
+              </div>
+            )}
+
+            {/* Admin upload button */}
+            {isAdmin && (
+              <>
+                <input
+                  ref={deliveryFileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".xlsx,.xls,.csv,.pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.zip"
+                  onChange={handleDeliveryFileSelect}
+                />
+                <button
+                  className={`btn btn-sm btn-outline btn-secondary w-full gap-2 ${deliveryUploading ? 'loading' : ''}`}
+                  onClick={() => { setDeliveryUploadError(null); deliveryFileInputRef.current?.click() }}
+                  disabled={deliveryUploading || deliveryFiles.length >= MAX_DELIVERY_FILES}
+                >
+                  {!deliveryUploading && <Upload size={14} />}
+                  {deliveryUploading ? 'Uploading…' : deliveryFiles.length >= MAX_DELIVERY_FILES ? 'File limit reached' : 'Upload Delivery File'}
+                </button>
+              </>
+            )}
+
+            {!isAdmin && (
+              <div className="text-xs text-base-content/30 text-center py-1">
+                Files uploaded here by your analyst will appear below for download
+              </div>
+            )}
+          </div>
+
+          {/* File list */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {deliveryLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <Loader2 size={24} className="animate-spin text-primary" />
+              </div>
+            ) : deliveryFiles.length === 0 ? (
+              <div className="text-center py-12">
+                <PackageOpen size={32} className="mx-auto text-base-content/20 mb-2" />
+                <p className="text-sm text-base-content/40">No delivery files yet</p>
+                <p className="text-xs text-base-content/30 mt-1">
+                  {isAdmin ? 'Upload completed deliverables for this project' : 'Your analyst will upload completed files here'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {deliveryFiles.map(f => (
+                  <div key={f.id} className="border border-base-300 rounded-lg bg-base-50">
+                    {/* File row */}
+                    {deliveryEditingId === f.id ? (
+                      /* Edit mode */
+                      <div className="p-3 space-y-2">
+                        <input
+                          className="input input-bordered input-sm w-full"
+                          value={deliveryEditName}
+                          onChange={e => setDeliveryEditName(e.target.value)}
+                          placeholder="File name"
+                        />
+                        <input
+                          className="input input-bordered input-sm w-full"
+                          value={deliveryEditDesc}
+                          onChange={e => setDeliveryEditDesc(e.target.value)}
+                          placeholder="Description (optional)"
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <button className="btn btn-xs btn-ghost" onClick={cancelDeliveryEdit} disabled={deliveryEditSaving}>
+                            Cancel
+                          </button>
+                          <button
+                            className={`btn btn-xs btn-primary gap-1 ${deliveryEditSaving ? 'loading' : ''}`}
+                            onClick={() => saveDeliveryEdit(f)}
+                            disabled={!deliveryEditName.trim() || deliveryEditSaving}
+                          >
+                            {!deliveryEditSaving && <CheckCircle2 size={11} />}
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Normal view */
+                      <div className="flex items-center gap-3 p-3 hover:bg-base-100 transition-colors rounded-lg">
+                        <div className="shrink-0">{fileIcon(f.file_type || '')}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-base-content truncate" title={f.file_name}>
+                            {f.file_name}
+                          </div>
+                          {f.description && (
+                            <div className="text-xs text-base-content/50 mt-0.5 truncate">{f.description}</div>
+                          )}
+                          <div className="text-xs text-base-content/40 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            <span>{formatFileSize(f.file_size)}</span>
+                            {f.uploader_name && <><span>·</span><span>{f.uploader_name}</span></>}
+                            <span>·</span>
+                            <span title={new Date(f.uploaded_at).toLocaleString()}>{timeAgo(f.uploaded_at)}</span>
+                            {(f.download_count || 0) > 0 && (
+                              <><span>·</span><span className="text-success">{f.download_count} download{f.download_count !== 1 ? 's' : ''}</span></>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {/* Download — all users */}
+                          <button
+                            className="btn btn-ghost btn-xs btn-circle tooltip tooltip-left"
+                            data-tip="Download"
+                            onClick={() => handleDeliveryDownload(f)}
+                            disabled={deliveryDownloadingId === f.id}
+                          >
+                            {deliveryDownloadingId === f.id
+                              ? <Loader2 size={13} className="animate-spin" />
+                              : <Download size={13} />
+                            }
+                          </button>
+                          {/* Admin only: edit, download history, delete */}
+                          {isAdmin && (
+                            <>
+                              <button
+                                className="btn btn-ghost btn-xs btn-circle tooltip tooltip-left"
+                                data-tip="Edit name/description"
+                                onClick={() => startDeliveryEdit(f)}
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                              <button
+                                className="btn btn-ghost btn-xs btn-circle tooltip tooltip-left"
+                                data-tip="Download history"
+                                onClick={() => toggleDownloadHistory(f.id)}
+                              >
+                                <Eye size={13} />
+                              </button>
+                              <button
+                                className="btn btn-ghost btn-xs btn-circle text-error/70 hover:text-error hover:bg-error/10 tooltip tooltip-left"
+                                data-tip="Delete"
+                                onClick={() => handleDeliveryDelete(f)}
+                                disabled={deliveryDeletingId === f.id}
+                              >
+                                {deliveryDeletingId === f.id
+                                  ? <Loader2 size={13} className="animate-spin" />
+                                  : <Trash2 size={13} />
+                                }
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Download history (admin, expandable) */}
+                    {isAdmin && expandedDownloadsId === f.id && (
+                      <div className="border-t border-base-300 p-3 bg-base-100 rounded-b-lg">
+                        <div className="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
+                          Download History
+                        </div>
+                        {downloadHistoryLoading ? (
+                          <div className="flex items-center gap-2 text-xs text-base-content/40">
+                            <Loader2 size={12} className="animate-spin" /> Loading…
+                          </div>
+                        ) : downloadHistory.length === 0 ? (
+                          <p className="text-xs text-base-content/30 italic">No downloads yet</p>
+                        ) : (
+                          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                            {downloadHistory.map(d => (
+                              <div key={d.id} className="flex items-center justify-between text-xs">
+                                <span className="text-base-content/70">
+                                  {d.downloaded_by_name || d.downloaded_by_email || 'Unknown user'}
+                                </span>
+                                <span className="text-base-content/40" title={new Date(d.downloaded_at).toLocaleString()}>
+                                  {timeAgo(d.downloaded_at)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

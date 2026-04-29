@@ -989,3 +989,211 @@ export async function deactivateProjectType(id: number): Promise<void> {
     .eq('id', id)
   if (error) throw error
 }
+
+// ─── Delivery Files (Admin upload / User download) ────────────────────────────
+
+export const MAX_DELIVERY_FILES = 25
+export const MAX_DELIVERY_FILE_SIZE_BYTES = 2 * 1024 * 1024   // 2 MB
+
+export interface DeliveryFile {
+  id: string
+  project_id: string
+  file_name: string
+  file_size: number
+  file_type: string | null
+  description: string | null
+  storage_path: string
+  uploaded_by: string | null
+  uploaded_at: string
+  updated_at: string
+  uploader_name: string | null
+  uploader_email: string | null
+  download_count?: number
+}
+
+export interface DeliveryFileDownload {
+  id: string
+  file_id: string
+  project_id: string
+  downloaded_by: string | null
+  downloaded_by_email: string | null
+  downloaded_by_name: string | null
+  downloaded_at: string
+}
+
+export async function fetchDeliveryFiles(projectId: string): Promise<DeliveryFile[]> {
+  const { data, error } = await supabase
+    .from('project_delivery_files')
+    .select('*, profiles!uploaded_by(full_name, email)')
+    .eq('project_id', projectId)
+    .order('uploaded_at', { ascending: false })
+
+  if (error) {
+    console.warn('delivery files fetch error:', error.message)
+    return []
+  }
+
+  // Get download counts in one query
+  const ids = (data || []).map((r: any) => r.id)
+  let countMap: Record<string, number> = {}
+  if (ids.length > 0) {
+    const { data: dlData } = await supabase
+      .from('delivery_file_downloads')
+      .select('file_id')
+      .in('file_id', ids)
+    ;(dlData || []).forEach((r: any) => {
+      countMap[r.file_id] = (countMap[r.file_id] || 0) + 1
+    })
+  }
+
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    project_id: row.project_id,
+    file_name: row.file_name,
+    file_size: row.file_size,
+    file_type: row.file_type,
+    description: row.description,
+    storage_path: row.storage_path,
+    uploaded_by: row.uploaded_by,
+    uploaded_at: row.uploaded_at,
+    updated_at: row.updated_at,
+    uploader_name: row.profiles?.full_name || null,
+    uploader_email: row.profiles?.email || null,
+    download_count: countMap[row.id] || 0,
+  }))
+}
+
+export async function uploadDeliveryFile(
+  projectId: string,
+  file: File,
+  userId: string
+): Promise<DeliveryFile> {
+  if (file.size > MAX_DELIVERY_FILE_SIZE_BYTES) {
+    throw new Error(`File size ${formatFileSize(file.size)} exceeds the 2 MB limit`)
+  }
+
+  const existing = await fetchDeliveryFiles(projectId)
+  if (existing.length >= MAX_DELIVERY_FILES) {
+    throw new Error(`Maximum of ${MAX_DELIVERY_FILES} delivery files per project reached`)
+  }
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const storagePath = `${projectId}/${Date.now()}_${safeName}`
+
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Not authenticated — please log in again')
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+  const contentType = file.type || 'application/octet-stream'
+  const fileBlob = new Blob([await file.arrayBuffer()], { type: contentType })
+
+  const uploadRes = await fetch(
+    `${supabaseUrl}/storage/v1/object/project-delivery-files/${storagePath}`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': contentType,
+        'x-upsert': 'false',
+      },
+      body: fileBlob,
+    }
+  )
+
+  if (!uploadRes.ok) {
+    const errText = await uploadRes.text().catch(() => uploadRes.statusText)
+    throw new Error(`Upload failed: ${errText}`)
+  }
+
+  const { data, error: dbError } = await supabase
+    .from('project_delivery_files')
+    .insert({
+      project_id: projectId,
+      file_name: file.name,
+      file_size: file.size,
+      file_type: file.type || 'application/octet-stream',
+      storage_path: storagePath,
+      uploaded_by: userId,
+    })
+    .select('*, profiles!uploaded_by(full_name, email)')
+    .single()
+
+  if (dbError) {
+    await supabase.storage.from('project-delivery-files').remove([storagePath]).catch(() => {})
+    throw new Error(`Database error: ${dbError.message}`)
+  }
+
+  return {
+    id: data.id,
+    project_id: data.project_id,
+    file_name: data.file_name,
+    file_size: data.file_size,
+    file_type: data.file_type,
+    description: data.description,
+    storage_path: data.storage_path,
+    uploaded_by: data.uploaded_by,
+    uploaded_at: data.uploaded_at,
+    updated_at: data.updated_at,
+    uploader_name: (data as any).profiles?.full_name || null,
+    uploader_email: (data as any).profiles?.email || null,
+    download_count: 0,
+  }
+}
+
+export async function updateDeliveryFile(
+  fileId: string,
+  updates: { file_name?: string; description?: string }
+): Promise<void> {
+  const { error } = await supabase
+    .from('project_delivery_files')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', fileId)
+  if (error) throw new Error(`Update failed: ${error.message}`)
+}
+
+export async function deleteDeliveryFile(
+  fileId: string,
+  storagePath: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('project_delivery_files')
+    .delete()
+    .eq('id', fileId)
+  if (error) throw new Error(`Delete failed: ${error.message}`)
+  await supabase.storage.from('project-delivery-files').remove([storagePath]).catch(() => {})
+}
+
+export async function getDeliveryFileUrl(storagePath: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from('project-delivery-files')
+    .createSignedUrl(storagePath, 3600)
+  if (error || !data) throw new Error('Could not generate download link')
+  return data.signedUrl
+}
+
+export async function trackDeliveryDownload(
+  fileId: string,
+  projectId: string,
+  userId: string | null,
+  userEmail: string | null,
+  userName: string | null
+): Promise<void> {
+  await supabase.from('delivery_file_downloads').insert({
+    file_id: fileId,
+    project_id: projectId,
+    downloaded_by: userId,
+    downloaded_by_email: userEmail,
+    downloaded_by_name: userName,
+  }).then(() => {}) // fire and forget, don't block download
+}
+
+export async function fetchDeliveryFileDownloads(fileId: string): Promise<DeliveryFileDownload[]> {
+  const { data, error } = await supabase
+    .from('delivery_file_downloads')
+    .select('*')
+    .eq('file_id', fileId)
+    .order('downloaded_at', { ascending: false })
+    .limit(50)
+  if (error) return []
+  return (data || []) as DeliveryFileDownload[]
+}

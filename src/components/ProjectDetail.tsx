@@ -71,7 +71,7 @@ export const ProjectDetail: React.FC<{
   onEdit?: () => void
   onStatusUpdated?: (updatedProject: Project) => void
 }> = ({ project, onClose, onEdit, onStatusUpdated }) => {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [tab, setTab] = useState<'details' | 'history' | 'files'>('details')
   const [statuses, setStatuses] = useState<LookupItem[]>([])
   const [selectedStatusId, setSelectedStatusId] = useState<number | null>(project.status_id ?? null)
@@ -281,51 +281,53 @@ export const ProjectDetail: React.FC<{
       {/* Details Tab */}
       {tab === 'details' && (
         <div className="flex-1 overflow-y-auto">
-          {/* Status Change Panel */}
-          <div className="p-4 border-b border-base-300 bg-base-50">
-            <div className="text-xs font-semibold uppercase tracking-wider text-base-content/40 mb-2">Quick Status Update</div>
-            <div className="flex gap-2 items-center">
-              <div className="relative flex-1">
-                <select
-                  className="select select-bordered select-sm w-full pr-8"
-                  value={selectedStatusId ?? ''}
-                  onChange={e => {
-                    const id = parseInt(e.target.value)
-                    const name = statuses.find(s => s.id === id)?.name || ''
-                    handleStatusChange(id, name)
-                  }}
+          {/* Status Change Panel — Admin only */}
+          {isAdmin && (
+            <div className="p-4 border-b border-base-300 bg-base-50">
+              <div className="text-xs font-semibold uppercase tracking-wider text-base-content/40 mb-2">Quick Status Update</div>
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-1">
+                  <select
+                    className="select select-bordered select-sm w-full pr-8"
+                    value={selectedStatusId ?? ''}
+                    onChange={e => {
+                      const id = parseInt(e.target.value)
+                      const name = statuses.find(s => s.id === id)?.name || ''
+                      handleStatusChange(id, name)
+                    }}
+                  >
+                    {statuses.length === 0
+                      ? <option value={localProject.status_id ?? ''}>{localProject.status}</option>
+                      : statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+                    }
+                  </select>
+                </div>
+                <button
+                  className={`btn btn-sm btn-primary gap-1.5 ${savingStatus ? 'loading' : ''}`}
+                  onClick={handleSaveStatus}
+                  disabled={!statusChanged || savingStatus}
                 >
-                  {statuses.length === 0
-                    ? <option value={localProject.status_id ?? ''}>{localProject.status}</option>
-                    : statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)
-                  }
-                </select>
+                  {!savingStatus && <CheckCircle2 size={14} />}
+                  Save
+                </button>
               </div>
-              <button
-                className={`btn btn-sm btn-primary gap-1.5 ${savingStatus ? 'loading' : ''}`}
-                onClick={handleSaveStatus}
-                disabled={!statusChanged || savingStatus}
-              >
-                {!savingStatus && <CheckCircle2 size={14} />}
-                Save
-              </button>
+              {willMarkDelivered && statusChanged && (
+                <div className="mt-2 text-xs text-success flex items-center gap-1.5">
+                  <CheckCircle2 size={12} />
+                  Will auto-fill today as Delivered Date and calculate days to complete
+                </div>
+              )}
+              {statusSuccess && (
+                <div className="mt-2 text-xs text-success flex items-center gap-1.5">
+                  <CheckCircle2 size={12} />
+                  Status updated successfully!
+                </div>
+              )}
+              {statusError && (
+                <div className="mt-2 text-xs text-error">{statusError}</div>
+              )}
             </div>
-            {willMarkDelivered && statusChanged && (
-              <div className="mt-2 text-xs text-success flex items-center gap-1.5">
-                <CheckCircle2 size={12} />
-                Will auto-fill today as Delivered Date and calculate days to complete
-              </div>
-            )}
-            {statusSuccess && (
-              <div className="mt-2 text-xs text-success flex items-center gap-1.5">
-                <CheckCircle2 size={12} />
-                Status updated successfully!
-              </div>
-            )}
-            {statusError && (
-              <div className="mt-2 text-xs text-error">{statusError}</div>
-            )}
-          </div>
+          )}
 
           {/* Fields */}
           <div className="p-4 space-y-1">

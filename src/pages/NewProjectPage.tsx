@@ -9,6 +9,7 @@ import {
   buildPredictionStats, predictDeliveryTime,
   uploadProjectFile, MAX_FILE_SIZE_BYTES, MAX_FILES_PER_PROJECT,
   fetchProjectCountries, fetchProjectTasks, formatFileSize,
+  fetchAnalysts,
 } from '../lib/data'
 import type {
   LookupItem, Project, ProjectFormData,
@@ -127,13 +128,16 @@ interface Props {
 }
 
 export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel }) => {
-  const { user } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const [form, setForm] = useState<ProjectFormData>(EMPTY_FORM)
   const [lookups, setLookups] = useState<{ statuses: LookupItem[]; clientTypes: LookupItem[]; industries: LookupItem[]; countries: LookupItem[] } | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [touched, setTouched] = useState<Record<string, boolean>>({})
+
+  // Analysts list
+  const [analysts, setAnalysts] = useState<import('../lib/data').Analyst[]>([])
 
   // ETA prediction
   const [predStats, setPredStats] = useState<ReturnType<typeof buildPredictionStats> | null>(null)
@@ -163,7 +167,19 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
         setError('Failed to load form options: ' + (err.message || 'Unknown error'))
         setLookups({ statuses: [], clientTypes: [], industries: [], countries: [] })
       })
+    fetchAnalysts().then(setAnalysts).catch(() => {})
   }, [])
+
+  // For normal users: auto-set Requestor to their name and Date Received to today
+  useEffect(() => {
+    if (!isAdmin && !editProject) {
+      setForm(f => ({
+        ...f,
+        requestor: profile?.full_name || user?.email || '',
+        date_received: new Date().toISOString().slice(0, 10),
+      }))
+    }
+  }, [isAdmin, profile?.full_name, user?.email, editProject])
 
   // Load prediction stats in background
   useEffect(() => {
@@ -243,12 +259,12 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   // ── Validation ───────────────────────────────────────────────────────────────
 
   const errors: Record<string, string> = {}
-  if (touched.project_owner && !form.project_owner) errors.project_owner = 'Required'
+  if (isAdmin && touched.project_owner && !form.project_owner) errors.project_owner = 'Required'
   if (touched.client_name && !form.client_name) errors.client_name = 'Required'
   if (touched.date_received && !form.date_received) errors.date_received = 'Required'
   if (touched.status_id && !form.status_id) errors.status_id = 'Required'
 
-  const isValid = form.project_owner && form.client_name && form.date_received && form.status_id
+  const isValid = (isAdmin ? !!form.project_owner : true) && !!form.client_name && !!form.date_received && !!form.status_id
 
   // ── Country builder ──────────────────────────────────────────────────────────
 
@@ -442,33 +458,55 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
           <div className="card bg-base-200 border border-base-300">
             <div className="card-body gap-4">
               <Section icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} title="People">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <Field label="Project Owner" required error={errors.project_owner}>
-                    <input
-                      className={`input input-bordered w-full ${errors.project_owner ? 'input-error' : ''}`}
-                      value={form.project_owner}
-                      onChange={e => set('project_owner', e.target.value)}
-                      onBlur={() => setTouched(t => ({ ...t, project_owner: true }))}
-                      placeholder="e.g. Jane Smith"
-                    />
-                  </Field>
-                  <Field label="Analyst">
-                    <input
-                      className="input input-bordered w-full"
-                      value={form.analyst}
-                      onChange={e => set('analyst', e.target.value)}
-                      placeholder="e.g. John Doe"
-                    />
-                  </Field>
-                  <Field label="Requestor">
-                    <input
-                      className="input input-bordered w-full"
-                      value={form.requestor}
-                      onChange={e => set('requestor', e.target.value)}
-                      placeholder="e.g. HR Manager"
-                    />
-                  </Field>
-                </div>
+                {isAdmin ? (
+                  /* Admin: full editable People fields */
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Field label="Project Owner" required error={errors.project_owner}>
+                      <input
+                        className={`input input-bordered w-full ${errors.project_owner ? 'input-error' : ''}`}
+                        value={form.project_owner}
+                        onChange={e => set('project_owner', e.target.value)}
+                        onBlur={() => setTouched(t => ({ ...t, project_owner: true }))}
+                        placeholder="e.g. Jane Smith"
+                      />
+                    </Field>
+                    <Field label="Analyst" hint="Select from list">
+                      <select
+                        className="select select-bordered w-full"
+                        value={form.analyst}
+                        onChange={e => set('analyst', e.target.value)}
+                      >
+                        <option value="">— Select analyst —</option>
+                        {analysts.map(a => (
+                          <option key={a.id} value={a.name}>{a.name}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Requestor">
+                      <input
+                        className="input input-bordered w-full"
+                        value={form.requestor}
+                        onChange={e => set('requestor', e.target.value)}
+                        placeholder="e.g. HR Manager"
+                      />
+                    </Field>
+                  </div>
+                ) : (
+                  /* Normal user: Requestor auto-set (read-only), Owner & Analyst assigned by admin */
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Field label="Submitted By (Requestor)">
+                        <div className="input input-bordered w-full bg-base-300/50 flex items-center text-sm text-base-content/70 cursor-not-allowed">
+                          {form.requestor || profile?.full_name || user?.email || '—'}
+                        </div>
+                      </Field>
+                    </div>
+                    <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-info/10 border border-info/20 text-info text-xs">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      <span><strong>Project Owner</strong> and <strong>Analyst</strong> will be assigned by an Admin after submission.</span>
+                    </div>
+                  </div>
+                )}
               </Section>
             </div>
           </div>
@@ -660,33 +698,53 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
               <div className="divider my-0 opacity-40"></div>
 
               <Section icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>} title="Dates">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <Field label="Date Received" required error={errors.date_received}>
-                    <input
-                      type="date"
-                      className={`input input-bordered w-full ${errors.date_received ? 'input-error' : ''}`}
-                      value={form.date_received}
-                      onChange={e => set('date_received', e.target.value)}
-                      onBlur={() => setTouched(t => ({ ...t, date_received: true }))}
-                    />
-                  </Field>
-                  <Field label="Expected Delivery">
-                    <input
-                      type="date"
-                      className="input input-bordered w-full"
-                      value={form.expected_delivery_date}
-                      onChange={e => set('expected_delivery_date', e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Date Delivered">
-                    <input
-                      type="date"
-                      className="input input-bordered w-full"
-                      value={form.date_delivered}
-                      onChange={e => set('date_delivered', e.target.value)}
-                    />
-                  </Field>
-                </div>
+                {isAdmin ? (
+                  /* Admin: all 3 date fields editable */
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Field label="Date Received" required error={errors.date_received}>
+                      <input
+                        type="date"
+                        className={`input input-bordered w-full ${errors.date_received ? 'input-error' : ''}`}
+                        value={form.date_received}
+                        onChange={e => set('date_received', e.target.value)}
+                        onBlur={() => setTouched(t => ({ ...t, date_received: true }))}
+                      />
+                    </Field>
+                    <Field label="Expected Delivery">
+                      <input
+                        type="date"
+                        className="input input-bordered w-full"
+                        value={form.expected_delivery_date}
+                        onChange={e => set('expected_delivery_date', e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Date Delivered">
+                      <input
+                        type="date"
+                        className="input input-bordered w-full"
+                        value={form.date_delivered}
+                        onChange={e => set('date_delivered', e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                ) : (
+                  /* Normal user: Date Received locked to today; Date Delivered hidden */
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field label="Date Received" hint="Auto-set to today">
+                      <div className="input input-bordered w-full bg-base-300/50 flex items-center text-sm text-base-content/70 cursor-not-allowed">
+                        {form.date_received || new Date().toISOString().slice(0, 10)}
+                      </div>
+                    </Field>
+                    <Field label="Expected Delivery">
+                      <input
+                        type="date"
+                        className="input input-bordered w-full"
+                        value={form.expected_delivery_date}
+                        onChange={e => set('expected_delivery_date', e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                )}
               </Section>
             </div>
           </div>

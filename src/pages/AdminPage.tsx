@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { UserPlus, Shield, User, CheckCircle2, Edit2, Save, X, AlertCircle, Loader2, RefreshCw, Key } from 'lucide-react'
+import { UserPlus, Shield, User, CheckCircle2, Edit2, Save, X, AlertCircle, Loader2, RefreshCw, Key, Users, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { fetchAnalysts, createAnalyst, deactivateAnalyst } from '../lib/data'
+import type { Analyst } from '../lib/data'
 import type { UserProfile } from '../types'
 
 export const AdminPage: React.FC = () => {
@@ -12,6 +14,13 @@ export const AdminPage: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null)
 
   const [newUser, setNewUser] = useState({ email: '', full_name: '', password: '', role: 'user' as 'admin' | 'user' })
+
+  // ── Analyst management state ──────────────────────────────────────────────
+  const [analysts, setAnalysts] = useState<Analyst[]>([])
+  const [analystLoading, setAnalystLoading] = useState(false)
+  const [newAnalystName, setNewAnalystName] = useState('')
+  const [addingAnalyst, setAddingAnalyst] = useState(false)
+  const [analystError, setAnalystError] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ full_name: '', role: 'user' as 'admin' | 'user', is_active: true })
 
   const fetchUsers = async () => {
@@ -24,7 +33,10 @@ export const AdminPage: React.FC = () => {
     setLoading(false)
   }
 
-  useEffect(() => { fetchUsers() }, [])
+  useEffect(() => {
+    fetchUsers()
+    loadAnalysts()
+  }, [])
 
   const showSuccess = (msg: string) => {
     setSuccess(msg)
@@ -82,6 +94,46 @@ export const AdminPage: React.FC = () => {
       showSuccess('User updated successfully!')
     } catch (err: any) {
       setError(err.message || 'Failed to update user')
+    }
+  }
+
+  const loadAnalysts = async () => {
+    setAnalystLoading(true)
+    try {
+      const list = await fetchAnalysts()
+      setAnalysts(list)
+    } catch (err: any) {
+      setAnalystError(err.message || 'Failed to load analysts')
+    } finally {
+      setAnalystLoading(false)
+    }
+  }
+
+  const handleAddAnalyst = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newAnalystName.trim()) return
+    setAddingAnalyst(true)
+    setAnalystError(null)
+    try {
+      const created = await createAnalyst(newAnalystName)
+      setAnalysts(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
+      setNewAnalystName('')
+      showSuccess(`Analyst "${created.name}" added!`)
+    } catch (err: any) {
+      setAnalystError(err.message?.includes('unique') ? 'An analyst with that name already exists.' : (err.message || 'Failed to add analyst'))
+    } finally {
+      setAddingAnalyst(false)
+    }
+  }
+
+  const handleRemoveAnalyst = async (analyst: Analyst) => {
+    if (!window.confirm(`Remove analyst "${analyst.name}" from the list? They won't appear in new project forms.`)) return
+    try {
+      await deactivateAnalyst(analyst.id)
+      setAnalysts(prev => prev.filter(a => a.id !== analyst.id))
+      showSuccess(`Analyst "${analyst.name}" removed.`)
+    } catch (err: any) {
+      setAnalystError(err.message || 'Failed to remove analyst')
     }
   }
 
@@ -177,6 +229,69 @@ export const AdminPage: React.FC = () => {
               </div>
             </div>
           </form>
+        </div>
+      </div>
+
+      {/* Manage Analysts */}
+      <div className="card bg-base-200 border border-base-300">
+        <div className="card-body">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="card-title text-base flex items-center gap-2">
+              <Users size={18} className="text-primary" /> Manage Analysts
+            </h3>
+            <span className="text-xs text-base-content/50">{analysts.length} active</span>
+          </div>
+          <p className="text-xs text-base-content/50 mb-3">
+            These names appear in the Analyst dropdown when creating or editing projects. Only admins can assign analysts.
+          </p>
+
+          {analystError && (
+            <div className="alert alert-error alert-sm mb-3 py-2">
+              <AlertCircle size={14} />
+              <span className="text-sm">{analystError}</span>
+              <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setAnalystError(null)}><X size={11} /></button>
+            </div>
+          )}
+
+          {/* Add analyst form */}
+          <form onSubmit={handleAddAnalyst} className="flex gap-2 mb-4">
+            <input
+              className="input input-bordered input-sm flex-1"
+              placeholder="Analyst full name…"
+              value={newAnalystName}
+              onChange={e => setNewAnalystName(e.target.value)}
+            />
+            <button
+              type="submit"
+              className={`btn btn-primary btn-sm gap-1.5 ${addingAnalyst ? 'loading' : ''}`}
+              disabled={addingAnalyst || !newAnalystName.trim()}
+            >
+              {!addingAnalyst && <Plus size={14} />}
+              Add
+            </button>
+          </form>
+
+          {/* Analyst list */}
+          {analystLoading ? (
+            <div className="flex justify-center py-4"><Loader2 size={20} className="animate-spin text-primary" /></div>
+          ) : analysts.length === 0 ? (
+            <p className="text-sm text-base-content/40 text-center py-4">No analysts yet — add one above.</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {analysts.map(analyst => (
+                <div key={analyst.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-base-100 border border-base-300 rounded-lg group">
+                  <span className="text-sm font-medium truncate">{analyst.name}</span>
+                  <button
+                    className="btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                    onClick={() => handleRemoveAnalyst(analyst)}
+                    title="Remove analyst"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

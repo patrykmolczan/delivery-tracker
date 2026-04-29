@@ -787,3 +787,40 @@ export function predictDeliveryTime(
 
   return { estimate, confidence, breakdown }
 }
+
+// ─── Analysts ──────────────────────────────────────────────────────────────────
+
+export interface Analyst {
+  id: number
+  name: string
+  is_active: boolean
+  created_at: string
+}
+
+export async function fetchAnalysts(): Promise<Analyst[]> {
+  const { data, error } = await supabase
+    .from('analysts')
+    .select('*')
+    .eq('is_active', true)
+    .order('name')
+  if (error) throw error
+  return (data || []) as Analyst[]
+}
+
+export async function createAnalyst(name: string): Promise<Analyst> {
+  const { data, error } = await supabase
+    .from('analysts')
+    .insert({ name: name.trim() })
+    .select()
+    .single()
+  if (error) throw error
+  return data as Analyst
+}
+
+export async function deactivateAnalyst(id: number): Promise<void> {
+  const { error } = await supabase
+    .from('analysts')
+    .update({ is_active: false })
+    .eq('id', id)
+  if (error) throw error
+}

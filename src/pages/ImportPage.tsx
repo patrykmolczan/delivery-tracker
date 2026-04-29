@@ -241,19 +241,13 @@ export const ImportPage: React.FC<Props> = ({ onDone }) => {
 
           {/* Template download */}
           <div className="text-center">
-            <button
+            <a
+              href="/import_template.csv"
+              download="delivery-tracker-import-template.csv"
               className="btn btn-ghost btn-sm gap-2 text-base-content/50"
-              onClick={() => {
-                const csv = 'Project Owner,Client Name,Date Received,Status,Analyst,Client Type,Requestor,Expected Delivery,Date Delivered,Project Summary,Job Count,Country,Industry\nJane Smith,Acme Corp,2024-01-15,In Process,John Doe,Global,,2024-02-15,,Market study,50,United States,Healthcare\n'
-                const blob = new Blob([csv], { type: 'text/csv' })
-                const a = document.createElement('a')
-                a.href = URL.createObjectURL(blob)
-                a.download = 'delivery-tracker-template.csv'
-                a.click()
-              }}
             >
               <FileText size={14} /> Download CSV Template
-            </button>
+            </a>
           </div>
         </div>
       )}

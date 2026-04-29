@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   UserPlus, Shield, User, CheckCircle2, Edit2, Save, X, AlertCircle,
   Loader2, RefreshCw, Key, Users, Plus, Trash2, Tag, Layers, Upload, Download,
+  Search, ChevronLeft, ChevronRight, UserX, UserCheck,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import {
@@ -242,6 +243,14 @@ export const AdminPage: React.FC = () => {
   const [ptLoading, setPtLoading] = useState(false)
   const [ptError, setPtError] = useState<string | null>(null)
 
+  // User management state
+  const [userSearch, setUserSearch] = useState('')
+  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [userPage, setUserPage] = useState(1)
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
+  const [bulkDeactivating, setBulkDeactivating] = useState(false)
+  const USERS_PER_PAGE = 25
+
   const fetchUsers = async () => {
     setLoading(true)
     const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
@@ -263,6 +272,11 @@ export const AdminPage: React.FC = () => {
   }
 
   useEffect(() => { loadAll() }, [])
+
+  useEffect(() => {
+    setUserPage(1)
+    setSelectedUserIds(new Set())
+  }, [userSearch, userStatusFilter])
 
   const showSuccess = (msg: string) => { setSuccess(msg); setTimeout(() => setSuccess(null), 3000) }
 
@@ -296,6 +310,61 @@ export const AdminPage: React.FC = () => {
       if (error) throw error
       setEditId(null); await fetchUsers(); showSuccess('User updated successfully!')
     } catch (err: any) { setError(err.message || 'Failed to update user') }
+  }
+
+  // ── User management handlers ───────────────────────────────────────────────
+  const toggleSelectUser = (id: string) => {
+    setSelectedUserIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAllPage = () => {
+    if (allPageSelected) {
+      setSelectedUserIds(prev => {
+        const next = new Set(prev)
+        pagedUsers.forEach(u => next.delete(u.id))
+        return next
+      })
+    } else {
+      setSelectedUserIds(prev => {
+        const next = new Set(prev)
+        pagedUsers.forEach(u => next.add(u.id))
+        return next
+      })
+    }
+  }
+
+  const quickToggleActive = async (user: UserProfile) => {
+    const newActive = !(user.is_active ?? true)
+    const { error } = await supabase.from('profiles').update({ is_active: newActive, updated_at: new Date().toISOString() }).eq('id', user.id)
+    if (!error) {
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_active: newActive } : u))
+      showSuccess(`${user.full_name || user.email} ${newActive ? 'activated' : 'deactivated'}.`)
+    } else {
+      setError(error.message)
+    }
+  }
+
+  const bulkDeactivate = async () => {
+    if (selectedUserIds.size === 0) return
+    if (!window.confirm(`Deactivate ${selectedUserIds.size} selected user(s)? They will lose access immediately.`)) return
+    setBulkDeactivating(true)
+    try {
+      const ids = Array.from(selectedUserIds)
+      const { error } = await supabase.from('profiles').update({ is_active: false, updated_at: new Date().toISOString() }).in('id', ids)
+      if (error) throw error
+      setUsers(prev => prev.map(u => selectedUserIds.has(u.id) ? { ...u, is_active: false } : u))
+      setSelectedUserIds(new Set())
+      showSuccess(`${ids.length} user(s) deactivated.`)
+    } catch (err: any) {
+      setError(err.message || 'Bulk deactivate failed')
+    } finally {
+      setBulkDeactivating(false)
+    }
   }
 
   // ── Analyst handlers ──────────────────────────────────────────────────────
@@ -396,6 +465,21 @@ export const AdminPage: React.FC = () => {
       showSuccess(`Project Type "${item.name}" removed.`)
     } catch (err: any) { setPtError(err.message || 'Failed to remove project type') }
   }
+
+  // Filtered + paginated users
+  const filteredUsers = users.filter(u => {
+    const q = userSearch.toLowerCase()
+    const matchSearch = !q || u.full_name?.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+    const matchStatus =
+      userStatusFilter === 'all' ? true :
+      userStatusFilter === 'active' ? (u.is_active !== false) :
+      (u.is_active === false)
+    return matchSearch && matchStatus
+  })
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE))
+  const pagedUsers = filteredUsers.slice((userPage - 1) * USERS_PER_PAGE, userPage * USERS_PER_PAGE)
+  const allPageSelected = pagedUsers.length > 0 && pagedUsers.every(u => selectedUserIds.has(u.id))
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -499,73 +583,200 @@ export const AdminPage: React.FC = () => {
       {/* Users Table */}
       <div className="card bg-base-200 border border-base-300">
         <div className="card-body p-0">
-          <div className="px-6 pt-4 pb-2">
-            <h3 className="card-title text-base flex items-center gap-2"><Users size={18} className="text-primary" /> Users</h3>
+          {/* Header */}
+          <div className="px-6 pt-5 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="card-title text-base flex items-center gap-2">
+                <Users size={18} className="text-primary" /> User Management
+              </h3>
+              <p className="text-xs text-base-content/50 mt-0.5">
+                {filteredUsers.length} of {users.length} users
+                {selectedUserIds.size > 0 && <span className="ml-2 text-warning font-medium">· {selectedUserIds.size} selected</span>}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Search */}
+              <div className="relative">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-base-content/40" />
+                <input
+                  className="input input-bordered input-sm pl-8 w-56"
+                  placeholder="Search name or email…"
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                />
+                {userSearch && (
+                  <button className="absolute right-2 top-1/2 -translate-y-1/2 text-base-content/40 hover:text-base-content" onClick={() => setUserSearch('')}>
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+              {/* Status filter pills */}
+              <div className="join">
+                {(['all', 'active', 'inactive'] as const).map(f => (
+                  <button
+                    key={f}
+                    className={`join-item btn btn-xs capitalize ${userStatusFilter === f ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
+                    onClick={() => setUserStatusFilter(f)}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
+
+          {/* Bulk action bar */}
+          {selectedUserIds.size > 0 && (
+            <div className="mx-6 mb-3 flex items-center gap-3 px-4 py-2.5 bg-warning/10 border border-warning/30 rounded-lg">
+              <span className="text-sm font-medium text-warning">{selectedUserIds.size} user{selectedUserIds.size !== 1 ? 's' : ''} selected</span>
+              <button
+                className={`btn btn-error btn-sm gap-1.5 ${bulkDeactivating ? 'loading' : ''}`}
+                onClick={bulkDeactivate}
+                disabled={bulkDeactivating}
+              >
+                {!bulkDeactivating && <UserX size={14} />} Deactivate Selected
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setSelectedUserIds(new Set())}>
+                <X size={14} /> Clear
+              </button>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center h-32"><Loader2 size={24} className="animate-spin text-primary" /></div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="table table-sm">
-                <thead>
-                  <tr className="bg-base-300/50">
-                    <th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map(user => (
-                    <tr key={user.id} className={!user.is_active ? 'opacity-50' : ''}>
-                      <td>
-                        <div className="flex items-center gap-2">
-                          <div className="avatar placeholder">
-                            <div className="bg-primary/20 text-primary rounded-full w-8">
-                              <span className="text-xs font-bold">{user.full_name?.[0]?.toUpperCase() || user.email[0]?.toUpperCase()}</span>
-                            </div>
-                          </div>
-                          {editId === user.id ? (
-                            <input className="input input-bordered input-xs w-32" value={editForm.full_name} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} />
-                          ) : (
-                            <span className="font-medium">{user.full_name}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="text-sm text-base-content/70">{user.email}</td>
-                      <td>
-                        {editId === user.id ? (
-                          <select className="select select-bordered select-xs" value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value as any }))}>
-                            <option value="user">User</option><option value="admin">Admin</option>
-                          </select>
-                        ) : (
-                          <span className={`badge badge-sm ${user.role === 'admin' ? 'badge-primary' : 'badge-ghost'}`}>
-                            {user.role === 'admin' ? <><Shield size={10} className="mr-1" />Admin</> : <><User size={10} className="mr-1" />User</>}
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        {editId === user.id ? (
-                          <input type="checkbox" className="toggle toggle-success toggle-sm" checked={editForm.is_active} onChange={e => setEditForm(f => ({ ...f, is_active: e.target.checked }))} />
-                        ) : (
-                          <span className={`badge badge-sm ${user.is_active ? 'badge-success' : 'badge-error'}`}>{user.is_active ? 'Active' : 'Inactive'}</span>
-                        )}
-                      </td>
-                      <td className="text-xs text-base-content/50">{new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                      <td>
-                        <div className="flex gap-1">
-                          {editId === user.id ? (
-                            <>
-                              <button className="btn btn-success btn-xs gap-1" onClick={() => saveEdit(user.id)}><Save size={12} /> Save</button>
-                              <button className="btn btn-ghost btn-xs" onClick={cancelEdit}><X size={12} /></button>
-                            </>
-                          ) : (
-                            <button className="btn btn-ghost btn-xs gap-1" onClick={() => startEdit(user)}><Edit2 size={12} /> Edit</button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          ) : filteredUsers.length === 0 ? (
+            <div className="text-center py-12 text-base-content/40">
+              <Users size={32} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">{userSearch ? `No users match "${userSearch}"` : 'No users found.'}</p>
             </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="table table-sm">
+                  <thead>
+                    <tr className="bg-base-300/50">
+                      <th className="w-10">
+                        <input
+                          type="checkbox"
+                          className="checkbox checkbox-sm"
+                          checked={allPageSelected}
+                          onChange={toggleSelectAllPage}
+                          title="Select all on this page"
+                        />
+                      </th>
+                      <th>User</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Joined</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagedUsers.map(user => (
+                      <tr key={user.id} className={`${!user.is_active ? 'opacity-50' : ''} ${selectedUserIds.has(user.id) ? 'bg-primary/5' : ''}`}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-sm"
+                            checked={selectedUserIds.has(user.id)}
+                            onChange={() => toggleSelectUser(user.id)}
+                          />
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <div className="avatar placeholder">
+                              <div className="bg-primary/20 text-primary rounded-full w-8">
+                                <span className="text-xs font-bold">{user.full_name?.[0]?.toUpperCase() || user.email[0]?.toUpperCase()}</span>
+                              </div>
+                            </div>
+                            {editId === user.id ? (
+                              <input className="input input-bordered input-xs w-32" value={editForm.full_name} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} />
+                            ) : (
+                              <span className="font-medium">{user.full_name}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="text-sm text-base-content/70">{user.email}</td>
+                        <td>
+                          {editId === user.id ? (
+                            <select className="select select-bordered select-xs" value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value as any }))}>
+                              <option value="user">User</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                          ) : (
+                            <span className={`badge badge-sm ${user.role === 'admin' ? 'badge-primary' : 'badge-ghost'}`}>
+                              {user.role === 'admin' ? <><Shield size={10} className="mr-1" />Admin</> : <><User size={10} className="mr-1" />User</>}
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          {editId === user.id ? (
+                            <input type="checkbox" className="toggle toggle-success toggle-sm" checked={editForm.is_active} onChange={e => setEditForm(f => ({ ...f, is_active: e.target.checked }))} />
+                          ) : (
+                            <span className={`badge badge-sm ${user.is_active !== false ? 'badge-success' : 'badge-error'}`}>
+                              {user.is_active !== false ? 'Active' : 'Inactive'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-xs text-base-content/50">{new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                        <td>
+                          <div className="flex gap-1">
+                            {editId === user.id ? (
+                              <>
+                                <button className="btn btn-success btn-xs gap-1" onClick={() => saveEdit(user.id)}><Save size={12} /> Save</button>
+                                <button className="btn btn-ghost btn-xs" onClick={cancelEdit}><X size={12} /></button>
+                              </>
+                            ) : (
+                              <>
+                                <button className="btn btn-ghost btn-xs gap-1" onClick={() => startEdit(user)} title="Edit name/role">
+                                  <Edit2 size={12} /> Edit
+                                </button>
+                                <button
+                                  className={`btn btn-xs gap-1 ${user.is_active !== false ? 'btn-ghost text-error/70 hover:text-error hover:bg-error/10' : 'btn-ghost text-success/70 hover:text-success hover:bg-success/10'}`}
+                                  onClick={() => quickToggleActive(user)}
+                                  title={user.is_active !== false ? 'Deactivate user' : 'Reactivate user'}
+                                >
+                                  {user.is_active !== false ? <><UserX size={12} /> Deactivate</> : <><UserCheck size={12} /> Activate</>}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-3 border-t border-base-300">
+                  <span className="text-xs text-base-content/50">
+                    Showing {(userPage - 1) * USERS_PER_PAGE + 1}–{Math.min(userPage * USERS_PER_PAGE, filteredUsers.length)} of {filteredUsers.length}
+                  </span>
+                  <div className="join">
+                    <button
+                      className="join-item btn btn-xs btn-ghost"
+                      disabled={userPage === 1}
+                      onClick={() => setUserPage(p => Math.max(1, p - 1))}
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <button className="join-item btn btn-xs btn-ghost pointer-events-none">
+                      {userPage} / {totalPages}
+                    </button>
+                    <button
+                      className="join-item btn btn-xs btn-ghost"
+                      disabled={userPage === totalPages}
+                      onClick={() => setUserPage(p => Math.min(totalPages, p + 1))}
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

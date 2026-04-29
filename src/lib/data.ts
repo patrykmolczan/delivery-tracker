@@ -61,40 +61,12 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
   }
 }
 
-// Fetch projects WITHOUT JOINs using parallel pagination to overcome the 1000-row PostgREST limit.
+// Fetch ALL projects via RPC function — bypasses PostgREST's 1000-row table limit.
 // Pass lookupMaps to resolve ID→name client-side.
 export async function fetchProjects(lookupMaps?: LookupMaps): Promise<Project[]> {
-  const PAGE_SIZE = 1000
-
-  // Get total count with a lightweight HEAD request
-  const { count, error: countError } = await supabase
-    .from('projects')
-    .select('*', { count: 'exact', head: true })
-  if (countError) throw countError
-
-  const total = count || 0
-  if (total === 0) return []
-
-  const pages = Math.ceil(total / PAGE_SIZE)
-
-  // Fetch all pages in parallel
-  const pageResults = await Promise.all(
-    Array.from({ length: pages }, (_, i) =>
-      supabase
-        .from('projects')
-        .select(SELECT_COLS)
-        .order('date_received', { ascending: false })
-        .range(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1)
-    )
-  )
-
-  const allRows: any[] = []
-  for (const { data, error } of pageResults) {
-    if (error) throw error
-    if (data) allRows.push(...data)
-  }
-
-  return allRows.map((row: any) => mapRow(row, lookupMaps))
+  const { data, error } = await supabase.rpc('get_projects_all')
+  if (error) throw error
+  return (data || []).map((row: any) => mapRow(row, lookupMaps))
 }
 
 export async function fetchLookups(): Promise<{

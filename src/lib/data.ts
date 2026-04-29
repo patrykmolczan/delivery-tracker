@@ -27,12 +27,6 @@ export function buildLookupMaps(lookups: {
   }
 }
 
-const SELECT_COLS = `
-  id, project_owner, analyst, client_name, requestor,
-  date_received, expected_delivery_date, date_delivered,
-  project_summary, job_count, days_to_complete, created_by, created_at,
-  project_type, status_id, client_type_id, country_id, industry_id
-`
 
 function mapRow(row: any, lookupMaps?: LookupMaps): Project {
   return {

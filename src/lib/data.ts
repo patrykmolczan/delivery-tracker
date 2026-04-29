@@ -178,7 +178,7 @@ export async function updateProjectStatus(
   }
   if (markDelivered) {
     updateData.date_delivered = dateDelivered
-    updateData.days_to_complete = daysToComplete
+    // days_to_complete is a GENERATED ALWAYS column — DB computes it from date_delivered - date_received automatically
   }
 
   const { error } = await supabase.from('projects').update(updateData).eq('id', id)

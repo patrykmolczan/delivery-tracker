@@ -11,7 +11,7 @@ import { ProjectTable } from './components/ProjectTable'
 import { ProjectDetail } from './components/ProjectDetail'
 import { Charts } from './components/Charts'
 import {
-  fetchProjects, fetchStatusCounts, fetchOwnerCounts,
+  fetchProjects, fetchStatusCounts, fetchOwnerCounts, buildLookupMaps,
   fetchFilterOptions, computeKPIs, filterProjects, sortProjects
 } from './lib/data'
 import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode } from './types'
@@ -48,13 +48,22 @@ const Dashboard: React.FC = () => {
     if (isRefresh) setRefreshing(true)
     else setLoading(true)
     try {
-      const [proj, sc, oc, opts] = await Promise.all([
-        fetchProjects(), fetchStatusCounts(), fetchOwnerCounts(), fetchFilterOptions()
+      // Fetch lookups first (tiny, fast), then projects once (no JOINs)
+      const lookups = await fetchLookups()
+      const lookupMaps = buildLookupMaps(lookups)
+      const [proj, opts] = await Promise.all([
+        fetchProjects(lookupMaps),
+        fetchFilterOptions([] as any) // will be overwritten below with real owners
       ])
+      // Compute stats in-memory from already-loaded projects
+      const sc = fetchStatusCounts(proj)
+      const oc = fetchOwnerCounts(proj)
+      // Re-compute filter options with real owners
+      const optsWithOwners = { ...opts, owners: [...new Set(proj.map((p: any) => p.project_owner).filter(Boolean))].sort() as string[] }
       setProjects(proj)
       setStatusCounts(sc)
       setOwnerCounts(oc)
-      setFilterOptions(opts)
+      setFilterOptions(optsWithOwners)
     } catch (err) {
       console.error('Failed to load data:', err)
     } finally {

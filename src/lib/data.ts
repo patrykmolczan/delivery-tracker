@@ -6,18 +6,37 @@ import type {
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
-export async function fetchProjects(): Promise<Project[]> {
+export type LookupMaps = {
+  statusMap: Map<number, string>
+  clientTypeMap: Map<number, string>
+  countryMap: Map<number, string>
+  industryMap: Map<number, string>
+}
+
+export function buildLookupMaps(lookups: {
+  statuses: LookupItem[]
+  clientTypes: LookupItem[]
+  countries: LookupItem[]
+  industries: LookupItem[]
+}): LookupMaps {
+  return {
+    statusMap: new Map(lookups.statuses.map(l => [l.id, l.name])),
+    clientTypeMap: new Map(lookups.clientTypes.map(l => [l.id, l.name])),
+    countryMap: new Map(lookups.countries.map(l => [l.id, l.name])),
+    industryMap: new Map(lookups.industries.map(l => [l.id, l.name])),
+  }
+}
+
+// Fetch projects WITHOUT JOINs — much faster for large datasets.
+// Pass lookupMaps to resolve ID→name client-side.
+export async function fetchProjects(lookupMaps?: LookupMaps): Promise<Project[]> {
   const { data, error } = await supabase
     .from('projects')
     .select(`
       id, project_owner, analyst, client_name, requestor,
       date_received, expected_delivery_date, date_delivered,
       project_summary, job_count, days_to_complete, created_by, created_at,
-      project_type, status_id, client_type_id, country_id, industry_id,
-      project_statuses!inner(name),
-      client_types(name),
-      countries(name),
-      industries(name)
+      project_type, status_id, client_type_id, country_id, industry_id
     `)
     .order('date_received', { ascending: false })
     .limit(20000)
@@ -36,13 +55,13 @@ export async function fetchProjects(): Promise<Project[]> {
     project_summary: row.project_summary,
     job_count: row.job_count,
     days_to_complete: row.days_to_complete,
-    status: row.project_statuses?.name || 'Unknown',
+    status: lookupMaps?.statusMap.get(row.status_id) || 'Unknown',
     status_id: row.status_id,
-    client_type: row.client_types?.name || null,
+    client_type: lookupMaps?.clientTypeMap.get(row.client_type_id) || null,
     client_type_id: row.client_type_id,
-    country: row.countries?.name || null,
+    country: lookupMaps?.countryMap.get(row.country_id) || null,
     country_id: row.country_id,
-    industry: row.industries?.name || null,
+    industry: lookupMaps?.industryMap.get(row.industry_id) || null,
     industry_id: row.industry_id,
     project_type: row.project_type || null,
     created_by: row.created_by,
@@ -385,8 +404,8 @@ export async function importProjectsBatch(
 
 // ─── Aggregates ───────────────────────────────────────────────────────────────
 
-export async function fetchStatusCounts(): Promise<StatusCount[]> {
-  const projects = await fetchProjects()
+// Now synchronous — pass the already-loaded projects array
+export function fetchStatusCounts(projects: Project[]): StatusCount[] {
   const map: Record<string, number> = {}
   projects.forEach(p => { map[p.status] = (map[p.status] || 0) + 1 })
   return Object.entries(map)
@@ -394,8 +413,7 @@ export async function fetchStatusCounts(): Promise<StatusCount[]> {
     .sort((a, b) => b.count - a.count)
 }
 
-export async function fetchOwnerCounts(): Promise<OwnerCount[]> {
-  const projects = await fetchProjects()
+export function fetchOwnerCounts(projects: Project[]): OwnerCount[] {
   const map: Record<string, OwnerCount> = {}
   projects.forEach(p => {
     if (!p.project_owner) return
@@ -409,7 +427,8 @@ export async function fetchOwnerCounts(): Promise<OwnerCount[]> {
   return Object.values(map).sort((a, b) => b.count - a.count)
 }
 
-export async function fetchFilterOptions() {
+// Accept already-loaded projects to derive owners; fetch lookup dropdowns from DB
+export async function fetchFilterOptions(projects: Project[]) {
   const [{ data: clientTypes }, { data: industries }, { data: countries }, { data: statuses }] =
     await Promise.all([
       supabase.from('client_types').select('name').eq('is_active', true).order('name'),
@@ -418,7 +437,6 @@ export async function fetchFilterOptions() {
       supabase.from('project_statuses').select('name').eq('is_active', true).order('display_order'),
     ])
 
-  const projects = await fetchProjects()
   const owners = [...new Set(projects.map(p => p.project_owner).filter(Boolean))].sort() as string[]
 
   return {

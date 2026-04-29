@@ -50,7 +50,7 @@ export const LoginPage: React.FC = () => {
           {/* Title */}
           <div className="flex flex-col items-center gap-1 pb-2">
             <h1 className="text-2xl font-bold text-base-content">Delivery Tracker</h1>
-            <p className="text-sm text-base-content/50">Delivery Project Tracker</p>
+
           </div>
 
           {/* Form */}

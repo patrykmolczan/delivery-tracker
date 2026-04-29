@@ -11,7 +11,7 @@ import { ProjectTable } from './components/ProjectTable'
 import { ProjectDetail } from './components/ProjectDetail'
 import { Charts } from './components/Charts'
 import {
-  fetchProjects, fetchStatusCounts, fetchOwnerCounts, buildLookupMaps,
+  fetchProjects, fetchStatusCounts, fetchOwnerCounts, buildLookupMaps, fetchLookups,
   fetchFilterOptions, computeKPIs, filterProjects, sortProjects
 } from './lib/data'
 import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode } from './types'

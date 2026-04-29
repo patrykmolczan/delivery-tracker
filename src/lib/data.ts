@@ -20,6 +20,7 @@ export async function fetchProjects(): Promise<Project[]> {
       industries(name)
     `)
     .order('date_received', { ascending: false })
+    .limit(20000)
 
   if (error) throw error
 

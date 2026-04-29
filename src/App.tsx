@@ -217,9 +217,6 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {isAdmin && (
-              <span className="badge badge-primary badge-sm">Admin</span>
-            )}
             {view !== 'table' && (
               <button
                 className="btn btn-primary btn-sm gap-1.5 hidden sm:flex"

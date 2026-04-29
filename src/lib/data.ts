@@ -61,9 +61,21 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
 // Fetch ALL projects via RPC function — bypasses PostgREST's 1000-row table limit.
 // Pass lookupMaps to resolve ID→name client-side.
 export async function fetchProjects(lookupMaps?: LookupMaps): Promise<Project[]> {
-  const { data, error } = await supabase.rpc('get_projects_all')
-  if (error) throw error
-  return (data || []).map((row: any) => mapRow(row, lookupMaps))
+  // PostgREST max-rows caps each request at 1,000. Paginate until all rows are fetched.
+  const PAGE_SIZE = 1000
+  let all: any[] = []
+  let from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .rpc('get_projects_all')
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all = all.concat(data)
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all.map((row: any) => mapRow(row, lookupMaps))
 }
 
 export async function fetchLookups(): Promise<{

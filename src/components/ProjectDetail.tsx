@@ -22,32 +22,6 @@ const Field: React.FC<FieldProps> = ({ icon, label, value, highlight }) => (
   </div>
 )
 
-// Summarise what changed between old and new JSONB snapshots
-function summariseChanges(old_data: Record<string, any> | null, new_data: Record<string, any> | null): string[] {
-  if (!old_data || !new_data) return []
-  const IGNORED = ['updated_at', 'created_at']
-  const LABELS: Record<string, string> = {
-    status_id: 'Status', date_delivered: 'Delivered Date', days_to_complete: 'Days to Complete',
-    project_owner: 'Owner', analyst: 'Analyst', client_name: 'Client', requestor: 'Requestor',
-    date_received: 'Date Received', expected_delivery_date: 'Expected Delivery',
-    project_summary: 'Summary', job_count: 'Job Count', client_type_id: 'Client Type',
-    country_id: 'Country', industry_id: 'Industry',
-  }
-  const diffs: string[] = []
-  const allKeys = new Set([...Object.keys(old_data), ...Object.keys(new_data)])
-  allKeys.forEach(key => {
-    if (IGNORED.includes(key)) return
-    const oldVal = old_data[key]
-    const newVal = new_data[key]
-    if (oldVal !== newVal) {
-      const label = LABELS[key] || key
-      const from = oldVal != null ? String(oldVal) : '—'
-      const to = newVal != null ? String(newVal) : '—'
-      diffs.push(`${label}: "${from}" → "${to}"`)
-    }
-  })
-  return diffs
-}
 
 function actionBadge(action: string) {
   if (action === 'INSERT') return <span className="badge badge-success badge-xs whitespace-nowrap">Created</span>
@@ -289,8 +263,10 @@ export const ProjectDetail: React.FC<{
           ) : (
             <div className="space-y-3">
               {history.map((entry, i) => {
-                const changes = summariseChanges(entry.old_data, entry.new_data)
-                const who = entry.user_name || entry.user_email || (entry.user_id ? `User …${entry.user_id.slice(-6)}` : 'System')
+                const who = entry.user_id ? `User …${entry.user_id.slice(-6)}` : 'System'
+                const fieldLabel = entry.field_changed
+                  ? entry.field_changed.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                  : null
                 return (
                   <div key={entry.id || i} className="border border-base-300 rounded-lg p-3 bg-base-50 text-sm">
                     <div className="flex items-center justify-between mb-1.5">
@@ -298,24 +274,26 @@ export const ProjectDetail: React.FC<{
                         {actionBadge(entry.action)}
                         <span className="font-medium text-base-content text-xs">{who}</span>
                       </div>
-                      <span className="text-xs text-base-content/40" title={new Date(entry.changed_at).toLocaleString()}>
-                        {timeAgo(entry.changed_at)}
+                      <span className="text-xs text-base-content/40" title={new Date(entry.created_at).toLocaleString()}>
+                        {timeAgo(entry.created_at)}
                       </span>
                     </div>
-                    {changes.length > 0 ? (
-                      <ul className="space-y-0.5 mt-1">
-                        {changes.map((c, j) => (
-                          <li key={j} className="text-xs text-base-content/70 flex items-start gap-1">
-                            <span className="text-base-content/30 mt-px">•</span>
-                            <span>{c}</span>
-                          </li>
-                        ))}
-                      </ul>
+                    {entry.action === 'INSERT' ? (
+                      <p className="text-xs text-base-content/40 italic">Project created</p>
+                    ) : entry.action === 'DELETE' ? (
+                      <p className="text-xs text-base-content/40 italic">Project deleted</p>
+                    ) : fieldLabel ? (
+                      <p className="text-xs text-base-content/70">
+                        <span className="font-medium">{fieldLabel}</span>
+                        {' '}changed
+                        {entry.old_value ? <span className="text-error"> from <em>{entry.old_value}</em></span> : ''}
+                        {entry.new_value ? <span className="text-success"> to <em>{entry.new_value}</em></span> : ''}
+                      </p>
                     ) : (
-                      <p className="text-xs text-base-content/40 italic">{entry.action === 'INSERT' ? 'Project created' : 'No tracked field changes'}</p>
+                      <p className="text-xs text-base-content/40 italic">No tracked field changes</p>
                     )}
                     <div className="text-xs text-base-content/30 mt-1.5">
-                      {new Date(entry.changed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {new Date(entry.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
                 )

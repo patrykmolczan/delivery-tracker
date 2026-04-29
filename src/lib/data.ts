@@ -188,21 +188,22 @@ export async function updateProjectStatus(
 
 export interface AuditEntry {
   id: string
-  action: string
-  changed_at: string
+  project_id: string
   user_id: string | null
-  old_data: Record<string, any> | null
-  new_data: Record<string, any> | null
-  user_email?: string | null
-  user_name?: string | null
+  action: string
+  field_changed: string | null
+  old_value: string | null
+  new_value: string | null
+  metadata: Record<string, any> | null
+  created_at: string
 }
 
 export async function fetchProjectHistory(projectId: string): Promise<AuditEntry[]> {
   const { data, error } = await supabase
     .from('audit_log')
     .select('*')
-    .eq('record_id', projectId)
-    .order('changed_at', { ascending: false })
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false })
     .limit(50)
 
   if (error) {

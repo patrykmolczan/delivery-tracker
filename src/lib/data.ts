@@ -462,7 +462,6 @@ export async function uploadProjectFile(
   if (!session?.access_token) throw new Error('Not authenticated — please log in again')
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
   const contentType = file.type || 'application/octet-stream'
 
   // Read file as blob to ensure consistent content-type handling

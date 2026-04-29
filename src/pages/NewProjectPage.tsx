@@ -9,26 +9,16 @@ import {
   buildPredictionStats, predictDeliveryTime,
   uploadProjectFile, MAX_FILE_SIZE_BYTES, MAX_FILES_PER_PROJECT,
   fetchProjectCountries, fetchProjectTasks, formatFileSize,
-  fetchAnalysts,
+  fetchAnalysts, fetchProjectTypes,
 } from '../lib/data'
 import type {
   LookupItem, Project, ProjectFormData,
   ProjectCountryInput, ProjectTaskInput,
 } from '../types'
+import type { ProjectType } from '../lib/data'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PROJECT_TYPES = [
-  'Pay Intel (Rate Card)',
-  'Pay Intel (Right Sourcing)',
-  'Magnit VMS',
-] as const
-
-const TEMPLATE_MAP: Record<string, { file: string; label: string }> = {
-  'Pay Intel (Rate Card)':    { file: '/templates/Pay_Intel_Template_RateCard.xlsx',    label: 'Pay Intel Rate Card Template.xlsx' },
-  'Pay Intel (Right Sourcing)': { file: '/templates/Pay_Intel_Template_RightSourcing.xlsx', label: 'Pay Intel Right Sourcing Template.xlsx' },
-  'Magnit VMS':               { file: '/templates/Magnit_VMS_Template.xls',            label: 'Magnit VMS Template.xls' },
-}
 
 const EMPTY_FORM: ProjectFormData = {
   project_owner: '',
@@ -139,6 +129,9 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   // Analysts list
   const [analysts, setAnalysts] = useState<import('../lib/data').Analyst[]>([])
 
+  // Project types list
+  const [projectTypes, setProjectTypes] = useState<ProjectType[]>([])
+
   // ETA prediction
   const [predStats, setPredStats] = useState<ReturnType<typeof buildPredictionStats> | null>(null)
   const [eta, setEta] = useState<{ estimate: number; confidence: string; breakdown: string } | null>(null)
@@ -161,8 +154,11 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
 
   // Load lookups
   useEffect(() => {
-    fetchLookups()
-      .then(setLookups)
+    Promise.all([fetchLookups(), fetchProjectTypes()])
+      .then(([lu, pts]) => {
+        setLookups(lu)
+        setProjectTypes(pts)
+      })
       .catch(err => {
         setError('Failed to load form options: ' + (err.message || 'Unknown error'))
         setLookups({ statuses: [], clientTypes: [], industries: [], countries: [] })
@@ -558,25 +554,29 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                       onChange={e => set('project_type', e.target.value || null)}
                     >
                       <option value="">— Select project type —</option>
-                      {PROJECT_TYPES.map(pt => (
-                        <option key={pt} value={pt}>{pt}</option>
+                      {projectTypes.map(pt => (
+                        <option key={pt.id} value={pt.name}>{pt.name}</option>
                       ))}
                     </select>
                   </Field>
                 </div>
 
                 {/* Template download strip */}
-                {form.project_type && TEMPLATE_MAP[form.project_type] && (
-                  <a
-                    href={TEMPLATE_MAP[form.project_type].file}
-                    download={TEMPLATE_MAP[form.project_type].label}
-                    className="inline-flex items-center gap-2 mt-2 px-3 py-2 rounded-lg border border-primary/30 bg-primary/5 text-primary text-sm hover:bg-primary/10 transition-colors w-fit"
-                  >
-                    <FileText size={14} />
-                    <span>Download {TEMPLATE_MAP[form.project_type].label}</span>
-                    <Download size={13} className="ml-1 opacity-60" />
-                  </a>
-                )}
+                {form.project_type && (() => {
+                  const pt = projectTypes.find(p => p.name === form.project_type)
+                  return pt?.template_url ? (
+                    <a
+                      href={pt.template_url}
+                      download={pt.template_label || pt.name}
+                      className="btn btn-ghost btn-sm gap-1.5 text-primary border border-primary/30 hover:bg-primary/10"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <Download size={14} />
+                      <span>Download {pt.template_label || `${pt.name} Template`}</span>
+                    </a>
+                  ) : null
+                })()}
               </Section>
             </div>
           </div>

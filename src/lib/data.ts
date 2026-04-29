@@ -824,3 +824,168 @@ export async function deactivateAnalyst(id: number): Promise<void> {
     .eq('id', id)
   if (error) throw error
 }
+
+// ─── Client Types (admin CRUD) ────────────────────────────────────────────────
+
+export interface ClientType {
+  id: number
+  name: string
+  is_active: boolean
+}
+
+export async function fetchClientTypesAdmin(): Promise<ClientType[]> {
+  const { data, error } = await supabase
+    .from('client_types')
+    .select('*')
+    .eq('is_active', true)
+    .order('name')
+  if (error) throw error
+  return (data || []) as ClientType[]
+}
+
+export async function createClientType(name: string): Promise<ClientType> {
+  const { data, error } = await supabase
+    .from('client_types')
+    .insert({ name: name.trim() })
+    .select()
+    .single()
+  if (error) throw error
+  return data as ClientType
+}
+
+export async function updateClientType(id: number, name: string): Promise<void> {
+  const { error } = await supabase
+    .from('client_types')
+    .update({ name: name.trim() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function deactivateClientType(id: number): Promise<void> {
+  const { error } = await supabase
+    .from('client_types')
+    .update({ is_active: false })
+    .eq('id', id)
+  if (error) throw error
+}
+
+// ─── Analyst edit (rename) ────────────────────────────────────────────────────
+
+export async function updateAnalyst(id: number, name: string): Promise<void> {
+  const { error } = await supabase
+    .from('analysts')
+    .update({ name: name.trim() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+// ─── Project Types (admin CRUD) ───────────────────────────────────────────────
+
+export interface ProjectType {
+  id: number
+  name: string
+  template_url: string | null
+  template_label: string | null
+  is_active: boolean
+  display_order: number
+}
+
+export async function fetchProjectTypes(): Promise<ProjectType[]> {
+  const { data, error } = await supabase
+    .from('project_types')
+    .select('*')
+    .eq('is_active', true)
+    .order('display_order')
+  if (error) throw error
+  return (data || []) as ProjectType[]
+}
+
+export async function createProjectType(
+  name: string,
+  templateFile?: File,
+  accessToken?: string
+): Promise<ProjectType> {
+  let templateUrl: string | null = null
+  let templateLabel: string | null = null
+
+  if (templateFile && accessToken) {
+    const safeName = templateFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const storagePath = `${Date.now()}_${safeName}`
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+
+    const uploadRes = await fetch(
+      `${supabaseUrl}/storage/v1/object/project-type-templates/${storagePath}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': templateFile.type || 'application/octet-stream',
+          'x-upsert': 'false',
+        },
+        body: templateFile,
+      }
+    )
+    if (!uploadRes.ok) {
+      const err = await uploadRes.text().catch(() => uploadRes.statusText)
+      throw new Error(`Template upload failed: ${err}`)
+    }
+    templateUrl = `${supabaseUrl}/storage/v1/object/public/project-type-templates/${storagePath}`
+    templateLabel = templateFile.name
+  }
+
+  const { data, error } = await supabase
+    .from('project_types')
+    .insert({ name: name.trim(), template_url: templateUrl, template_label: templateLabel })
+    .select()
+    .single()
+  if (error) throw error
+  return data as ProjectType
+}
+
+export async function updateProjectType(
+  id: number,
+  name: string,
+  templateFile?: File,
+  accessToken?: string
+): Promise<void> {
+  const updates: any = { name: name.trim() }
+
+  if (templateFile && accessToken) {
+    const safeName = templateFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const storagePath = `${Date.now()}_${safeName}`
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+
+    const uploadRes = await fetch(
+      `${supabaseUrl}/storage/v1/object/project-type-templates/${storagePath}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': templateFile.type || 'application/octet-stream',
+          'x-upsert': 'false',
+        },
+        body: templateFile,
+      }
+    )
+    if (!uploadRes.ok) {
+      const err = await uploadRes.text().catch(() => uploadRes.statusText)
+      throw new Error(`Template upload failed: ${err}`)
+    }
+    updates.template_url = `${supabaseUrl}/storage/v1/object/public/project-type-templates/${storagePath}`
+    updates.template_label = templateFile.name
+  }
+
+  const { error } = await supabase
+    .from('project_types')
+    .update(updates)
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function deactivateProjectType(id: number): Promise<void> {
+  const { error } = await supabase
+    .from('project_types')
+    .update({ is_active: false })
+    .eq('id', id)
+  if (error) throw error
+}

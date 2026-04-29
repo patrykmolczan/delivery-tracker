@@ -1,9 +1,223 @@
-import React, { useState, useEffect } from 'react'
-import { UserPlus, Shield, User, CheckCircle2, Edit2, Save, X, AlertCircle, Loader2, RefreshCw, Key, Users, Plus, Trash2 } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import {
+  UserPlus, Shield, User, CheckCircle2, Edit2, Save, X, AlertCircle,
+  Loader2, RefreshCw, Key, Users, Plus, Trash2, Tag, Layers, Upload, Download,
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { fetchAnalysts, createAnalyst, deactivateAnalyst } from '../lib/data'
-import type { Analyst } from '../lib/data'
+import {
+  fetchAnalysts, createAnalyst, updateAnalyst, deactivateAnalyst,
+  fetchClientTypesAdmin, createClientType, updateClientType, deactivateClientType,
+  fetchProjectTypes, createProjectType, updateProjectType, deactivateProjectType,
+} from '../lib/data'
+import type { Analyst, ClientType, ProjectType } from '../lib/data'
 import type { UserProfile } from '../types'
+
+// ─── Reusable inline-editable list section ────────────────────────────────────
+
+interface ListItem { id: number; name: string }
+
+interface ManagedListProps {
+  title: string
+  subtitle: string
+  icon: React.ReactNode
+  items: ListItem[]
+  loading: boolean
+  error: string | null
+  onClearError: () => void
+  onAdd: (name: string, file?: File) => Promise<void>
+  onEdit: (id: number, name: string, file?: File) => Promise<void>
+  onRemove: (item: ListItem) => Promise<void>
+  withTemplateUpload?: boolean
+  templateItems?: ProjectType[]
+}
+
+const ManagedList: React.FC<ManagedListProps> = ({
+  title, subtitle, icon, items, loading, error, onClearError,
+  onAdd, onEdit, onRemove, withTemplateUpload = false, templateItems = [],
+}) => {
+  const [newName, setNewName] = useState('')
+  const [newFile, setNewFile] = useState<File | null>(null)
+  const [adding, setAdding] = useState(false)
+  const [editId, setEditId] = useState<number | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editFile, setEditFile] = useState<File | null>(null)
+  const [saving, setSaving] = useState(false)
+  const addFileRef = useRef<HTMLInputElement>(null)
+  const editFileRef = useRef<HTMLInputElement>(null)
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newName.trim()) return
+    setAdding(true)
+    try {
+      await onAdd(newName, newFile || undefined)
+      setNewName('')
+      setNewFile(null)
+      if (addFileRef.current) addFileRef.current.value = ''
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  const startEdit = (item: ListItem) => {
+    setEditId(item.id)
+    setEditName(item.name)
+    setEditFile(null)
+    if (editFileRef.current) editFileRef.current.value = ''
+  }
+
+  const cancelEdit = () => {
+    setEditId(null)
+    setEditName('')
+    setEditFile(null)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editName.trim() || editId === null) return
+    setSaving(true)
+    try {
+      await onEdit(editId, editName, editFile || undefined)
+      setEditId(null)
+      setEditName('')
+      setEditFile(null)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="card bg-base-200 border border-base-300">
+      <div className="card-body">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="card-title text-base flex items-center gap-2">
+            {icon} {title}
+          </h3>
+          <span className="text-xs text-base-content/50">{items.length} active</span>
+        </div>
+        <p className="text-xs text-base-content/50 mb-3">{subtitle}</p>
+
+        {error && (
+          <div className="alert alert-error py-2 mb-3">
+            <AlertCircle size={14} />
+            <span className="text-sm">{error}</span>
+            <button className="btn btn-ghost btn-xs ml-auto" onClick={onClearError}><X size={11} /></button>
+          </div>
+        )}
+
+        {/* Add form */}
+        <form onSubmit={handleAdd} className="flex flex-wrap gap-2 mb-4">
+          <input
+            className="input input-bordered input-sm flex-1 min-w-40"
+            placeholder={`${title} name…`}
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+          />
+          {withTemplateUpload && (
+            <label className="btn btn-ghost btn-sm gap-1.5 border border-base-300 cursor-pointer">
+              <Upload size={13} />
+              {newFile ? <span className="max-w-24 truncate text-xs">{newFile.name}</span> : <span className="text-xs">Template (optional)</span>}
+              <input
+                ref={addFileRef}
+                type="file"
+                className="hidden"
+                accept=".xlsx,.xls,.csv"
+                onChange={e => setNewFile(e.target.files?.[0] || null)}
+              />
+            </label>
+          )}
+          <button
+            type="submit"
+            className={`btn btn-primary btn-sm gap-1.5 ${adding ? 'loading' : ''}`}
+            disabled={adding || !newName.trim()}
+          >
+            {!adding && <Plus size={14} />} Add
+          </button>
+        </form>
+
+        {/* List */}
+        {loading ? (
+          <div className="flex justify-center py-4"><Loader2 size={20} className="animate-spin text-primary" /></div>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-base-content/40 text-center py-4">No items yet — add one above.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {items.map(item => {
+              const pt = templateItems.find(t => t.id === item.id)
+              return editId === item.id ? (
+                <div key={item.id} className="flex flex-wrap items-center gap-2 px-3 py-2 bg-base-100 border border-primary/30 rounded-lg">
+                  <input
+                    className="input input-bordered input-xs flex-1 min-w-32"
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') cancelEdit() }}
+                  />
+                  {withTemplateUpload && (
+                    <label className="btn btn-ghost btn-xs gap-1 border border-base-300 cursor-pointer">
+                      <Upload size={11} />
+                      {editFile ? <span className="max-w-20 truncate text-xs">{editFile.name}</span> : <span className="text-xs">Replace template</span>}
+                      <input
+                        ref={editFileRef}
+                        type="file"
+                        className="hidden"
+                        accept=".xlsx,.xls,.csv"
+                        onChange={e => setEditFile(e.target.files?.[0] || null)}
+                      />
+                    </label>
+                  )}
+                  <button
+                    className={`btn btn-success btn-xs gap-1 ${saving ? 'loading' : ''}`}
+                    onClick={handleSaveEdit}
+                    disabled={saving || !editName.trim()}
+                  >
+                    {!saving && <Save size={11} />} Save
+                  </button>
+                  <button className="btn btn-ghost btn-xs" onClick={cancelEdit}><X size={11} /></button>
+                </div>
+              ) : (
+                <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-base-100 border border-base-300 rounded-lg group">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium truncate">{item.name}</span>
+                    {pt?.template_url && (
+                      <a
+                        href={pt.template_url}
+                        download={pt.template_label || pt.name}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-ghost btn-xs gap-1 text-primary/70 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Download template"
+                      >
+                        <Download size={11} /> Template
+                      </a>
+                    )}
+                  </div>
+                  <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      className="btn btn-ghost btn-xs gap-1 hover:bg-primary/10"
+                      onClick={() => startEdit(item)}
+                      title="Edit"
+                    >
+                      <Edit2 size={11} />
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-xs text-error/60 hover:text-error hover:bg-error/10"
+                      onClick={() => onRemove(item)}
+                      title="Remove"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Admin Page ──────────────────────────────────────────────────────────
 
 export const AdminPage: React.FC = () => {
   const [users, setUsers] = useState<UserProfile[]>([])
@@ -12,129 +226,175 @@ export const AdminPage: React.FC = () => {
   const [editId, setEditId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-
   const [newUser, setNewUser] = useState({ email: '', full_name: '', password: '', role: 'user' as 'admin' | 'user' })
+  const [editForm, setEditForm] = useState({ full_name: '', role: 'user' as 'admin' | 'user', is_active: true })
 
-  // ── Analyst management state ──────────────────────────────────────────────
+  // ── List states ───────────────────────────────────────────────────────────
   const [analysts, setAnalysts] = useState<Analyst[]>([])
   const [analystLoading, setAnalystLoading] = useState(false)
-  const [newAnalystName, setNewAnalystName] = useState('')
-  const [addingAnalyst, setAddingAnalyst] = useState(false)
   const [analystError, setAnalystError] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ full_name: '', role: 'user' as 'admin' | 'user', is_active: true })
+
+  const [clientTypes, setClientTypes] = useState<ClientType[]>([])
+  const [ctLoading, setCtLoading] = useState(false)
+  const [ctError, setCtError] = useState<string | null>(null)
+
+  const [projectTypes, setProjectTypes] = useState<ProjectType[]>([])
+  const [ptLoading, setPtLoading] = useState(false)
+  const [ptError, setPtError] = useState<string | null>(null)
 
   const fetchUsers = async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
     if (!error) setUsers(data as UserProfile[])
     setLoading(false)
   }
 
-  useEffect(() => {
+  const loadAll = async () => {
     fetchUsers()
-    loadAnalysts()
-  }, [])
-
-  const showSuccess = (msg: string) => {
-    setSuccess(msg)
-    setTimeout(() => setSuccess(null), 3000)
+    // Analysts
+    setAnalystLoading(true)
+    fetchAnalysts().then(list => { setAnalysts(list); setAnalystLoading(false) }).catch(e => { setAnalystError(e.message); setAnalystLoading(false) })
+    // Client types
+    setCtLoading(true)
+    fetchClientTypesAdmin().then(list => { setClientTypes(list); setCtLoading(false) }).catch(e => { setCtError(e.message); setCtLoading(false) })
+    // Project types
+    setPtLoading(true)
+    fetchProjectTypes().then(list => { setProjectTypes(list); setPtLoading(false) }).catch(e => { setPtError(e.message); setPtLoading(false) })
   }
 
+  useEffect(() => { loadAll() }, [])
+
+  const showSuccess = (msg: string) => { setSuccess(msg); setTimeout(() => setSuccess(null), 3000) }
+
+  const getAccessToken = async (): Promise<string> => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) throw new Error('Not authenticated')
+    return session.access_token
+  }
+
+  // ── User CRUD ─────────────────────────────────────────────────────────────
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newUser.email || !newUser.password || !newUser.full_name) return
-    setCreating(true)
-    setError(null)
+    setCreating(true); setError(null)
     try {
-      // Use Supabase admin API via RPC
-      const { error } = await supabase.rpc('admin_create_user', {
-        p_email: newUser.email,
-        p_password: newUser.password,
-        p_full_name: newUser.full_name,
-        p_role: newUser.role,
-      })
+      const { error } = await supabase.rpc('admin_create_user', { p_email: newUser.email, p_password: newUser.password, p_full_name: newUser.full_name, p_role: newUser.role })
       if (error) throw error
       setNewUser({ email: '', full_name: '', password: '', role: 'user' })
       await fetchUsers()
       showSuccess(`User ${newUser.email} created successfully!`)
-    } catch (err: any) {
-      setError(err.message || 'Failed to create user')
-    } finally {
-      setCreating(false)
-    }
+    } catch (err: any) { setError(err.message || 'Failed to create user') }
+    finally { setCreating(false) }
   }
 
-  const startEdit = (user: UserProfile) => {
-    setEditId(user.id)
-    setEditForm({ full_name: user.full_name, role: user.role, is_active: user.is_active ?? true })
-  }
-
-  const cancelEdit = () => {
-    setEditId(null)
-  }
-
+  const startEdit = (user: UserProfile) => { setEditId(user.id); setEditForm({ full_name: user.full_name, role: user.role, is_active: user.is_active ?? true }) }
+  const cancelEdit = () => setEditId(null)
   const saveEdit = async (id: string) => {
     setError(null)
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: editForm.full_name,
-          role: editForm.role,
-          is_active: editForm.is_active,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
+      const { error } = await supabase.from('profiles').update({ full_name: editForm.full_name, role: editForm.role, is_active: editForm.is_active, updated_at: new Date().toISOString() }).eq('id', id)
       if (error) throw error
-      setEditId(null)
-      await fetchUsers()
-      showSuccess('User updated successfully!')
-    } catch (err: any) {
-      setError(err.message || 'Failed to update user')
-    }
+      setEditId(null); await fetchUsers(); showSuccess('User updated successfully!')
+    } catch (err: any) { setError(err.message || 'Failed to update user') }
   }
 
-  const loadAnalysts = async () => {
-    setAnalystLoading(true)
-    try {
-      const list = await fetchAnalysts()
-      setAnalysts(list)
-    } catch (err: any) {
-      setAnalystError(err.message || 'Failed to load analysts')
-    } finally {
-      setAnalystLoading(false)
-    }
-  }
-
-  const handleAddAnalyst = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newAnalystName.trim()) return
-    setAddingAnalyst(true)
+  // ── Analyst handlers ──────────────────────────────────────────────────────
+  const handleAddAnalyst = async (name: string) => {
     setAnalystError(null)
     try {
-      const created = await createAnalyst(newAnalystName)
+      const created = await createAnalyst(name)
       setAnalysts(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
-      setNewAnalystName('')
       showSuccess(`Analyst "${created.name}" added!`)
     } catch (err: any) {
-      setAnalystError(err.message?.includes('unique') ? 'An analyst with that name already exists.' : (err.message || 'Failed to add analyst'))
-    } finally {
-      setAddingAnalyst(false)
+      setAnalystError(err.message?.includes('unique') ? 'An analyst with that name already exists.' : err.message || 'Failed to add analyst')
+      throw err
     }
   }
 
-  const handleRemoveAnalyst = async (analyst: Analyst) => {
-    if (!window.confirm(`Remove analyst "${analyst.name}" from the list? They won't appear in new project forms.`)) return
+  const handleEditAnalyst = async (id: number, name: string) => {
+    setAnalystError(null)
     try {
-      await deactivateAnalyst(analyst.id)
-      setAnalysts(prev => prev.filter(a => a.id !== analyst.id))
-      showSuccess(`Analyst "${analyst.name}" removed.`)
+      await updateAnalyst(id, name)
+      setAnalysts(prev => prev.map(a => a.id === id ? { ...a, name } : a).sort((a, b) => a.name.localeCompare(b.name)))
+      showSuccess('Analyst updated!')
     } catch (err: any) {
-      setAnalystError(err.message || 'Failed to remove analyst')
+      setAnalystError(err.message || 'Failed to update analyst'); throw err
     }
+  }
+
+  const handleRemoveAnalyst = async (item: ListItem) => {
+    if (!window.confirm(`Remove analyst "${item.name}"? They won't appear in new project forms.`)) return
+    try {
+      await deactivateAnalyst(item.id)
+      setAnalysts(prev => prev.filter(a => a.id !== item.id))
+      showSuccess(`Analyst "${item.name}" removed.`)
+    } catch (err: any) { setAnalystError(err.message || 'Failed to remove analyst') }
+  }
+
+  // ── Client Type handlers ───────────────────────────────────────────────────
+  const handleAddClientType = async (name: string) => {
+    setCtError(null)
+    try {
+      const created = await createClientType(name)
+      setClientTypes(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
+      showSuccess(`Client Type "${created.name}" added!`)
+    } catch (err: any) {
+      setCtError(err.message?.includes('unique') ? 'A client type with that name already exists.' : err.message || 'Failed to add client type')
+      throw err
+    }
+  }
+
+  const handleEditClientType = async (id: number, name: string) => {
+    setCtError(null)
+    try {
+      await updateClientType(id, name)
+      setClientTypes(prev => prev.map(ct => ct.id === id ? { ...ct, name } : ct).sort((a, b) => a.name.localeCompare(b.name)))
+      showSuccess('Client Type updated!')
+    } catch (err: any) { setCtError(err.message || 'Failed to update client type'); throw err }
+  }
+
+  const handleRemoveClientType = async (item: ListItem) => {
+    if (!window.confirm(`Remove client type "${item.name}"?`)) return
+    try {
+      await deactivateClientType(item.id)
+      setClientTypes(prev => prev.filter(ct => ct.id !== item.id))
+      showSuccess(`Client Type "${item.name}" removed.`)
+    } catch (err: any) { setCtError(err.message || 'Failed to remove client type') }
+  }
+
+  // ── Project Type handlers ─────────────────────────────────────────────────
+  const handleAddProjectType = async (name: string, file?: File) => {
+    setPtError(null)
+    try {
+      const token = file ? await getAccessToken() : undefined
+      const created = await createProjectType(name, file, token)
+      setProjectTypes(prev => [...prev, created])
+      showSuccess(`Project Type "${created.name}" added!`)
+    } catch (err: any) {
+      setPtError(err.message?.includes('unique') ? 'A project type with that name already exists.' : err.message || 'Failed to add project type')
+      throw err
+    }
+  }
+
+  const handleEditProjectType = async (id: number, name: string, file?: File) => {
+    setPtError(null)
+    try {
+      const token = file ? await getAccessToken() : undefined
+      await updateProjectType(id, name, file, token)
+      // Refresh the full list to get updated template_url
+      const updated = await fetchProjectTypes()
+      setProjectTypes(updated)
+      showSuccess('Project Type updated!')
+    } catch (err: any) { setPtError(err.message || 'Failed to update project type'); throw err }
+  }
+
+  const handleRemoveProjectType = async (item: ListItem) => {
+    if (!window.confirm(`Remove project type "${item.name}"?`)) return
+    try {
+      await deactivateProjectType(item.id)
+      setProjectTypes(prev => prev.filter(pt => pt.id !== item.id))
+      showSuccess(`Project Type "${item.name}" removed.`)
+    } catch (err: any) { setPtError(err.message || 'Failed to remove project type') }
   }
 
   return (
@@ -143,88 +403,50 @@ export const AdminPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Shield size={22} className="text-primary" /> User Management
+            <Shield size={22} className="text-primary" /> Admin Panel
           </h1>
-          <p className="text-sm text-base-content/50 mt-0.5">Create and manage user accounts and permissions</p>
+          <p className="text-sm text-base-content/50 mt-0.5">Manage users, lookup lists, and system settings</p>
         </div>
-        <button className="btn btn-ghost btn-sm gap-1.5" onClick={fetchUsers}>
-          <RefreshCw size={14} /> Refresh
-        </button>
+        <button className="btn btn-ghost btn-sm gap-1.5" onClick={loadAll}><RefreshCw size={14} /> Refresh</button>
       </div>
 
-      {/* Alerts */}
+      {/* Global alerts */}
       {error && (
         <div className="alert alert-error">
-          <AlertCircle size={18} />
-          <span>{error}</span>
+          <AlertCircle size={18} /><span>{error}</span>
           <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setError(null)}><X size={12} /></button>
         </div>
       )}
       {success && (
-        <div className="alert alert-success">
-          <CheckCircle2 size={18} />
-          <span>{success}</span>
-        </div>
+        <div className="alert alert-success"><CheckCircle2 size={18} /><span>{success}</span></div>
       )}
 
       {/* Create User Form */}
       <div className="card bg-base-200 border border-base-300">
         <div className="card-body">
-          <h3 className="card-title text-base flex items-center gap-2">
-            <UserPlus size={18} className="text-primary" /> Create New User
-          </h3>
+          <h3 className="card-title text-base flex items-center gap-2"><UserPlus size={18} className="text-primary" /> Create New User</h3>
           <form onSubmit={handleCreateUser} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-2">
             <div className="form-control">
               <label className="label py-0"><span className="label-text text-xs font-medium">Full Name <span className="text-error">*</span></span></label>
-              <input
-                className="input input-bordered input-sm"
-                placeholder="Jane Smith"
-                value={newUser.full_name}
-                onChange={e => setNewUser(u => ({ ...u, full_name: e.target.value }))}
-                required
-              />
+              <input className="input input-bordered input-sm" placeholder="Jane Smith" value={newUser.full_name} onChange={e => setNewUser(u => ({ ...u, full_name: e.target.value }))} required />
             </div>
             <div className="form-control">
               <label className="label py-0"><span className="label-text text-xs font-medium">Email <span className="text-error">*</span></span></label>
-              <input
-                type="email"
-                className="input input-bordered input-sm"
-                placeholder="jane@company.com"
-                value={newUser.email}
-                onChange={e => setNewUser(u => ({ ...u, email: e.target.value }))}
-                required
-              />
+              <input type="email" className="input input-bordered input-sm" placeholder="jane@company.com" value={newUser.email} onChange={e => setNewUser(u => ({ ...u, email: e.target.value }))} required />
             </div>
             <div className="form-control">
               <label className="label py-0"><span className="label-text text-xs font-medium">Password <span className="text-error">*</span></span></label>
-              <input
-                type="password"
-                className="input input-bordered input-sm"
-                placeholder="Min. 8 characters"
-                value={newUser.password}
-                onChange={e => setNewUser(u => ({ ...u, password: e.target.value }))}
-                minLength={8}
-                required
-              />
+              <input type="password" className="input input-bordered input-sm" placeholder="Min. 8 characters" value={newUser.password} onChange={e => setNewUser(u => ({ ...u, password: e.target.value }))} minLength={8} required />
             </div>
             <div className="form-control">
               <label className="label py-0"><span className="label-text text-xs font-medium">Role</span></label>
               <div className="flex gap-2">
-                <select
-                  className="select select-bordered select-sm flex-1"
-                  value={newUser.role}
-                  onChange={e => setNewUser(u => ({ ...u, role: e.target.value as any }))}
-                >
+                <select className="select select-bordered select-sm flex-1" value={newUser.role} onChange={e => setNewUser(u => ({ ...u, role: e.target.value as any }))}>
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                 </select>
-                <button
-                  type="submit"
-                  className={`btn btn-primary btn-sm gap-1.5 ${creating ? 'loading' : ''}`}
-                  disabled={creating}
-                >
-                  {!creating && <UserPlus size={14} />}
-                  {creating ? '…' : 'Create'}
+                <button type="submit" className={`btn btn-primary btn-sm gap-1.5 ${creating ? 'loading' : ''}`} disabled={creating}>
+                  {!creating && <UserPlus size={14} />}{creating ? '…' : 'Create'}
                 </button>
               </div>
             </div>
@@ -232,87 +454,62 @@ export const AdminPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Manage Analysts */}
-      <div className="card bg-base-200 border border-base-300">
-        <div className="card-body">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="card-title text-base flex items-center gap-2">
-              <Users size={18} className="text-primary" /> Manage Analysts
-            </h3>
-            <span className="text-xs text-base-content/50">{analysts.length} active</span>
-          </div>
-          <p className="text-xs text-base-content/50 mb-3">
-            These names appear in the Analyst dropdown when creating or editing projects. Only admins can assign analysts.
-          </p>
-
-          {analystError && (
-            <div className="alert alert-error alert-sm mb-3 py-2">
-              <AlertCircle size={14} />
-              <span className="text-sm">{analystError}</span>
-              <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setAnalystError(null)}><X size={11} /></button>
-            </div>
-          )}
-
-          {/* Add analyst form */}
-          <form onSubmit={handleAddAnalyst} className="flex gap-2 mb-4">
-            <input
-              className="input input-bordered input-sm flex-1"
-              placeholder="Analyst full name…"
-              value={newAnalystName}
-              onChange={e => setNewAnalystName(e.target.value)}
-            />
-            <button
-              type="submit"
-              className={`btn btn-primary btn-sm gap-1.5 ${addingAnalyst ? 'loading' : ''}`}
-              disabled={addingAnalyst || !newAnalystName.trim()}
-            >
-              {!addingAnalyst && <Plus size={14} />}
-              Add
-            </button>
-          </form>
-
-          {/* Analyst list */}
-          {analystLoading ? (
-            <div className="flex justify-center py-4"><Loader2 size={20} className="animate-spin text-primary" /></div>
-          ) : analysts.length === 0 ? (
-            <p className="text-sm text-base-content/40 text-center py-4">No analysts yet — add one above.</p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-              {analysts.map(analyst => (
-                <div key={analyst.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-base-100 border border-base-300 rounded-lg group">
-                  <span className="text-sm font-medium truncate">{analyst.name}</span>
-                  <button
-                    className="btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    onClick={() => handleRemoveAnalyst(analyst)}
-                    title="Remove analyst"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* Managed Lists — 3 columns on large screens */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <ManagedList
+          title="Analysts"
+          subtitle="Names that appear in the Analyst dropdown when creating or editing projects."
+          icon={<Users size={18} className="text-primary" />}
+          items={analysts}
+          loading={analystLoading}
+          error={analystError}
+          onClearError={() => setAnalystError(null)}
+          onAdd={handleAddAnalyst}
+          onEdit={handleEditAnalyst}
+          onRemove={handleRemoveAnalyst}
+        />
+        <ManagedList
+          title="Client Types"
+          subtitle="Available client type options in the project form."
+          icon={<Tag size={18} className="text-secondary" />}
+          items={clientTypes}
+          loading={ctLoading}
+          error={ctError}
+          onClearError={() => setCtError(null)}
+          onAdd={handleAddClientType}
+          onEdit={handleEditClientType}
+          onRemove={handleRemoveClientType}
+        />
+        <ManagedList
+          title="Project Types"
+          subtitle="Project type options with optional downloadable templates."
+          icon={<Layers size={18} className="text-accent" />}
+          items={projectTypes}
+          loading={ptLoading}
+          error={ptError}
+          onClearError={() => setPtError(null)}
+          onAdd={handleAddProjectType}
+          onEdit={handleEditProjectType}
+          onRemove={handleRemoveProjectType}
+          withTemplateUpload
+          templateItems={projectTypes}
+        />
       </div>
 
       {/* Users Table */}
       <div className="card bg-base-200 border border-base-300">
         <div className="card-body p-0">
+          <div className="px-6 pt-4 pb-2">
+            <h3 className="card-title text-base flex items-center gap-2"><Users size={18} className="text-primary" /> Users</h3>
+          </div>
           {loading ? (
-            <div className="flex items-center justify-center h-32">
-              <Loader2 size={24} className="animate-spin text-primary" />
-            </div>
+            <div className="flex items-center justify-center h-32"><Loader2 size={24} className="animate-spin text-primary" /></div>
           ) : (
             <div className="overflow-x-auto">
               <table className="table table-sm">
                 <thead>
                   <tr className="bg-base-300/50">
-                    <th>User</th>
-                    <th>Email</th>
-                    <th>Role</th>
-                    <th>Status</th>
-                    <th>Joined</th>
-                    <th>Actions</th>
+                    <th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -326,11 +523,7 @@ export const AdminPage: React.FC = () => {
                             </div>
                           </div>
                           {editId === user.id ? (
-                            <input
-                              className="input input-bordered input-xs w-32"
-                              value={editForm.full_name}
-                              onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))}
-                            />
+                            <input className="input input-bordered input-xs w-32" value={editForm.full_name} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} />
                           ) : (
                             <span className="font-medium">{user.full_name}</span>
                           )}
@@ -339,13 +532,8 @@ export const AdminPage: React.FC = () => {
                       <td className="text-sm text-base-content/70">{user.email}</td>
                       <td>
                         {editId === user.id ? (
-                          <select
-                            className="select select-bordered select-xs"
-                            value={editForm.role}
-                            onChange={e => setEditForm(f => ({ ...f, role: e.target.value as any }))}
-                          >
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
+                          <select className="select select-bordered select-xs" value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value as any }))}>
+                            <option value="user">User</option><option value="admin">Admin</option>
                           </select>
                         ) : (
                           <span className={`badge badge-sm ${user.role === 'admin' ? 'badge-primary' : 'badge-ghost'}`}>
@@ -355,34 +543,21 @@ export const AdminPage: React.FC = () => {
                       </td>
                       <td>
                         {editId === user.id ? (
-                          <input
-                            type="checkbox"
-                            className="toggle toggle-success toggle-sm"
-                            checked={editForm.is_active}
-                            onChange={e => setEditForm(f => ({ ...f, is_active: e.target.checked }))}
-                          />
+                          <input type="checkbox" className="toggle toggle-success toggle-sm" checked={editForm.is_active} onChange={e => setEditForm(f => ({ ...f, is_active: e.target.checked }))} />
                         ) : (
-                          <span className={`badge badge-sm ${user.is_active ? 'badge-success' : 'badge-error'}`}>
-                            {user.is_active ? 'Active' : 'Inactive'}
-                          </span>
+                          <span className={`badge badge-sm ${user.is_active ? 'badge-success' : 'badge-error'}`}>{user.is_active ? 'Active' : 'Inactive'}</span>
                         )}
                       </td>
-                      <td className="text-xs text-base-content/50">
-                        {new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </td>
+                      <td className="text-xs text-base-content/50">{new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                       <td>
                         <div className="flex gap-1">
                           {editId === user.id ? (
                             <>
-                              <button className="btn btn-success btn-xs gap-1" onClick={() => saveEdit(user.id)}>
-                                <Save size={12} /> Save
-                              </button>
+                              <button className="btn btn-success btn-xs gap-1" onClick={() => saveEdit(user.id)}><Save size={12} /> Save</button>
                               <button className="btn btn-ghost btn-xs" onClick={cancelEdit}><X size={12} /></button>
                             </>
                           ) : (
-                            <button className="btn btn-ghost btn-xs gap-1" onClick={() => startEdit(user)}>
-                              <Edit2 size={12} /> Edit
-                            </button>
+                            <button className="btn btn-ghost btn-xs gap-1" onClick={() => startEdit(user)}><Edit2 size={12} /> Edit</button>
                           )}
                         </div>
                       </td>
@@ -395,14 +570,12 @@ export const AdminPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Note about OKTA */}
+      {/* OKTA note */}
       <div className="alert bg-base-200 border border-base-300">
         <Key size={18} className="text-primary" />
         <div>
           <p className="font-semibold text-sm">OKTA SSO Ready</p>
-          <p className="text-xs text-base-content/60">
-            This auth system is architected to support OKTA SSO via OAuth2/OIDC. When ready, configure the OKTA provider in Supabase Auth settings — no code changes required.
-          </p>
+          <p className="text-xs text-base-content/60">This auth system is architected to support OKTA SSO via OAuth2/OIDC. When ready, configure the OKTA provider in Supabase Auth settings — no code changes required.</p>
         </div>
       </div>
     </div>

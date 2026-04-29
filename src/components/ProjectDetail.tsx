@@ -10,7 +10,7 @@ import {
   updateProjectStatus, fetchProjectHistory,
   fetchLookups,
   fetchProjectFiles, uploadProjectFile, deleteProjectFile, getProjectFileUrl,
-  formatFileSize, MAX_FILE_SIZE_BYTES, MAX_FILES_PER_PROJECT,
+  formatFileSize, MAX_FILES_PER_PROJECT,
 } from '../lib/data'
 import type { AuditEntry, ProjectFile } from '../lib/data'
 import type { LookupItem } from '../types'

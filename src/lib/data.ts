@@ -428,6 +428,7 @@ export interface AuditEntry {
   id: string
   project_id: string
   user_id: string | null
+  user_name: string | null
   action: string
   field_changed: string | null
   old_value: string | null
@@ -439,7 +440,7 @@ export interface AuditEntry {
 export async function fetchProjectHistory(projectId: string): Promise<AuditEntry[]> {
   const { data, error } = await supabase
     .from('audit_log')
-    .select('*')
+    .select('*, profiles!user_id(full_name)')
     .eq('project_id', projectId)
     .order('created_at', { ascending: false })
     .limit(50)
@@ -448,7 +449,11 @@ export async function fetchProjectHistory(projectId: string): Promise<AuditEntry
     console.warn('audit_log fetch error:', error.message)
     return []
   }
-  return (data || []) as AuditEntry[]
+  return (data || []).map((row: any) => ({
+    ...row,
+    user_name: row.profiles?.full_name || null,
+    profiles: undefined,
+  })) as AuditEntry[]
 }
 
 // ─── CSV Import ────────────────────────────────────────────────────────────────

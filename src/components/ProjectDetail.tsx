@@ -766,7 +766,7 @@ export const ProjectDetail: React.FC<{
           ) : (
             <div className="space-y-3">
               {history.map((entry, i) => {
-                const who = entry.user_id ? `User …${entry.user_id.slice(-6)}` : 'System'
+                const who = entry.user_name || (entry.user_id ? `User …${entry.user_id.slice(-6)}` : 'System')
                 const fieldLabel = entry.field_changed
                   ? entry.field_changed.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
                   : null

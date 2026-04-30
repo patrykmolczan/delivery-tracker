@@ -17,6 +17,8 @@ import type {
 } from '../types'
 import type { ProjectType } from '../lib/data'
 import { parseTemplateFile, type DBCountry } from '../lib/templateParser'
+import { analyzeTemplateQuality, type TemplateQualityResult } from '../lib/templateQualityAnalyzer'
+import { TemplateQualityReview } from '../components/TemplateQualityReview'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -269,6 +271,8 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   // ── Template parse state ─────────────────────────────────────────────────────
   const [isParsing, setIsParsing] = useState(false)
   const [parseResult, setParseResult] = useState<{ warnings: string[]; fuzzyMatches: string[]; unmatchedCount: number } | null>(null)
+  const [qualityResult, setQualityResult] = useState<TemplateQualityResult | null>(null)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
   const parseInputRef = useRef<HTMLInputElement>(null)
 
   // ── Country builder ──────────────────────────────────────────────────────────
@@ -278,6 +282,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     if (!lookups) return
     setIsParsing(true)
     setParseResult(null)
+    setQualityResult(null)
     try {
       const dbCountries: DBCountry[] = lookups.countries.map(c => ({ id: c.id, name: c.name }))
       const result = await parseTemplateFile(file, form.project_type || '', dbCountries)
@@ -313,6 +318,12 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
         fuzzyMatches,
         unmatchedCount: result.unmatched.length,
       })
+      // Fire quality analysis async — don't block the parse result display
+      setIsAnalyzing(true)
+      analyzeTemplateQuality(file, form.project_type || '')
+        .then(qr => setQualityResult(qr))
+        .catch(() => setQualityResult(null))
+        .finally(() => setIsAnalyzing(false))
     } catch (err) {
       setParseResult({
         warnings: [`Failed to parse file: ${err instanceof Error ? err.message : 'Unknown error'}`],
@@ -704,6 +715,8 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                       )}
                     </div>
                   )}
+                  {/* AI Quality Review Panel */}
+                  <TemplateQualityReview result={qualityResult} isLoading={isAnalyzing} />
                 </div>
 
                 {/* Country picker row */}

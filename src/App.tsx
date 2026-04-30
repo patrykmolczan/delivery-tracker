@@ -130,7 +130,7 @@ const Dashboard: React.FC = () => {
         <div className="p-4 border-b border-base-300 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             {logoUrl ? (
-              <div className={isDark ? 'bg-white/90 rounded-md px-1.5 py-0.5 mr-1' : 'mr-1'}>
+              <div className={`rounded-md px-1.5 py-0.5 mr-1 transition-colors ${isDark ? 'bg-white/90' : 'bg-transparent'}`}>
                 <img
                   src={logoUrl}
                   alt="Logo"

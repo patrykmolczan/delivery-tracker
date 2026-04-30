@@ -68,7 +68,7 @@ function shell(logoUrl: string, accentColor: string, content: string): string {
                   <tr>
                     <td>
                       ${logoUrl
-                        ? `<img src="${logoUrl}" alt="Company Logo" height="36" style="display:block;height:36px;width:auto;max-width:160px;object-fit:contain;" />`
+                        ? `<img src="${logoUrl}" alt="Company Logo" height="52" style="display:block;height:52px;width:auto;max-width:220px;object-fit:contain;" />`
                         : `<span style="font-size:13px;font-weight:700;letter-spacing:1px;color:${BRAND};text-transform:uppercase;">Delivery Tracker</span>`}
                     </td>
                     <td align="right">

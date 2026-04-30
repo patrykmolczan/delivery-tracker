@@ -70,7 +70,7 @@ const MULTI_SEP_PATTERN = /\s*[&;]\s*|\s+and\s+/i
 // For slash: only flag if both sides look like state/country names (3+ chars each)
 const SLASH_MULTI_PATTERN = /^[a-zA-Z\s]{3,}\s*\/\s*[a-zA-Z\s]{3,}$/
 
-function detectMultiLocation(value: string, field: 'state' | 'city' | 'country'): string[] | null {
+function detectMultiLocation(value: string, _field: 'state' | 'city' | 'country'): string[] | null {
   if (!value || value.toLowerCase() === 'remote') return null
 
   let separator: string | null = null

@@ -1340,3 +1340,107 @@ export async function updateAppSetting(key: string, value: string): Promise<void
     .eq('key', key);
   if (error) throw error;
 }
+
+// ── Project Delivery Notes ────────────────────────────────────────────────────
+
+export interface DeliveryNote {
+  id: string
+  project_id: string
+  note: string
+  created_by: string | null
+  created_at: string
+  updated_at: string | null
+  updated_by: string | null
+  author_name: string | null
+  author_role: string | null
+  updater_name: string | null
+}
+
+export async function fetchDeliveryNotes(projectId: string): Promise<DeliveryNote[]> {
+  const { data, error } = await supabase
+    .from('project_delivery_notes')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(`Failed to fetch delivery notes: ${error.message}`)
+  if (!data || data.length === 0) return []
+
+  const userIds = [...new Set([
+    ...data.map((d: any) => d.created_by).filter(Boolean),
+    ...data.map((d: any) => d.updated_by).filter(Boolean),
+  ])]
+
+  let profileMap: Record<string, { full_name: string; role: string }> = {}
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, role')
+      .in('id', userIds)
+    for (const p of (profiles || [])) {
+      profileMap[(p as any).id] = { full_name: (p as any).full_name, role: (p as any).role }
+    }
+  }
+
+  return data.map((d: any) => ({
+    id: d.id,
+    project_id: d.project_id,
+    note: d.note,
+    created_by: d.created_by,
+    created_at: d.created_at,
+    updated_at: d.updated_at,
+    updated_by: d.updated_by,
+    author_name: d.created_by ? profileMap[d.created_by]?.full_name ?? null : null,
+    author_role: d.created_by ? profileMap[d.created_by]?.role ?? null : null,
+    updater_name: d.updated_by ? profileMap[d.updated_by]?.full_name ?? null : null,
+  }))
+}
+
+export async function createDeliveryNote(
+  projectId: string,
+  note: string,
+  userId: string,
+): Promise<DeliveryNote> {
+  const { data, error } = await supabase
+    .from('project_delivery_notes')
+    .insert({ project_id: projectId, note: note.trim(), created_by: userId })
+    .select('*')
+    .single()
+
+  if (error) throw new Error(`Failed to create delivery note: ${error.message}`)
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, role')
+    .eq('id', userId)
+    .single()
+
+  return {
+    ...(data as any),
+    author_name: (profile as any)?.full_name ?? null,
+    author_role: (profile as any)?.role ?? null,
+    updater_name: null,
+  }
+}
+
+export async function updateDeliveryNote(
+  noteId: string,
+  note: string,
+  userId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('project_delivery_notes')
+    .update({ note: note.trim(), updated_at: new Date().toISOString(), updated_by: userId })
+    .eq('id', noteId)
+
+  if (error) throw new Error(`Failed to update delivery note: ${error.message}`)
+}
+
+export async function deleteDeliveryNote(noteId: string): Promise<void> {
+  const { error } = await supabase
+    .from('project_delivery_notes')
+    .delete()
+    .eq('id', noteId)
+
+  if (error) throw new Error(`Failed to delete delivery note: ${error.message}`)
+}

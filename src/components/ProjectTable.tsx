@@ -36,8 +36,8 @@ const columns: { key: SortField; label: string }[] = [
 // Column widths as percentages — must sum to 100 (without Actions col)
 // With Actions col the last col takes 5% and others shrink proportionally via table-fixed
 const COL_WIDTHS = {
-  id_number: '4%',
-  status: '7%',
+  id_number: '3%',       // -1% (narrow ID fits in 3%)
+  status: '10%',         // +3% — fits "Ready to Deliver" / "SKV Validation" without truncation
   project_owner: '7%',
   analyst: '6%',
   client_type: '8%',
@@ -46,10 +46,10 @@ const COL_WIDTHS = {
   date_received: '7%',
   expected_delivery_date: '7%',
   date_delivered: '7%',
-  days_to_complete: '4%',
+  days_to_complete: '3%', // -1% (short numbers fit fine)
   country: '8%',
   industry: '9%',
-  job_count: '3%',
+  job_count: '2%',        // -1% (single digits only)
   actions: '4%',
 }
 

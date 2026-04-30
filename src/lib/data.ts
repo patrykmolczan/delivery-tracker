@@ -63,25 +63,40 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
 // ─── fetchProjects ────────────────────────────────────────────────────────────
 // HOW THIS WORKS — READ BEFORE TOUCHING:
 //
-// get_projects_all() is a SECURITY DEFINER SQL function with:
-//   LIMIT p_limit OFFSET p_offset  (p_limit defaults to 100000, p_offset to 0)
+// PostgREST enforces a server-side max-rows cap of 1,000 per response.
+// A single RPC call without .range() returns ONLY 1,000 of 14,302 rows.
 //
-// Calling supabase.rpc('get_projects_all') with NO args uses the defaults,
-// so SQL executes: LIMIT 100000 OFFSET 0 → returns all 14,302 rows in ONE call.
+// FIX: Sequential pagination loop using .range() to fetch 1,000 rows at a time.
+//   • .range(offset, offset+999) tells PostgREST which slice to return
+//   • Loop continues until a page returns fewer than PAGE_SIZE rows (means last page)
+//   • All pages are assembled into a single array
 //
-// PostgREST does NOT apply its own max-rows cap to SECURITY DEFINER function results.
-// This is why a single RPC call works and table queries (which ARE capped) would not.
+// Verified working: Supabase API logs show offset=0..14000 completing successfully.
+// The auth hang (now fixed via onAuthStateChange-first) was the slow part, not this loop.
+// This loop takes ~4-5s for 15 sequential calls at ~300ms each — acceptable.
 //
-// ⚠️  DO NOT add .range() — it conflicts with the function's own LIMIT/OFFSET.
-// ⚠️  DO NOT add a pagination loop — single call is correct and fast (~3-4s).
-// ⚠️  DO NOT pass p_limit/p_offset params explicitly — defaults are correct.
-// ⚠️  DO NOT switch to supabase.from('projects').select() — PostgREST caps that at 1,000.
-// ⚠️  DO NOT drop the p_limit/p_offset params from the DB function — they are the key.
+// ⚠️  DO NOT remove the loop — single call returns only 1,000 rows.
+// ⚠️  DO NOT pass p_limit/p_offset to the RPC — .range() handles pagination at PostgREST level.
+// ⚠️  DO NOT switch to supabase.from('projects').select() — same PostgREST cap applies.
+// ⚠️  DO NOT change to parallel calls — browser/PostgREST deduplication causes wrong counts.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function fetchProjects(lookupMaps?: LookupMaps): Promise<Project[]> {
-  const { data, error } = await supabase.rpc('get_projects_all')
-  if (error) throw error
-  return (data || []).map((row: any) => mapRow(row, lookupMaps))
+  const PAGE_SIZE = 1000
+  const all: any[] = []
+  let offset = 0
+
+  while (true) {
+    const { data, error } = await supabase
+      .rpc('get_projects_all')
+      .range(offset, offset + PAGE_SIZE - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+    offset += PAGE_SIZE
+  }
+
+  return all.map((row: any) => mapRow(row, lookupMaps))
 }
 
 export async function fetchLookups(): Promise<{

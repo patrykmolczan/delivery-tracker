@@ -144,9 +144,6 @@ export async function analyzeTemplateQuality(file: File, projectType: string): P
       if (compactRows.length >= 120) break
     }
 
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY
-    if (!apiKey) throw new Error('OpenAI API key not configured')
-
     const systemPrompt = `You are a Senior Compensation Data Quality Analyst at a global HR consulting firm. You specialize in reviewing Pay Intelligence (pay equity/benchmarking) data templates before submission to the Pay Intel platform.
 
 Your expertise:
@@ -221,31 +218,21 @@ Rules:
 - overallScore: start at 100, subtract: 15 per critical duplicate group, 10 per warning duplicate, 5 per missing description row (max -30 total for descriptions), 10 per missing country row (max -20), 5 per leveling issue, 2 per missing level in coverage
 - issueCount: sum all items across all categories by their severity field`
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Call via serverless proxy — avoids browser CORS + keeps API key server-side only
+    const response = await fetch('/api/analyze-template', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        temperature: 0.1,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ systemPrompt, userPrompt }),
     })
 
     if (!response.ok) {
-      const err = await response.text()
-      throw new Error(`OpenAI API error: ${response.status} — ${err}`)
+      const errData = await response.json().catch(() => ({ error: response.statusText }))
+      throw new Error(errData.error || `Server error ${response.status}`)
     }
 
     const data = await response.json()
-    const raw = data.choices?.[0]?.message?.content
-    if (!raw) throw new Error('Empty response from OpenAI')
+    const raw = data.content
+    if (!raw) throw new Error('Empty response from analysis server')
 
     const parsed = JSON.parse(raw) as Omit<TemplateQualityResult, 'rowsAnalyzed'>
     return { ...parsed, rowsAnalyzed: rows.length }

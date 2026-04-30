@@ -39,10 +39,13 @@ export interface Project {
   industry: string | null
   industry_id?: number | null
   project_type: string | null
+  id_number?: number | null
+  time_allocation?: number | null
   project_countries?: ProjectCountry[]
   project_tasks?: ProjectTask[]
   created_by?: string | null
   created_at?: string | null
+  notifications_enabled?: boolean
 }
 
 // Input type for multi-country form entries
@@ -74,6 +77,7 @@ export interface ProjectFormData {
   country_id: number | null       // primary country (backward compat)
   industry_id: number | null
   project_type: string | null
+  time_allocation: string  // string for controlled input, convert to number on save
   project_countries: ProjectCountryInput[]
   project_tasks: ProjectTaskInput[]
 }
@@ -111,6 +115,7 @@ export interface FilterState {
   search: string
   status: string
   owner: string
+  analyst: string
   clientType: string
   industry: string
   country: string

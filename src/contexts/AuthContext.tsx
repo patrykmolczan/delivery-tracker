@@ -36,33 +36,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   useEffect(() => {
-    // Timeout fallback: if auth doesn't resolve in 8s, proceed anyway
-    const timeout = setTimeout(() => setLoading(false), 8000)
+    // CRITICAL: Register onAuthStateChange FIRST.
+    // Supabase v2 fires INITIAL_SESSION synchronously from localStorage —
+    // no network call, no hang. getSession() called first triggers a
+    // token-refresh network request that can block 8+ seconds on refresh.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setSession(session)
+        setUser(session?.user ?? null)
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      clearTimeout(timeout)
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        try { await fetchProfile(session.user.id) } catch {}
+        if (session?.user) {
+          try { await fetchProfile(session.user.id) } catch {}
+        } else {
+          setProfile(null)
+        }
+
+        // INITIAL_SESSION fires on mount — this is our signal that auth is ready.
+        // All other events (SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED) keep loading false.
+        if (event === 'INITIAL_SESSION') {
+          setLoading(false)
+        }
       }
-      setLoading(false)
-    }).catch(() => {
+    )
+
+    // Safety net: if INITIAL_SESSION never fires (e.g. no stored session at all
+    // and Supabase doesn't emit the event), unblock after 3 seconds.
+    const timeout = setTimeout(() => setLoading(false), 3000)
+
+    return () => {
+      subscription.unsubscribe()
       clearTimeout(timeout)
-      setLoading(false)
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        try { await fetchProfile(session.user.id) } catch {}
-      } else {
-        setProfile(null)
-      }
-    })
-
-    return () => subscription.unsubscribe()
+    }
   }, [])
 
   const signIn = async (email: string, password: string) => {

@@ -17,6 +17,7 @@ interface ProjectTableProps {
 const ROW_HEIGHT = 44
 
 const columns: { key: SortField; label: string }[] = [
+  { key: 'id_number', label: 'ID #' },
   { key: 'status', label: 'Status' },
   { key: 'project_owner', label: 'Owner' },
   { key: 'analyst', label: 'Analyst' },
@@ -173,6 +174,9 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                         onClick={() => onSelectProject(p)}
                         style={{ height: ROW_HEIGHT }}
                       >
+                        <td className="text-base-content/60 whitespace-nowrap font-mono text-xs">
+                          {p.id_number ?? '—'}
+                        </td>
                         <td className="whitespace-nowrap">
                           <span
                             className={`badge badge-sm ${getStatusColor(

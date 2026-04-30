@@ -50,17 +50,50 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
     industry: lookupMaps?.industryMap.get(row.industry_id) || null,
     industry_id: row.industry_id,
     project_type: row.project_type || null,
+    id_number: row.id_number ?? null,
+    time_allocation: row.time_allocation ?? null,
+    notifications_enabled: row.notifications_enabled ?? true,
     created_by: row.created_by,
     created_at: row.created_at,
   }
 }
 
-// Fetch ALL projects via RPC function — bypasses PostgREST's 1000-row table limit.
-// Pass lookupMaps to resolve ID→name client-side.
+// Fetch ALL projects via RPC function — single call with explicit LIMIT/OFFSET in SQL,
+// bypassing PostgREST's server-side max-rows cap entirely.
+// ─── fetchProjects ────────────────────────────────────────────────────────────
+// CRITICAL: PostgREST enforces a server-side max-rows cap of 1,000 per request.
+// A single RPC call WILL silently return only 1,000 of 14,302 rows.
+//
+// FIX: Parallel pagination — fire all page requests simultaneously.
+//   • get_projects_all() has NO SQL LIMIT so PostgREST can slice it freely with .range()
+//   • MAX_PAGES=20 supports up to 20,000 rows; adjust if dataset grows past that
+//   • All pages fire in parallel → total time ≈ one round-trip (~400ms) not 15× sequential
+//
+// ⚠️  DO NOT "simplify" this to a single .rpc() call — it will break row count.
+// ⚠️  DO NOT add p_limit/p_offset params to the RPC call — breaks PostgREST slicing.
+// ⚠️  DO NOT switch to a while-loop — sequential calls are 10× slower.
+// ─────────────────────────────────────────────────────────────────────────────
 export async function fetchProjects(lookupMaps?: LookupMaps): Promise<Project[]> {
-  const { data, error } = await supabase.rpc('get_projects_all')
-  if (error) throw error
-  return (data || []).map((row: any) => mapRow(row, lookupMaps))
+  const PAGE_SIZE = 1000
+  const MAX_PAGES = 20 // supports up to 20,000 rows
+
+  const results = await Promise.all(
+    Array.from({ length: MAX_PAGES }, (_, i) =>
+      supabase
+        .rpc('get_projects_all')
+        .range(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1)
+    )
+  )
+
+  const all: any[] = []
+  for (const { data, error } of results) {
+    if (error) throw error
+    if (!data || data.length === 0) break
+    all.push(...data)
+    if (data.length < PAGE_SIZE) break
+  }
+
+  return all.map((row: any) => mapRow(row, lookupMaps))
 }
 
 export async function fetchLookups(): Promise<{
@@ -103,6 +136,7 @@ export async function createProject(form: ProjectFormData, userId: string): Prom
       : form.country_id,
     industry_id: form.industry_id,
     project_type: form.project_type || null,
+    time_allocation: form.time_allocation ? parseFloat(form.time_allocation as string) : null,
     created_by: userId,
   }
 
@@ -114,6 +148,7 @@ export async function createProject(form: ProjectFormData, userId: string): Prom
       date_received, expected_delivery_date, date_delivered,
       project_summary, job_count, days_to_complete, created_by, created_at,
       project_type, status_id, client_type_id, country_id, industry_id,
+      id_number, time_allocation,
       project_statuses!inner(name),
       client_types(name),
       countries(name),
@@ -156,6 +191,8 @@ export async function createProject(form: ProjectFormData, userId: string): Prom
     industry: (data as any).industries?.name || null,
     industry_id: data.industry_id,
     project_type: (data as any).project_type || null,
+    id_number: (data as any).id_number ?? null,
+    time_allocation: (data as any).time_allocation ?? null,
     created_by: data.created_by,
     created_at: data.created_at,
   }
@@ -179,6 +216,7 @@ export async function updateProject(id: string, form: ProjectFormData): Promise<
       : form.country_id,
     industry_id: form.industry_id,
     project_type: form.project_type || null,
+    time_allocation: form.time_allocation != null ? (form.time_allocation ? parseFloat(form.time_allocation as string) : null) : null,
     updated_at: new Date().toISOString(),
   }
 
@@ -423,18 +461,24 @@ export function fetchOwnerCounts(projects: Project[]): OwnerCount[] {
 
 // Accept already-loaded projects to derive owners; fetch lookup dropdowns from DB
 export async function fetchFilterOptions(projects: Project[]) {
-  const [{ data: clientTypes }, { data: industries }, { data: countries }, { data: statuses }] =
+  const [{ data: clientTypes }, { data: industries }, { data: countries }, { data: statuses }, { data: analystRows }] =
     await Promise.all([
       supabase.from('client_types').select('name').eq('is_active', true).order('name'),
       supabase.from('industries').select('name').eq('is_active', true).order('name'),
       supabase.from('countries').select('name').eq('is_active', true).order('name'),
       supabase.from('project_statuses').select('name').eq('is_active', true).order('display_order'),
+      supabase.from('analysts').select('name').eq('is_active', true).order('name'),
     ])
 
   const owners = [...new Set(projects.map(p => p.project_owner).filter(Boolean))].sort() as string[]
+  // Also include unique analyst values from actual project data (catches historical data not in analysts table)
+  const analystsFromDB = (analystRows || []).map((r: any) => r.name) as string[]
+  const analystsFromProjects = [...new Set(projects.map(p => p.analyst).filter(Boolean))].sort() as string[]
+  const analysts = [...new Set([...analystsFromDB, ...analystsFromProjects])].sort()
 
   return {
     owners,
+    analysts,
     clientTypes: (clientTypes || []).map((r: any) => r.name),
     industries: (industries || []).map((r: any) => r.name),
     countries: (countries || []).map((r: any) => r.name),
@@ -476,6 +520,7 @@ export function filterProjects(projects: Project[], filters: FilterState): Proje
     }
     if (filters.status && p.status !== filters.status) return false
     if (filters.owner && p.project_owner !== filters.owner) return false
+    if (filters.analyst && p.analyst !== filters.analyst) return false
     if (filters.clientType && p.client_type !== filters.clientType) return false
     if (filters.industry && p.industry !== filters.industry) return false
     if (filters.country && p.country !== filters.country) return false
@@ -988,4 +1033,254 @@ export async function deactivateProjectType(id: number): Promise<void> {
     .update({ is_active: false })
     .eq('id', id)
   if (error) throw error
+}
+
+// ─── Delivery Files (Admin upload / User download) ────────────────────────────
+
+export const MAX_DELIVERY_FILES = 25
+export const MAX_DELIVERY_FILE_SIZE_BYTES = 2 * 1024 * 1024   // 2 MB
+
+export interface DeliveryFile {
+  id: string
+  project_id: string
+  file_name: string
+  file_size: number
+  file_type: string | null
+  description: string | null
+  storage_path: string
+  uploaded_by: string | null
+  uploaded_at: string
+  updated_at: string
+  uploader_name: string | null
+  uploader_email: string | null
+  download_count?: number
+}
+
+export interface DeliveryFileDownload {
+  id: string
+  file_id: string
+  project_id: string
+  downloaded_by: string | null
+  downloaded_by_email: string | null
+  downloaded_by_name: string | null
+  downloaded_at: string
+}
+
+export async function fetchDeliveryFiles(projectId: string): Promise<DeliveryFile[]> {
+  const { data, error } = await supabase
+    .from('project_delivery_files')
+    .select('*, profiles!uploaded_by(full_name, email)')
+    .eq('project_id', projectId)
+    .order('uploaded_at', { ascending: false })
+
+  if (error) {
+    console.warn('delivery files fetch error:', error.message)
+    return []
+  }
+
+  // Get download counts in one query
+  const ids = (data || []).map((r: any) => r.id)
+  let countMap: Record<string, number> = {}
+  if (ids.length > 0) {
+    const { data: dlData } = await supabase
+      .from('delivery_file_downloads')
+      .select('file_id')
+      .in('file_id', ids)
+    ;(dlData || []).forEach((r: any) => {
+      countMap[r.file_id] = (countMap[r.file_id] || 0) + 1
+    })
+  }
+
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    project_id: row.project_id,
+    file_name: row.file_name,
+    file_size: row.file_size,
+    file_type: row.file_type,
+    description: row.description,
+    storage_path: row.storage_path,
+    uploaded_by: row.uploaded_by,
+    uploaded_at: row.uploaded_at,
+    updated_at: row.updated_at,
+    uploader_name: row.profiles?.full_name || null,
+    uploader_email: row.profiles?.email || null,
+    download_count: countMap[row.id] || 0,
+  }))
+}
+
+export async function uploadDeliveryFile(
+  projectId: string,
+  file: File,
+  userId: string
+): Promise<DeliveryFile> {
+  if (file.size > MAX_DELIVERY_FILE_SIZE_BYTES) {
+    throw new Error(`File size ${formatFileSize(file.size)} exceeds the 2 MB limit`)
+  }
+
+  const existing = await fetchDeliveryFiles(projectId)
+  if (existing.length >= MAX_DELIVERY_FILES) {
+    throw new Error(`Maximum of ${MAX_DELIVERY_FILES} delivery files per project reached`)
+  }
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const storagePath = `${projectId}/${Date.now()}_${safeName}`
+
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('Not authenticated — please log in again')
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+  const contentType = file.type || 'application/octet-stream'
+  const fileBlob = new Blob([await file.arrayBuffer()], { type: contentType })
+
+  const uploadRes = await fetch(
+    `${supabaseUrl}/storage/v1/object/project-delivery-files/${storagePath}`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': contentType,
+        'x-upsert': 'false',
+      },
+      body: fileBlob,
+    }
+  )
+
+  if (!uploadRes.ok) {
+    const errText = await uploadRes.text().catch(() => uploadRes.statusText)
+    throw new Error(`Upload failed: ${errText}`)
+  }
+
+  const { data, error: dbError } = await supabase
+    .from('project_delivery_files')
+    .insert({
+      project_id: projectId,
+      file_name: file.name,
+      file_size: file.size,
+      file_type: file.type || 'application/octet-stream',
+      storage_path: storagePath,
+      uploaded_by: userId,
+    })
+    .select('*, profiles!uploaded_by(full_name, email)')
+    .single()
+
+  if (dbError) {
+    await supabase.storage.from('project-delivery-files').remove([storagePath]).catch(() => {})
+    throw new Error(`Database error: ${dbError.message}`)
+  }
+
+  return {
+    id: data.id,
+    project_id: data.project_id,
+    file_name: data.file_name,
+    file_size: data.file_size,
+    file_type: data.file_type,
+    description: data.description,
+    storage_path: data.storage_path,
+    uploaded_by: data.uploaded_by,
+    uploaded_at: data.uploaded_at,
+    updated_at: data.updated_at,
+    uploader_name: (data as any).profiles?.full_name || null,
+    uploader_email: (data as any).profiles?.email || null,
+    download_count: 0,
+  }
+}
+
+export async function updateDeliveryFile(
+  fileId: string,
+  updates: { file_name?: string; description?: string }
+): Promise<void> {
+  const { error } = await supabase
+    .from('project_delivery_files')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', fileId)
+  if (error) throw new Error(`Update failed: ${error.message}`)
+}
+
+export async function deleteDeliveryFile(
+  fileId: string,
+  storagePath: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('project_delivery_files')
+    .delete()
+    .eq('id', fileId)
+  if (error) throw new Error(`Delete failed: ${error.message}`)
+  await supabase.storage.from('project-delivery-files').remove([storagePath]).catch(() => {})
+}
+
+export async function getDeliveryFileUrl(storagePath: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from('project-delivery-files')
+    .createSignedUrl(storagePath, 3600)
+  if (error || !data) throw new Error('Could not generate download link')
+  return data.signedUrl
+}
+
+export async function trackDeliveryDownload(
+  fileId: string,
+  projectId: string,
+  userId: string | null,
+  userEmail: string | null,
+  userName: string | null
+): Promise<void> {
+  await supabase.from('delivery_file_downloads').insert({
+    file_id: fileId,
+    project_id: projectId,
+    downloaded_by: userId,
+    downloaded_by_email: userEmail,
+    downloaded_by_name: userName,
+  }).then(() => {}) // fire and forget, don't block download
+}
+
+export async function fetchDeliveryFileDownloads(fileId: string): Promise<DeliveryFileDownload[]> {
+  const { data, error } = await supabase
+    .from('delivery_file_downloads')
+    .select('*')
+    .eq('file_id', fileId)
+    .order('downloaded_at', { ascending: false })
+    .limit(50)
+  if (error) return []
+  return (data || []) as DeliveryFileDownload[]
+}
+
+// ── Notification Settings ────────────────────────────────────────────────────
+export async function fetchNotificationSettings() {
+  const { data } = await supabase.from('notification_settings').select('*').order('label')
+  return data || []
+}
+
+export async function updateNotificationSetting(id: string, enabled: boolean) {
+  const { error } = await supabase.from('notification_settings').update({ setting_value: enabled }).eq('id', id)
+  if (error) throw new Error(`Failed to update: ${error.message}`)
+}
+
+export async function updateProjectNotificationsEnabled(projectId: string, enabled: boolean) {
+  const { error } = await supabase.from('projects').update({ notifications_enabled: enabled }).eq('id', projectId)
+  if (error) throw new Error(`Failed to update: ${error.message}`)
+}
+
+export async function fetchProjectOwnerEmail(userId: string): Promise<string | null> {
+  const { data } = await supabase.from('profiles').select('email').eq('id', userId).single()
+  return (data as any)?.email || null
+}
+
+// ── App Settings ──────────────────────────────────────────────
+export async function fetchAppSettings(): Promise<Record<string, string>> {
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('key, value');
+  if (error) throw error;
+  const result: Record<string, string> = {};
+  for (const row of data ?? []) {
+    if (row.value != null) result[row.key] = row.value;
+  }
+  return result;
+}
+
+export async function updateAppSetting(key: string, value: string): Promise<void> {
+  const { error } = await supabase
+    .from('app_settings')
+    .update({ value, updated_at: new Date().toISOString() })
+    .eq('key', key);
+  if (error) throw error;
 }

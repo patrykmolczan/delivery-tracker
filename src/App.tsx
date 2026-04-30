@@ -14,11 +14,13 @@ import {
   fetchProjects, fetchStatusCounts, fetchOwnerCounts, buildLookupMaps, fetchLookups,
   fetchFilterOptions, computeKPIs, filterProjects, sortProjects
 } from './lib/data'
+import { useLogo } from './hooks/useLogo'
 import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode } from './types'
 import {
   LayoutDashboard, Table2, RefreshCw, LogOut, Truck, Loader2,
-  Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight
+  Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon
 } from 'lucide-react'
+import { useTheme } from './contexts/ThemeContext'
 
 const NAV_ITEMS: Array<{ id: ViewMode; label: string; icon: React.ReactNode; adminOnly?: boolean }> = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
@@ -31,11 +33,13 @@ const NAV_ITEMS: Array<{ id: ViewMode; label: string; icon: React.ReactNode; adm
 
 const Dashboard: React.FC = () => {
   const { user, profile, isAdmin, signOut } = useAuth()
+  const { logoUrl } = useLogo()
+  const { isDark, toggleTheme } = useTheme()
   const [projects, setProjects] = useState<Project[]>([])
   const [statusCounts, setStatusCounts] = useState<StatusCount[]>([])
   const [ownerCounts, setOwnerCounts] = useState<OwnerCount[]>([])
-  const [filterOptions, setFilterOptions] = useState({ owners: [] as string[], clientTypes: [] as string[], industries: [] as string[], countries: [] as string[], statuses: [] as string[] })
-  const [filters, setFilters] = useState<FilterState>({ search: '', status: '', owner: '', clientType: '', industry: '', country: '', dateFrom: '', dateTo: '' })
+  const [filterOptions, setFilterOptions] = useState({ owners: [] as string[], analysts: [] as string[], clientTypes: [] as string[], industries: [] as string[], countries: [] as string[], statuses: [] as string[] })
+  const [filters, setFilters] = useState<FilterState>({ search: '', status: '', owner: '', analyst: '', clientType: '', industry: '', country: '', dateFrom: '', dateTo: '' })
   const [sort, setSort] = useState<SortState>({ field: 'date_received', direction: 'desc' })
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [editProject, setEditProject] = useState<Project | null>(null)
@@ -125,12 +129,23 @@ const Dashboard: React.FC = () => {
         {/* Logo */}
         <div className="p-4 border-b border-base-300 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 bg-primary/10 rounded-lg">
-              <Truck size={18} className="text-primary" />
-            </div>
+            {logoUrl ? (
+              <div className={`rounded-md px-1.5 py-0.5 mr-1 transition-colors ${isDark ? 'bg-white/90' : 'bg-transparent'}`}>
+                <img
+                  src={logoUrl}
+                  alt="Logo"
+                  className="h-8 w-auto object-contain"
+                  style={{ maxHeight: '32px' }}
+                />
+              </div>
+            ) : (
+              <div className="p-1.5 bg-primary/10 rounded-lg">
+                <Truck size={18} className="text-primary" />
+              </div>
+            )}
             <div>
               <p className="font-bold text-sm text-base-content">Delivery Tracker</p>
-              <p className="text-xs text-base-content/40">Procurement & HR</p>
+              <p className="text-xs text-base-content/40">Project Dashboard</p>
             </div>
           </div>
           <button className="btn btn-ghost btn-xs lg:hidden" onClick={() => setSidebarOpen(false)}>
@@ -174,6 +189,36 @@ const Dashboard: React.FC = () => {
               <p className="text-xs text-base-content/40 truncate">{user?.email}</p>
             </div>
           </div>
+          {/* Theme Toggle */}
+          <div className="flex items-center justify-between px-2 py-1.5 mb-1">
+            <span className="text-xs text-base-content/50 font-medium">Appearance</span>
+            <div className="flex items-center gap-0.5 bg-base-300 rounded-lg p-0.5">
+              <button
+                onClick={() => { if (isDark) toggleTheme() }}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
+                  !isDark
+                    ? 'bg-base-100 text-base-content shadow-sm'
+                    : 'text-base-content/50 hover:text-base-content'
+                }`}
+                title="Light mode"
+              >
+                <Sun size={11} />
+                Light
+              </button>
+              <button
+                onClick={() => { if (!isDark) toggleTheme() }}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
+                  isDark
+                    ? 'bg-base-100 text-base-content shadow-sm'
+                    : 'text-base-content/50 hover:text-base-content'
+                }`}
+                title="Dark mode"
+              >
+                <Moon size={11} />
+                Dark
+              </button>
+            </div>
+          </div>
           <div className="flex gap-2 mt-1">
             <button
               className={`btn btn-ghost btn-xs gap-1.5 flex-1 ${refreshing ? 'loading' : ''}`}
@@ -206,9 +251,6 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {isAdmin && (
-              <span className="badge badge-primary badge-sm">Admin</span>
-            )}
             {view !== 'table' && (
               <button
                 className="btn btn-primary btn-sm gap-1.5 hidden sm:flex"

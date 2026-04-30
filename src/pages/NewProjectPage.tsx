@@ -36,6 +36,7 @@ const EMPTY_FORM: ProjectFormData = {
   country_id: null,
   industry_id: null,
   project_type: null,
+  time_allocation: '',
   project_countries: [],
   project_tasks: [],
 }
@@ -204,6 +205,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
       country_id: editProject.country_id ?? null,
       industry_id: editProject.industry_id ?? null,
       project_type: editProject.project_type ?? null,
+      time_allocation: editProject.time_allocation?.toString() || '',
       project_countries: [],
       project_tasks: [],
     })
@@ -813,6 +815,18 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                       onChange={e => set('job_count', e.target.value)}
                       placeholder={totalJobsFromCountries > 0 ? totalJobsFromCountries.toString() : 'e.g. 150'}
                       min="0"
+                    />
+                  </Field>
+                  {/* Time Allocation */}
+                  <Field label="Time Allocation (hrs)">
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      className="input input-bordered w-full"
+                      placeholder="e.g. 2.5"
+                      value={form.time_allocation}
+                      onChange={e => setForm(prev => ({ ...prev, time_allocation: e.target.value }))}
                     />
                   </Field>
                 </div>

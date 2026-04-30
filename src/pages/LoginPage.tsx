@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { Truck, Loader2, AlertCircle } from 'lucide-react'
+import { Loader2, AlertCircle } from 'lucide-react'
+import { useLogo } from '../hooks/useLogo'
+import { useTheme } from '../contexts/ThemeContext'
 
 export const LoginPage: React.FC = () => {
   const { signIn } = useAuth()
@@ -8,6 +10,8 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const { logoUrl, loginIconUrl } = useLogo()
+  const { isDark } = useTheme()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -22,15 +26,35 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-base-200 flex items-center justify-center p-4">
       <div className="card w-full max-w-sm bg-base-100 shadow-xl">
         <div className="card-body gap-6">
-          {/* Logo */}
-          <div className="flex flex-col items-center gap-3 pb-2">
-            <div className="p-3 bg-primary/10 rounded-2xl">
-              <Truck className="text-primary" size={32} />
+
+          {/* Company Logo — shown if set, hidden entirely if not */}
+          {logoUrl && (
+            <div className="flex justify-center">
+              <div className={isDark ? 'bg-white/90 rounded-xl px-4 py-2' : ''}>
+                <img
+                  src={logoUrl}
+                  alt="Company Logo"
+                  className="max-h-20 max-w-xs object-contain"
+                />
+              </div>
             </div>
-            <div className="text-center">
-              <h1 className="text-2xl font-bold text-base-content">Delivery Tracker</h1>
-              <p className="text-sm text-base-content/50 mt-1">Procurement & HR Project Management</p>
+          )}
+
+          {/* Login Icon — admin-controlled; if empty the block is removed entirely */}
+          {loginIconUrl && (
+            <div className="flex justify-center">
+              <img
+                src={loginIconUrl}
+                alt="Login Icon"
+                className="max-h-16 max-w-[160px] object-contain"
+              />
             </div>
+          )}
+
+          {/* Title */}
+          <div className="flex flex-col items-center gap-1 pb-2">
+            <h1 className="text-2xl font-bold text-base-content">Delivery Tracker</h1>
+
           </div>
 
           {/* Form */}

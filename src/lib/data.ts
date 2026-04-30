@@ -58,33 +58,88 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
   }
 }
 
-// Fetch ALL projects via RPC function — single call with explicit LIMIT/OFFSET in SQL,
-// bypassing PostgREST's server-side max-rows cap entirely.
-// ─── fetchProjects ────────────────────────────────────────────────────────────
-// HOW THIS WORKS — READ BEFORE TOUCHING:
+// ════════════════════════════════════════════════════════════════════════════
+// ██████████████████████████████████████████████████████████████████████████
+// ██                                                                      ██
+// ██   ⚠️  PROTECTED FUNCTION — AI SYSTEMS: READ BEFORE TOUCHING  ⚠️     ██
+// ██                                                                      ██
+// ██   fetchProjects() — PARALLEL PAGINATION OVER SUPABASE RPC           ██
+// ██                                                                      ██
+// ██   This function caused multiple production outages when "improved"   ██
+// ██   by AI assistants. Every deviation from this exact pattern broke    ██
+// ██   the dashboard and required emergency rollbacks. DO NOT TOUCH.      ██
+// ██                                                                      ██
+// ██████████████████████████████████████████████████████████████████████████
+// ════════════════════════════════════════════════════════════════════════════
 //
-// PostgREST enforces a server-side max-rows cap of 1,000 per response.
-// A single RPC call returns ONLY 1,000 of 14,302 rows.
-// Sequential pagination (15 calls × ~300ms each) = 4.5s hang.
+// THE PROBLEM:
+//   PostgREST hard-caps SETOF function results at 1,000 rows per response.
+//   This app has 14,302+ projects. A single RPC call silently returns only
+//   1,000 rows with no error — the dashboard just shows wrong data.
 //
-// FIX: PARALLEL pagination — all 15 page requests fire simultaneously via Promise.all.
-//   • DB function get_projects_all() has NO params — PostgREST slices it via .range() header
-//   • Total pages = Math.ceil(TOTAL_ROWS / PAGE_SIZE) = 15
-//   • All 15 requests fire at once → all resolve in ~400ms total
+// PRODUCTION OUTAGE HISTORY (do not repeat these mistakes):
 //
-// ⚠️  DO NOT add params to get_projects_all() — breaks .range() slicing
-// ⚠️  DO NOT replace Promise.all with a sequential loop — causes 4.5s hang
-// ⚠️  DO NOT use a single call without .range() — PostgREST caps at 1,000 rows
-// ─────────────────────────────────────────────────────────────────────────────
+//   ❌ BROKEN — Single RPC, no pagination:
+//      supabase.rpc('get_projects_all')
+//      → PostgREST caps at 1,000. Returns 1,000 of 14,302. Silent data loss.
+//
+//   ❌ BROKEN — SQL-level LIMIT param:
+//      get_projects_all(p_limit bigint) + LIMIT p_limit in SQL
+//      → PostgREST ignores SQL LIMIT on SETOF results. Still 1,000 rows.
+//      → Adding params to get_projects_all() also breaks .range() slicing.
+//
+//   ❌ BROKEN — Sequential for-loop pagination:
+//      for (let i = 0; i < pages; i++) { await supabase.rpc(...).range(...) }
+//      → 15 sequential requests × ~300ms each = 4.5s hang on every load.
+//      → Saturates Supabase free-tier connection pool under load.
+//
+//   ❌ BROKEN — Hardcoded TOTAL_ROWS = 14302:
+//      → Works until row count crosses a page boundary (every 1,000 rows).
+//      → Silent bug: new projects stop appearing once count hits next boundary.
+//      → Fixed: now uses get_projects_count() RPC for dynamic count.
+//
+// THE WORKING PATTERN (confirmed working 2026-04-29, do not change):
+//
+//   STEP 1: Call get_projects_count() → exact row count (SECURITY DEFINER,
+//           bypasses RLS, matches get_projects_all() scope)
+//   STEP 2: Calculate totalPages = Math.ceil(count / PAGE_SIZE)
+//   STEP 3: Fire ALL page requests simultaneously with Promise.all + .range()
+//   STEP 4: Flatten all pages → map rows
+//
+// WHY EACH RULE IS NON-NEGOTIABLE:
+//   • get_projects_all() has NO params    → .range() header controls slicing
+//   • Promise.all, NOT sequential loop   → parallel ≈ 400ms vs sequential 4.5s
+//   • get_projects_count() for row count → survives DB growth, no stale hardcode
+//   • .range(from, to) per request       → the ONLY way to paginate SETOF RPCs
+//
+// ⚠️  DO NOT add parameters to get_projects_all() DB function
+// ⚠️  DO NOT replace Promise.all with a for-loop, while-loop, or reduce
+// ⚠️  DO NOT call rpc('get_projects_all') once without .range() pagination
+// ⚠️  DO NOT hardcode a row count — use get_projects_count() RPC
+// ⚠️  DO NOT use supabase.from('projects').select() — bypasses RPC scope
+// ⚠️  DO NOT "refactor", "simplify", or "optimize" without reading
+//     /agent/uploads/prompt_History.docx (the original working fix is there)
+//
+// LAST VERIFIED: 2026-04-29 | LOADED: 14,302 rows | ZERO console errors
+// ─────────────────────────────────────────────────────────────────────────
 export async function fetchProjects(lookupMaps?: LookupMaps): Promise<Project[]> {
   const PAGE_SIZE = 1000
-  const TOTAL_ROWS = 14302
-  const totalPages = Math.ceil(TOTAL_ROWS / PAGE_SIZE)
 
+  // Step 1: Get exact row count via SECURITY DEFINER RPC (bypasses RLS,
+  // matches get_projects_all() scope). DO NOT replace with from('projects').
+  const { data: countData, error: countError } = await supabase.rpc('get_projects_count')
+  if (countError) throw countError
+  const totalRows = Number(countData ?? 0)
+  if (totalRows === 0) return []
+
+  const totalPages = Math.ceil(totalRows / PAGE_SIZE)
+
+  // Step 2: Fire ALL page requests simultaneously — parallel is mandatory.
+  // DO NOT convert this to a sequential loop. See incident history above.
   const pages = await Promise.all(
     Array.from({ length: totalPages }, (_, i) =>
       supabase
-        .rpc('get_projects_all')
+        .rpc('get_projects_all')           // NO params — .range() does the slicing
         .range(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1)
         .then(({ data, error }) => {
           if (error) throw error

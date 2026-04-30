@@ -1107,6 +1107,7 @@ export interface DeliveryFile {
   uploaded_by: string | null
   uploaded_at: string
   updated_at: string
+  expires_at: string | null
   uploader_name: string | null
   uploader_email: string | null
   download_count?: number
@@ -1237,6 +1238,7 @@ export async function uploadDeliveryFile(
     updated_at: data.updated_at,
     uploader_name: (data as any).profiles?.full_name || null,
     uploader_email: (data as any).profiles?.email || null,
+    expires_at: data.expires_at || null,
     download_count: 0,
   }
 }

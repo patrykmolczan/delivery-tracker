@@ -79,6 +79,28 @@ function fileIcon(fileType: string) {
   return <File size={16} className="text-base-content/50" />
 }
 
+function getExpiryBadge(expiresAt: string | null | undefined): { label: string; title: string; cls: string } | null {
+  if (!expiresAt) return null
+  const now = new Date()
+  const exp = new Date(expiresAt)
+  const msLeft = exp.getTime() - now.getTime()
+  const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24))
+  const fullDate = exp.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  if (daysLeft <= 0) {
+    return { label: '⚠ Expired', title: `Expired on ${fullDate}`, cls: 'text-error font-semibold' }
+  }
+  if (daysLeft <= 14) {
+    return { label: `Expires in ${daysLeft}d`, title: `Expires ${fullDate} — download soon`, cls: 'text-error' }
+  }
+  if (daysLeft <= 30) {
+    return { label: `Expires in ${daysLeft}d`, title: `Expires ${fullDate}`, cls: 'text-warning' }
+  }
+  if (daysLeft <= 90) {
+    return { label: `Expires in ~${Math.round(daysLeft / 30)}mo`, title: `Expires ${fullDate}`, cls: 'text-warning/70' }
+  }
+  return { label: `Expires ${fullDate}`, title: `Auto-expires ${fullDate}`, cls: 'text-base-content/35' }
+}
+
 export const ProjectDetail: React.FC<{
   project: Project
   onClose: () => void
@@ -1205,6 +1227,7 @@ export const ProjectDetail: React.FC<{
                             {(f.download_count || 0) > 0 && (
                               <><span>·</span><span className="text-success">{f.download_count} download{f.download_count !== 1 ? 's' : ''}</span></>
                             )}
+                            {(() => { const exp = getExpiryBadge(f.expires_at); return exp ? <><span>·</span><span className={exp.cls} title={exp.title}>{exp.label}</span></> : null })()}
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">

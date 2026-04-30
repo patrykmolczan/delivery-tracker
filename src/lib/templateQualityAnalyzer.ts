@@ -30,13 +30,6 @@ export interface MissingDataIssue {
   severity: 'critical' | 'warning'
 }
 
-export interface LevelCoverageResult {
-  jobFamily: string
-  foundLevels: string[]
-  missingLevels: string[]
-  suggestion: string
-}
-
 export interface LocationIssue {
   rowIndex: number
   jobTitle: string
@@ -55,7 +48,6 @@ export interface TemplateQualityResult {
   duplicates: DuplicateGroup[]
   levelingIssues: LevelingIssue[]
   missingDataRows: MissingDataIssue[]
-  levelCoverage: LevelCoverageResult[]
   locationIssues: LocationIssue[]
   rowsAnalyzed: number
 }
@@ -120,7 +112,6 @@ export async function analyzeTemplateQuality(file: File, projectType: string): P
         duplicates: [],
         levelingIssues: [],
         missingDataRows: [],
-        levelCoverage: [],
         locationIssues: [],
         rowsAnalyzed: 0,
       }
@@ -147,9 +138,9 @@ export async function analyzeTemplateQuality(file: File, projectType: string): P
     const systemPrompt = `You are a Senior Compensation Data Quality Analyst at a global HR consulting firm. You specialize in reviewing Pay Intelligence (pay equity/benchmarking) data templates before submission to the Pay Intel platform.
 
 Your expertise:
-- Pay Intel platform requires 5 levels per job family: Junior (L1), Intermediate (L2), Senior (L3), Lead (L4), Guru (L5)
-- Level indicators: Jr./Junior, Sr./Senior, Lead, Principal, Staff, I/II/III/IV/V, Manager, Director, VP, Head of, Chief, C-level, SME, Associate
-- IMPORTANT: Some titles naturally contain hierarchy words but are standalone jobs. "Delivery Manager" is a real job title — not "Delivery" + level "Manager". Use judgment.
+- CRITICAL RULE: Pay Intel automatically delivers 5 pricing levels (Junior, Intermediate, Senior, Lead, Guru) for EVERY job title submitted. Therefore, users should NEVER include level modifiers in job titles. "Software Engineer" is perfect — Pay Intel will return all 5 levels. "Senior Software Engineer" is WRONG — the Sr. modifier is redundant and degrades data quality.
+- Level modifiers to FLAG (should be removed from titles): Jr., Jr, Junior, Sr., Sr, Senior, Lead (as prefix/suffix modifier), I, II, III, IV, V (roman numerals as suffix), Associate (as prefix meaning entry-level), Staff (as prefix), Principal (as prefix meaning seniority), SME, Mid-Level, Entry-Level
+- EXCEPTION — Do NOT flag these as leveling issues because the level IS the job title: Manager, Senior Manager, Director, Senior Director, VP, SVP, EVP, Head of, Chief, C-level titles, Team Lead (standalone job title). "Delivery Manager" is correct. "Engineering Manager" is correct. "VP of Finance" is correct.
 - Semantic duplicates are common and harmful: "DevOps Engineer" vs "Development Operations Engineer" vs "DevOps Engineer - Senior" are related and need review.
 - Abbreviations that signal duplicates: Dev/Development, Ops/Operations, Eng/Engineer, Mgr/Manager, Admin/Administrator, Dir/Director, SW/Software, FE/Frontend, BE/Backend
 - Missing job descriptions reduce pricing accuracy — always flag rows without descriptions
@@ -190,14 +181,6 @@ Return a JSON object with EXACTLY this structure:
       "severity": "critical" | "warning"
     }
   ],
-  "levelCoverage": [
-    {
-      "jobFamily": "<base job family, e.g. Software Engineer>",
-      "foundLevels": ["<level names found>"],
-      "missingLevels": ["Junior" | "Intermediate" | "Senior" | "Lead" | "Guru"],
-      "suggestion": "<recommended additions>"
-    }
-  ],
   "locationIssues": [
     {
       "rowIndex": <int>,
@@ -210,12 +193,11 @@ Return a JSON object with EXACTLY this structure:
 
 Rules:
 - duplicates: only flag clear semantic duplicates; don't flag different seniority levels of the same title as duplicates (Sr. Engineer vs Engineer is expected)
-- levelingIssues: flag inconsistent abbreviations (Sr. vs Senior mixed), flag job families where some rows have level indicators and others don't in an inconsistent way
+- levelingIssues: flag ANY job title that contains a level modifier (Jr., Sr., Senior, Junior, II, III, IV, Lead as modifier, Staff as modifier, Principal as modifier, SME, Associate as entry-level modifier, Mid-Level, Entry-Level). These should be removed — Pay Intel delivers all 5 levels automatically. EXCEPTION: do NOT flag titles where the level IS the job (Manager, Director, VP, Head of, Senior Manager, Senior Director, C-suite, Team Lead). For each flagged title, provide the clean base title as the suggestion.
 - missingDataRows: ONLY include rows where country is blank/empty OR description is blank/empty (remote as state/city with a country is fine)
-- levelCoverage: group job titles into families and show which of the 5 Pay Intel levels are present; only include families with 2+ rows in the data
 - locationIssues: flag rows missing country entirely; flag rows where country is present but state AND city are both blank and the job isn't remote
 - Be concise in messages — max 120 chars per message field
-- overallScore: start at 100, subtract: 15 per critical duplicate group, 10 per warning duplicate, 5 per missing description row (max -30 total for descriptions), 10 per missing country row (max -20), 5 per leveling issue, 2 per missing level in coverage
+- overallScore: start at 100, subtract: 15 per critical duplicate group, 10 per warning duplicate, 5 per missing description row (max -30 total for descriptions), 10 per missing country row (max -20), 8 per leveling issue (title contains unnecessary level modifier that Pay Intel handles automatically)
 - issueCount: sum all items across all categories by their severity field`
 
     // Call via serverless proxy — avoids browser CORS + keeps API key server-side only
@@ -244,7 +226,6 @@ Rules:
       duplicates: [],
       levelingIssues: [],
       missingDataRows: [],
-      levelCoverage: [],
       locationIssues: [],
       rowsAnalyzed: 0,
     }

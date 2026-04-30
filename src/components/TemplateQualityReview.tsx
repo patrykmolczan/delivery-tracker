@@ -23,9 +23,6 @@ function exportIssuesCSV(result: TemplateQualityResult) {
   result.levelingIssues.forEach(l => {
     rows.push(['Leveling', l.severity, l.jobTitle, l.issue, l.suggestion])
   })
-  result.levelCoverage.filter(c => c.missingLevels.length > 0).forEach(c => {
-    rows.push(['Coverage', 'info', c.jobFamily, `Missing: ${c.missingLevels.join(', ')}`, c.suggestion])
-  })
   result.missingDataRows.forEach(m => {
     rows.push(['Missing Data', m.severity, m.jobTitle, `Missing: ${m.missing.join(', ')}`, ''])
   })
@@ -94,11 +91,10 @@ function ScrollableContainer({ children, maxRows = 7 }: { children: React.ReactN
 export function TemplateQualityReview({ result, isLoading }: Props) {
   // Auto-open sections that have issues; empty sections start closed
   const getInitialOpen = useCallback(() => {
-    if (!result) return new Set<string>(['duplicates', 'leveling', 'coverage', 'missing', 'location'])
+    if (!result) return new Set<string>(['duplicates', 'leveling', 'missing', 'location'])
     const open = new Set<string>()
     if (result.duplicates.length > 0) open.add('duplicates')
     if (result.levelingIssues.length > 0) open.add('leveling')
-    if (result.levelCoverage.some(c => c.missingLevels.length > 0)) open.add('coverage')
     if (result.missingDataRows.length > 0) open.add('missing')
     if (result.locationIssues.length > 0) open.add('location')
     return open
@@ -115,7 +111,7 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
   }
 
   const collapseAll = () => setOpenSections(new Set())
-  const expandAll  = () => setOpenSections(new Set(['duplicates', 'leveling', 'coverage', 'missing', 'location']))
+  const expandAll  = () => setOpenSections(new Set(['duplicates', 'leveling', 'missing', 'location']))
 
   if (!isLoading && !result) return null
 
@@ -186,7 +182,6 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
   )
 
   // ── 5-Level matrix ──
-  const coverageIssues = result.levelCoverage.filter(c => c.missingLevels.length > 0)
 
   return (
     <div className="rounded-xl border border-base-300 bg-base-100 overflow-hidden mt-4">
@@ -202,7 +197,7 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
             <div>
               <div className={`font-bold text-base ${scoreColor}`}>{scoreLabel}</div>
               <div className="text-xs text-base-content/60 mt-0.5">
-                Analyzed {result.rowsAnalyzed} rows · Pay Intel 5-Level Check · AI-Powered
+                Analyzed {result.rowsAnalyzed} rows · Pay Intel Quality Check · AI-Powered
               </div>
             </div>
           </div>
@@ -290,8 +285,12 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
         <SectionHeader sectionKey="leveling" icon={Layers} label="Leveling Issues" count={result.levelingIssues.length} />
         {openSections.has('leveling') && (
           <div className="px-4 pb-3">
+            <div className="flex items-start gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 mb-3 text-xs text-base-content/70">
+              <span className="text-primary mt-0.5 shrink-0">ℹ️</span>
+              <span><strong className="text-base-content">Pay Intel delivers all 5 levels automatically.</strong> Submit clean base titles only — e.g. <em>"Software Engineer"</em> not <em>"Senior Software Engineer"</em>. Exceptions: Manager, Director, VP, Head of, and other titles where seniority is inherent are correct as-is.</span>
+            </div>
             {result.levelingIssues.length === 0 ? (
-              <EmptyState text="Leveling looks consistent" />
+              <EmptyState text="All titles are clean base titles — no level modifiers found" />
             ) : (
               <ExpandableList
                 items={result.levelingIssues}
@@ -311,75 +310,7 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
         )}
       </div>
 
-      {/* ── Section 3: 5-Level Coverage Matrix ── */}
-      <div className="border-b border-base-300">
-        <SectionHeader sectionKey="coverage" icon={BarChart3} label="Pay Intel 5-Level Coverage" count={coverageIssues.length} />
-        {openSections.has('coverage') && (
-          <div className="px-4 pb-3">
-            <div className="text-xs text-base-content/50 mb-3 flex items-center gap-1">
-              <Info className="w-3 h-3" />
-              Pay Intel delivers 5 pricing levels: Junior · Intermediate · Senior · Lead · Guru
-            </div>
-            {result.levelCoverage.length === 0 ? (
-              <div className="text-sm text-base-content/50 py-2">ℹ️ Not enough data to analyze level coverage</div>
-            ) : (
-              <ScrollableContainer maxRows={8}>
-                <table className="w-full text-xs border-collapse">
-                  <thead className="sticky top-0 z-10">
-                    <tr className="bg-base-200">
-                      <th className="text-left px-3 py-2 font-semibold text-base-content/70 border-b border-base-300 w-[40%]">
-                        Job Family
-                      </th>
-                      {LEVELS.map(l => (
-                        <th key={l} className="text-center px-2 py-2 font-semibold text-base-content/70 border-b border-base-300">
-                          {l}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.levelCoverage.map((cov, i) => {
-                      const hasMissing = cov.missingLevels.length > 0
-                      return (
-                        <tr
-                          key={i}
-                          className={`border-b border-base-200 ${hasMissing ? '' : 'opacity-60'} hover:bg-base-200/40 transition-colors`}
-                        >
-                          <td className="px-3 py-2 font-medium text-base-content">
-                            {cov.jobFamily}
-                          </td>
-                          {LEVELS.map(level => {
-                            const found   = cov.foundLevels.includes(level)
-                            const missing = cov.missingLevels.includes(level)
-                            return (
-                              <td key={level} className="text-center px-2 py-2">
-                                {found ? (
-                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-success/20 text-success text-[10px] font-bold">✓</span>
-                                ) : missing ? (
-                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-error/15 text-error/70 text-[10px] font-bold">✗</span>
-                                ) : (
-                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-base-300/40 text-base-content/20 text-[10px]">–</span>
-                                )}
-                              </td>
-                            )
-                          })}
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </ScrollableContainer>
-            )}
-            {coverageIssues.length > 0 && (
-              <div className="text-xs text-primary mt-2 px-1">
-                💡 {coverageIssues.length} job {coverageIssues.length === 1 ? 'family is' : 'families are'} missing levels — Pay Intel works best with all 5 levels per job family
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Section 4: Missing Data ── */}
+      {/* ── Section 3: Missing Data ── */}
       <div className="border-b border-base-300 bg-base-200/20">
         <SectionHeader sectionKey="missing" icon={AlertTriangle} label="Missing Data" count={result.missingDataRows.length} />
         {openSections.has('missing') && (
@@ -429,7 +360,7 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
         )}
       </div>
 
-      {/* ── Section 5: Location Issues ── */}
+      {/* ── Section 4: Location Issues ── */}
       <div>
         <SectionHeader sectionKey="location" icon={MapPin} label="Location Issues" count={result.locationIssues.length} />
         {openSections.has('location') && (

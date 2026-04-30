@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import {
-  Zap, Copy, Layers, AlertTriangle, MapPin,
+  Zap, Copy, Layers, AlertTriangle, MapPin, SplitSquareVertical,
   ChevronDown, ChevronUp, CheckCircle2, AlertCircle,
   ChevronsUpDown, ChevronsDownUp, Download
 } from 'lucide-react'
@@ -27,6 +27,15 @@ function exportIssuesCSV(result: TemplateQualityResult) {
   })
   result.locationIssues.forEach(l => {
     rows.push(['Location', l.severity, l.jobTitle, l.issue, ''])
+  })
+  ;(result.multiLocationRows || []).forEach(m => {
+    rows.push([
+      'Multi-Location Row',
+      'critical',
+      m.jobTitle,
+      `${m.field} field contains multiple locations: "${m.value}"`,
+      `Split into ${m.detectedLocations.length} rows: ${m.detectedLocations.join(' / ')}`
+    ])
   })
 
   const csv = rows.map(r => r.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -97,6 +106,7 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
     if (result.levelingIssues.length > 0) open.add('leveling')
     if (result.missingDataRows.length > 0) open.add('missing')
     if (result.locationIssues.length > 0) open.add('location')
+  if ((result.multiLocationRows || []).length > 0) open.add('multiloc')
     return open
   }, [result])
 
@@ -156,8 +166,8 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
 
   // ── Section header ──
   const SectionHeader = ({
-    sectionKey, icon: Icon, label, count
-  }: { sectionKey: string; icon: React.ElementType; label: string; count: number }) => (
+    sectionKey, icon: Icon, label, count, countColorClass
+  }: { sectionKey: string; icon: React.ElementType; label: string; count: number; countColorClass?: string }) => (
     <button
       type="button"
       onClick={() => toggleSection(sectionKey)}
@@ -166,7 +176,9 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
       <div className="flex items-center gap-2">
         <Icon className="w-4 h-4 text-base-content/60" />
         <span className="font-medium text-sm text-base-content">{label}</span>
-        {count > 0 && <span className="badge badge-sm badge-neutral">{count}</span>}
+        {count > 0 && (
+          <span className={`badge badge-sm ${countColorClass ?? 'badge-neutral'}`}>{count}</span>
+        )}
       </div>
       {openSections.has(sectionKey)
         ? <ChevronUp className="w-4 h-4 text-base-content/40" />
@@ -362,6 +374,87 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
 
       {/* ── Section 4: Location Issues ── */}
       <div>
+                {/* ── Multi-Location Rows ─────────────────────────────────── */}
+        {(result.multiLocationRows || []).length > 0 && (
+          <div className="rounded-xl border-2 border-error/40 bg-error/5 overflow-hidden">
+            <SectionHeader
+              sectionKey="multiloc"
+              icon={SplitSquareVertical}
+              label="Multi-Location Rows"
+              count={(result.multiLocationRows || []).length}
+              countColorClass="bg-error/15 text-error"
+            />
+            {openSections.has('multiloc') && (
+              <div className="p-4 space-y-3">
+                {/* Explanation banner */}
+                <div className="flex gap-3 p-3 rounded-lg bg-error/10 border border-error/25">
+                  <AlertCircle className="w-4 h-4 text-error mt-0.5 shrink-0" />
+                  <div className="text-xs text-base-content/80 leading-relaxed">
+                    <span className="font-semibold text-error">Structural Error — Action Required.</span>{' '}
+                    Each row must contain exactly <span className="font-semibold">one location</span> (one state, one city).
+                    Rows with combined values like <span className="font-mono bg-base-200 px-1 rounded">"Kentucky &amp; Indiana"</span> must be
+                    split into separate rows — one per state/city — each with the full job title, description, and country.
+                    Pay Intel cannot process multi-location rows correctly.
+                  </div>
+                </div>
+                {/* Group by unique value */}
+                {(() => {
+                  const grouped = new Map<string, typeof result.multiLocationRows>()
+                  for (const r of (result.multiLocationRows || [])) {
+                    const key = `${r.field}:${r.value}`
+                    if (!grouped.has(key)) grouped.set(key, [])
+                    grouped.get(key)!.push(r)
+                  }
+                  return Array.from(grouped.entries()).map(([key, rows]) => {
+                    const first = rows[0]
+                    return (
+                      <div key={key} className="rounded-lg border border-error/20 bg-base-100 overflow-hidden">
+                        <div className="flex items-start gap-3 p-3">
+                          <div className="w-1.5 self-stretch rounded-full bg-error shrink-0" />
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-semibold uppercase tracking-wide text-error/70 bg-error/10 px-2 py-0.5 rounded">
+                                {first.field}
+                              </span>
+                              <span className="font-mono text-sm font-semibold text-base-content">
+                                "{first.value}"
+                              </span>
+                              <span className="text-xs text-base-content/50">
+                                affects {rows.length} row{rows.length !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 items-center">
+                              <span className="text-xs text-base-content/60 mr-1">Split into:</span>
+                              {first.detectedLocations.map((loc, i) => (
+                                <span key={i} className="text-xs bg-base-200 text-base-content px-2 py-0.5 rounded-full font-medium">
+                                  {loc}
+                                </span>
+                              ))}
+                            </div>
+                            <details className="mt-1">
+                              <summary className="text-xs text-base-content/50 cursor-pointer hover:text-base-content/70 select-none">
+                                Show affected rows ({rows.length})
+                              </summary>
+                              <div className="mt-1.5 space-y-1 pl-1">
+                                {rows.map((r, i) => (
+                                  <div key={i} className="text-xs text-base-content/60 flex gap-2">
+                                    <span className="text-base-content/40 tabular-nums">Row {r.rowIndex}</span>
+                                    <span className="truncate">{r.jobTitle}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                })()}
+              </div>
+            )}
+          </div>
+        )}
+
         <SectionHeader sectionKey="location" icon={MapPin} label="Location Issues" count={result.locationIssues.length} />
         {openSections.has('location') && (
           <div className="px-4 pb-3">

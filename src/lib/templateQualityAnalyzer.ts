@@ -37,6 +37,14 @@ export interface LocationIssue {
   severity: 'critical' | 'warning'
 }
 
+export interface MultiLocationRow {
+  rowIndex: number
+  jobTitle: string
+  field: 'state' | 'city' | 'country'
+  value: string
+  detectedLocations: string[]
+}
+
 export interface TemplateQualityResult {
   overallScore: number
   summary: string
@@ -49,8 +57,74 @@ export interface TemplateQualityResult {
   levelingIssues: LevelingIssue[]
   missingDataRows: MissingDataIssue[]
   locationIssues: LocationIssue[]
+  multiLocationRows: MultiLocationRow[]
   rowsAnalyzed: number
 }
+
+// ─── Multi-location client-side detector ────────────────────────────────────
+// Detects patterns like "Kentucky & Indiana", "New York / California",
+// "Texas and Florida", "CA; NY" in state, city, or country fields.
+// Runs instantly — no GPT needed for this structural check.
+
+const MULTI_SEP_PATTERN = /\s*[&;]\s*|\s+and\s+/i
+// For slash: only flag if both sides look like state/country names (3+ chars each)
+const SLASH_MULTI_PATTERN = /^[a-zA-Z\s]{3,}\s*\/\s*[a-zA-Z\s]{3,}$/
+
+function detectMultiLocation(value: string, field: 'state' | 'city' | 'country'): string[] | null {
+  if (!value || value.toLowerCase() === 'remote') return null
+
+  let separator: string | null = null
+  let parts: string[] = []
+
+  if (MULTI_SEP_PATTERN.test(value)) {
+    parts = value.split(MULTI_SEP_PATTERN).map(p => p.trim()).filter(Boolean)
+    separator = parts.length > 1 ? '&/and/;' : null
+  } else if (SLASH_MULTI_PATTERN.test(value)) {
+    parts = value.split('/').map(p => p.trim()).filter(Boolean)
+    separator = '/'
+  }
+
+  if (separator && parts.length > 1) return parts
+  return null
+}
+
+function runMultiLocationCheck(rows: RawTemplateRow[]): MultiLocationRow[] {
+  const issues: MultiLocationRow[] = []
+  const seen = new Set<string>() // dedupe same value appearing many times
+
+  for (const row of rows) {
+    const checks: Array<{ field: 'state' | 'city' | 'country'; value: string }> = [
+      { field: 'state', value: row.state },
+      { field: 'city', value: row.city },
+      { field: 'country', value: row.country },
+    ]
+
+    for (const { field, value } of checks) {
+      if (!value) continue
+      const dedupeKey = `${field}:${value.toLowerCase()}`
+      // Report first occurrence per unique value, then summarise in UI
+      if (seen.has(dedupeKey)) {
+        // Still need to record the row for full reporting but skip adding a duplicate issue entry
+        // We'll group by value in the UI, so just push with same value
+      }
+      const locations = detectMultiLocation(value, field)
+      if (locations) {
+        if (!seen.has(dedupeKey)) seen.add(dedupeKey)
+        issues.push({
+          rowIndex: row.rowIndex,
+          jobTitle: row.jobTitle,
+          field,
+          value,
+          detectedLocations: locations,
+        })
+      }
+    }
+  }
+
+  return issues
+}
+
+// ─── Extract rows from template ──────────────────────────────────────────────
 
 export async function extractRawRows(file: File, _projectType: string): Promise<RawTemplateRow[]> {
   const buffer = await file.arrayBuffer()
@@ -100,6 +174,8 @@ export async function extractRawRows(file: File, _projectType: string): Promise<
   return result
 }
 
+// ─── Main analysis function ──────────────────────────────────────────────────
+
 export async function analyzeTemplateQuality(file: File, projectType: string): Promise<TemplateQualityResult> {
   try {
     const rows = await extractRawRows(file, projectType)
@@ -113,9 +189,13 @@ export async function analyzeTemplateQuality(file: File, projectType: string): P
         levelingIssues: [],
         missingDataRows: [],
         locationIssues: [],
+        multiLocationRows: [],
         rowsAnalyzed: 0,
       }
     }
+
+    // ── Client-side multi-location check (fast, deterministic, runs before GPT) ──
+    const multiLocationRows = runMultiLocationCheck(rows)
 
     const seen = new Set<string>()
     const compactRows: Array<{ r: number; t: string; c: string; s: string; d: string }> = []
@@ -141,6 +221,7 @@ Your expertise:
 - CRITICAL RULE: Pay Intel automatically delivers 5 pricing levels (Junior, Intermediate, Senior, Lead, Guru) for EVERY job title submitted. Therefore, users should NEVER include level modifiers in job titles. "Software Engineer" is perfect — Pay Intel will return all 5 levels. "Senior Software Engineer" is WRONG — the Sr. modifier is redundant and degrades data quality.
 - Level modifiers to FLAG (should be removed from titles): Jr., Jr, Junior, Sr., Sr, Senior, Lead (as prefix/suffix modifier), I, II, III, IV, V (roman numerals as suffix), Associate (as prefix meaning entry-level), Staff (as prefix), Principal (as prefix meaning seniority), SME, Mid-Level, Entry-Level
 - EXCEPTION — Do NOT flag these as leveling issues because the level IS the job title: Manager, Senior Manager, Director, Senior Director, VP, SVP, EVP, Head of, Chief, C-level titles, Team Lead (standalone job title). "Delivery Manager" is correct. "Engineering Manager" is correct. "VP of Finance" is correct.
+- CRITICAL LOCATION RULE: Each row MUST contain only ONE location (one state AND one city). A row with "Kentucky & Indiana" in the State field is invalid — it must be split into two rows: one for Kentucky and one for Indiana. Flag any row where a state, city, or country field appears to contain multiple locations combined with &, and, /, comma, or semicolon separators. This is a structural error — the template cannot be processed correctly until each location is on its own row.
 - Semantic duplicates are common and harmful: "DevOps Engineer" vs "Development Operations Engineer" vs "DevOps Engineer - Senior" are related and need review.
 - Abbreviations that signal duplicates: Dev/Development, Ops/Operations, Eng/Engineer, Mgr/Manager, Admin/Administrator, Dir/Director, SW/Software, FE/Frontend, BE/Backend
 - Missing job descriptions reduce pricing accuracy — always flag rows without descriptions
@@ -148,7 +229,7 @@ Your expertise:
 - Your output will be parsed as JSON — respond with ONLY valid JSON, no markdown fences, no explanation text outside the JSON.`
 
     const userPrompt = `Analyze this Pay Intel template data. Total rows in file: ${rows.length}. Unique combos being analyzed: ${compactRows.length}.
-
+${multiLocationRows.length > 0 ? `\nNOTE: Client-side scan already detected ${multiLocationRows.length} multi-location rows (e.g., "${multiLocationRows[0]?.value}" in ${multiLocationRows[0]?.field} field). Do NOT re-flag these in locationIssues — they are handled separately. Focus your locationIssues on missing country or other location problems.\n` : ''}
 DATA (fields: r=rowNum, t=jobTitle, c=country, s=state/city, d=description preview):
 ${JSON.stringify(compactRows)}
 
@@ -195,7 +276,7 @@ Rules:
 - duplicates: only flag clear semantic duplicates; don't flag different seniority levels of the same title as duplicates (Sr. Engineer vs Engineer is expected)
 - levelingIssues: flag ANY job title that contains a level modifier (Jr., Sr., Senior, Junior, II, III, IV, Lead as modifier, Staff as modifier, Principal as modifier, SME, Associate as entry-level modifier, Mid-Level, Entry-Level). These should be removed — Pay Intel delivers all 5 levels automatically. EXCEPTION: do NOT flag titles where the level IS the job (Manager, Director, VP, Head of, Senior Manager, Senior Director, C-suite, Team Lead). For each flagged title, provide the clean base title as the suggestion.
 - missingDataRows: ONLY include rows where country is blank/empty OR description is blank/empty (remote as state/city with a country is fine)
-- locationIssues: flag rows missing country entirely; flag rows where country is present but state AND city are both blank and the job isn't remote
+- locationIssues: flag rows missing country entirely; flag rows where country is present but state AND city are both blank and the job isn't remote. Do NOT re-flag multi-location rows — those are handled separately.
 - Be concise in messages — max 120 chars per message field
 - overallScore: start at 100, subtract: 15 per critical duplicate group, 10 per warning duplicate, 5 per missing description row (max -30 total for descriptions), 10 per missing country row (max -20), 8 per leveling issue (title contains unnecessary level modifier that Pay Intel handles automatically)
 - issueCount: sum all items across all categories by their severity field`
@@ -216,8 +297,27 @@ Rules:
     const raw = data.content
     if (!raw) throw new Error('Empty response from analysis server')
 
-    const parsed = JSON.parse(raw) as Omit<TemplateQualityResult, 'rowsAnalyzed'>
-    return { ...parsed, rowsAnalyzed: rows.length }
+    const parsed = JSON.parse(raw) as Omit<TemplateQualityResult, 'rowsAnalyzed' | 'multiLocationRows'>
+
+    // Adjust score downward for multi-location rows (client-side, deterministic)
+    // -12 per unique bad value, capped at -35 total
+    const uniqueMultiLocValues = new Set(multiLocationRows.map(r => `${r.field}:${r.value.toLowerCase()}`))
+    const multiLocPenalty = Math.min(uniqueMultiLocValues.size * 12, 35)
+    const adjustedScore = Math.max(0, (parsed.overallScore ?? 100) - multiLocPenalty)
+
+    // Add multi-location critical count to issueCount
+    const adjustedIssueCount = {
+      ...parsed.issueCount,
+      critical: (parsed.issueCount?.critical ?? 0) + (multiLocationRows.length > 0 ? uniqueMultiLocValues.size : 0),
+    }
+
+    return {
+      ...parsed,
+      overallScore: adjustedScore,
+      issueCount: adjustedIssueCount,
+      multiLocationRows,
+      rowsAnalyzed: rows.length,
+    }
   } catch (err) {
     return {
       overallScore: -1,
@@ -227,6 +327,7 @@ Rules:
       levelingIssues: [],
       missingDataRows: [],
       locationIssues: [],
+      multiLocationRows: [],
       rowsAnalyzed: 0,
     }
   }

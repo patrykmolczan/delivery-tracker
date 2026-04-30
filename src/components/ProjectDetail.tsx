@@ -4,6 +4,7 @@ import {
   FileText, Edit2, History, CheckCircle2, Loader2,
   Paperclip, Upload, Download, Trash2, AlertCircle, File,
   Globe, ListTodo, Tag, PackageOpen, Eye, Bell, BellOff,
+  MessageSquare, Plus, Send,
 } from 'lucide-react'
 import type { Project, ProjectCountry, ProjectTask } from '../types'
 import {
@@ -18,7 +19,10 @@ import {
   fetchDeliveryFileDownloads,
   MAX_DELIVERY_FILES,
 } from '../lib/data'
-import type { AuditEntry, ProjectFile, DeliveryFile, DeliveryFileDownload } from '../lib/data'
+import type { AuditEntry, ProjectFile, DeliveryFile, DeliveryFileDownload, DeliveryNote } from '../lib/data'
+import {
+  fetchDeliveryNotes, createDeliveryNote, updateDeliveryNote, deleteDeliveryNote,
+} from '../lib/data'
 import type { LookupItem } from '../types'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -132,6 +136,17 @@ export const ProjectDetail: React.FC<{
   const [downloadHistoryLoading, setDownloadHistoryLoading] = useState(false)
   const deliveryFileInputRef = useRef<HTMLInputElement>(null)
 
+  // ── Delivery Notes state ─────────────────────────────────────────────────────
+  const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([])
+  const [notesLoading, setNotesLoading] = useState(false)
+  const [noteComposing, setNoteComposing] = useState(false)
+  const [noteText, setNoteText] = useState('')
+  const [noteSaving, setNoteSaving] = useState(false)
+  const [noteEditingId, setNoteEditingId] = useState<string | null>(null)
+  const [noteEditText, setNoteEditText] = useState('')
+  const [noteDeletingId, setNoteDeletingId] = useState<string | null>(null)
+  const [noteError, setNoteError] = useState<string | null>(null)
+
   // Completed / Ready to Deliver statuses auto-fill delivered date
   const DELIVERED_STATUSES = ['Completed', 'Ready to Deliver']
   const willMarkDelivered = DELIVERED_STATUSES.includes(selectedStatusName) && !localProject.date_delivered
@@ -177,10 +192,22 @@ export const ProjectDetail: React.FC<{
     setDeliveryLoading(false)
   }
 
+  const loadDeliveryNotes = async () => {
+    setNotesLoading(true)
+    try {
+      const notes = await fetchDeliveryNotes(localProject.id)
+      setDeliveryNotes(notes)
+    } catch (err) {
+      console.error('Failed to load delivery notes:', err)
+    } finally {
+      setNotesLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (tab === 'history') loadHistory()
     if (tab === 'files') loadFiles()
-    if (tab === 'delivery') loadDeliveryFiles()
+    if (tab === 'delivery') { loadDeliveryFiles(); loadDeliveryNotes() }
   }, [tab, localProject.id])
 
   const handleStatusChange = (statusId: number, statusName: string) => {
@@ -302,6 +329,61 @@ export const ProjectDetail: React.FC<{
     } finally {
       setDownloadingId(null)
     }
+  }
+
+  // ── Delivery Note handlers ────────────────────────────────────────────────────
+  const handleNoteCreate = async () => {
+    if (!noteText.trim() || !user) return
+    setNoteSaving(true)
+    setNoteError(null)
+    try {
+      const created = await createDeliveryNote(localProject.id, noteText, user.id)
+      setDeliveryNotes(prev => [created, ...prev])
+      setNoteText('')
+      setNoteComposing(false)
+    } catch (err: any) {
+      setNoteError(err.message || 'Failed to save note')
+    } finally {
+      setNoteSaving(false)
+    }
+  }
+
+  const handleNoteEditSave = async (noteId: string) => {
+    if (!noteEditText.trim() || !user) return
+    setNoteSaving(true)
+    setNoteError(null)
+    try {
+      await updateDeliveryNote(noteId, noteEditText, user.id)
+      setDeliveryNotes(prev => prev.map(n =>
+        n.id === noteId
+          ? { ...n, note: noteEditText.trim(), updated_at: new Date().toISOString(), updater_name: 'You' }
+          : n
+      ))
+      setNoteEditingId(null)
+      setNoteEditText('')
+    } catch (err: any) {
+      setNoteError(err.message || 'Failed to update note')
+    } finally {
+      setNoteSaving(false)
+    }
+  }
+
+  const handleNoteDelete = async (noteId: string) => {
+    if (!window.confirm('Delete this delivery note? This cannot be undone.')) return
+    setNoteDeletingId(noteId)
+    try {
+      await deleteDeliveryNote(noteId)
+      setDeliveryNotes(prev => prev.filter(n => n.id !== noteId))
+    } catch (err: any) {
+      setNoteError(err.message || 'Failed to delete note')
+    } finally {
+      setNoteDeletingId(null)
+    }
+  }
+
+  function noteAuthorInitials(name: string | null): string {
+    if (!name) return '?'
+    return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
   }
 
   // ── Delivery File handlers ───────────────────────────────────────────────────
@@ -867,6 +949,193 @@ export const ProjectDetail: React.FC<{
                 Files uploaded here by your analyst will appear below for download
               </div>
             )}
+          </div>
+
+          {/* ── Delivery Notes Section ─────────────────────────────────────── */}
+          <div className="border-b border-base-300">
+            {/* Notes header */}
+            <div className="flex items-center justify-between px-4 py-3 bg-base-50">
+              <div className="flex items-center gap-2">
+                <MessageSquare size={14} className="text-primary/70" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+                  Delivery Notes
+                </span>
+                {deliveryNotes.length > 0 && (
+                  <span className="badge badge-primary badge-xs">{deliveryNotes.length}</span>
+                )}
+              </div>
+              {isAdmin && !noteComposing && (
+                <button
+                  className="btn btn-xs btn-ghost gap-1 text-primary"
+                  onClick={() => { setNoteComposing(true); setNoteError(null) }}
+                >
+                  <Plus size={12} /> Add Note
+                </button>
+              )}
+            </div>
+
+            {/* Compose form */}
+            {isAdmin && noteComposing && (
+              <div className="px-4 pb-4 pt-2 bg-base-50 space-y-2">
+                <textarea
+                  className="textarea textarea-bordered w-full text-sm resize-none leading-relaxed"
+                  rows={4}
+                  placeholder="Enter delivery notes for the requestor — describe the data delivered, methodology, coverage, caveats, etc."
+                  value={noteText}
+                  onChange={e => setNoteText(e.target.value)}
+                  autoFocus
+                />
+                {noteError && (
+                  <div className="flex items-center gap-1.5 text-xs text-error">
+                    <AlertCircle size={12} /> {noteError}
+                  </div>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button
+                    className="btn btn-xs btn-ghost"
+                    onClick={() => { setNoteComposing(false); setNoteText(''); setNoteError(null) }}
+                    disabled={noteSaving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className={`btn btn-xs btn-primary gap-1 ${noteSaving ? 'loading' : ''}`}
+                    onClick={handleNoteCreate}
+                    disabled={!noteText.trim() || noteSaving}
+                  >
+                    {!noteSaving && <Send size={11} />}
+                    Post Note
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Notes list */}
+            <div className="max-h-72 overflow-y-auto">
+              {notesLoading ? (
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 size={18} className="animate-spin text-primary/50" />
+                </div>
+              ) : deliveryNotes.length === 0 ? (
+                <div className="text-center py-6">
+                  <MessageSquare size={24} className="mx-auto text-base-content/15 mb-1.5" />
+                  <p className="text-xs text-base-content/30">
+                    {isAdmin ? 'No delivery notes yet — add context for the requestor' : 'No analyst notes for this delivery yet'}
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-base-200">
+                  {deliveryNotes.map(n => (
+                    <div key={n.id} className="group relative">
+                      {/* Edit mode */}
+                      {isAdmin && noteEditingId === n.id ? (
+                        <div className="p-4 space-y-2 bg-base-100">
+                          <textarea
+                            className="textarea textarea-bordered w-full text-sm resize-none leading-relaxed"
+                            rows={4}
+                            value={noteEditText}
+                            onChange={e => setNoteEditText(e.target.value)}
+                            autoFocus
+                          />
+                          {noteError && (
+                            <div className="flex items-center gap-1.5 text-xs text-error">
+                              <AlertCircle size={12} /> {noteError}
+                            </div>
+                          )}
+                          <div className="flex justify-end gap-2">
+                            <button
+                              className="btn btn-xs btn-ghost"
+                              onClick={() => { setNoteEditingId(null); setNoteEditText(''); setNoteError(null) }}
+                              disabled={noteSaving}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              className={`btn btn-xs btn-primary gap-1 ${noteSaving ? 'loading' : ''}`}
+                              onClick={() => handleNoteEditSave(n.id)}
+                              disabled={!noteEditText.trim() || noteSaving}
+                            >
+                              {!noteSaving && <CheckCircle2 size={11} />}
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Read mode */
+                        <div className="flex gap-3 p-4 hover:bg-base-50 transition-colors">
+                          {/* Left accent stripe */}
+                          <div className="shrink-0 w-0.5 rounded-full bg-primary/30 self-stretch" />
+
+                          {/* Avatar */}
+                          <div className="shrink-0 w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                            <span className="text-xs font-bold text-primary/70 leading-none">
+                              {noteAuthorInitials(n.author_name)}
+                            </span>
+                          </div>
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            {/* Author row */}
+                            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                              <span className="text-sm font-semibold text-base-content">
+                                {n.author_name || 'Unknown'}
+                              </span>
+                              {n.author_role === 'admin' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-primary/10 text-primary border border-primary/20">
+                                  Admin
+                                </span>
+                              )}
+                              <span className="text-xs text-base-content/35 ml-auto" title={new Date(n.created_at).toLocaleString()}>
+                                {timeAgo(n.created_at)}
+                              </span>
+                              {n.updated_at && (
+                                <span className="text-[10px] text-base-content/30 italic">edited</span>
+                              )}
+                            </div>
+
+                            {/* Note body */}
+                            <p className="text-sm text-base-content/80 leading-relaxed whitespace-pre-wrap break-words">
+                              {n.note}
+                            </p>
+
+                            {/* Updater line */}
+                            {n.updated_at && n.updater_name && (
+                              <p className="text-[10px] text-base-content/30 mt-1.5">
+                                Last edited by {n.updater_name} · {timeAgo(n.updated_at)}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Admin actions (hover) */}
+                          {isAdmin && (
+                            <div className="shrink-0 flex items-start gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                className="btn btn-ghost btn-xs btn-circle tooltip tooltip-left"
+                                data-tip="Edit note"
+                                onClick={() => { setNoteEditingId(n.id); setNoteEditText(n.note); setNoteError(null) }}
+                              >
+                                <Edit2 size={12} />
+                              </button>
+                              <button
+                                className="btn btn-ghost btn-xs btn-circle text-error/60 hover:text-error hover:bg-error/10 tooltip tooltip-left"
+                                data-tip="Delete note"
+                                onClick={() => handleNoteDelete(n.id)}
+                                disabled={noteDeletingId === n.id}
+                              >
+                                {noteDeletingId === n.id
+                                  ? <Loader2 size={12} className="animate-spin" />
+                                  : <Trash2 size={12} />
+                                }
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* File list */}

@@ -1,0 +1,4 @@
+email,full_name,password,status
+john.doe@company.com,John Doe,TempPass123!,active
+jane.smith@company.com,Jane Smith,TempPass456!,active
+bob.jones@company.com,Bob Jones,,inactive

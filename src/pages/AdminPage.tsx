@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import BulkUserPage from './BulkUserPage'
 import {
   UserPlus, Shield, User, CheckCircle2, Edit2, Save, X, AlertCircle,
   Loader2, RefreshCw, Key, Users, Plus, Trash2, Tag, Layers, Upload, Download,
@@ -223,6 +224,7 @@ const ManagedList: React.FC<ManagedListProps> = ({
 // ─── Main Admin Page ──────────────────────────────────────────────────────────
 
 export const AdminPage: React.FC = () => {
+  const [showBulkUsers, setShowBulkUsers] = useState(false)
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -600,6 +602,11 @@ export const AdminPage: React.FC = () => {
   const pagedUsers = filteredUsers.slice((userPage - 1) * USERS_PER_PAGE, userPage * USERS_PER_PAGE)
   const allPageSelected = pagedUsers.length > 0 && pagedUsers.every(u => selectedUserIds.has(u.id))
 
+  // ── Bulk User Management overlay ─────────────────────────────────────────
+  if (showBulkUsers) {
+    return <BulkUserPage onBack={() => { setShowBulkUsers(false); fetchUsers() }} />
+  }
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header */}
@@ -864,6 +871,15 @@ export const AdminPage: React.FC = () => {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {/* Bulk Import */}
+              <button
+                className="btn btn-outline btn-sm gap-1.5"
+                onClick={() => setShowBulkUsers(true)}
+                title="Bulk create or update users via CSV"
+              >
+                <Upload size={14} />
+                Bulk Import
+              </button>
               {/* Search */}
               <div className="relative">
                 <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-base-content/40" />

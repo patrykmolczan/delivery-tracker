@@ -75,8 +75,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+    } catch {
+      // Safari may throw or silently fail — continue regardless
+    }
+
+    // Immediately clear local state — don't wait for onAuthStateChange
+    // Safari's ITP can suppress the SIGNED_OUT event, so we force it here.
+    setUser(null)
+    setSession(null)
     setProfile(null)
+
+    // Wipe all Supabase auth keys from localStorage (Safari-safe)
+    try {
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('sb-') || k === 'delivery-tracker-auth')
+        .forEach(k => localStorage.removeItem(k))
+    } catch {
+      // localStorage may be restricted in some Safari private-mode contexts
+    }
+
+    // Hard redirect as final fallback — guarantees the login page shows
+    // even if React state update doesn't trigger a re-render in Safari
+    window.location.href = '/'
   }
 
   const isAdmin = profile?.role === 'admin'

@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react'
 import {
-  Zap, Copy, Layers, BarChart3, AlertTriangle, MapPin,
-  ChevronDown, ChevronUp, CheckCircle2, AlertCircle, Info,
+  Zap, Copy, Layers, AlertTriangle, MapPin,
+  ChevronDown, ChevronUp, CheckCircle2, AlertCircle,
   ChevronsUpDown, ChevronsDownUp, Download
 } from 'lucide-react'
 import type { TemplateQualityResult } from '../lib/templateQualityAnalyzer'
@@ -11,7 +11,6 @@ interface Props {
   isLoading: boolean
 }
 
-const LEVELS = ['Junior', 'Intermediate', 'Senior', 'Lead', 'Guru'] as const
 
 // ─── Export helper ────────────────────────────────────────────────────────────
 function exportIssuesCSV(result: TemplateQualityResult) {

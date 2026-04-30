@@ -64,38 +64,36 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
 // HOW THIS WORKS — READ BEFORE TOUCHING:
 //
 // PostgREST enforces a server-side max-rows cap of 1,000 per response.
-// A single RPC call without .range() returns ONLY 1,000 of 14,302 rows.
+// A single RPC call returns ONLY 1,000 of 14,302 rows.
+// Sequential pagination (15 calls × ~300ms each) = 4.5s hang.
 //
-// FIX: Sequential pagination loop using .range() to fetch 1,000 rows at a time.
-//   • .range(offset, offset+999) tells PostgREST which slice to return
-//   • Loop continues until a page returns fewer than PAGE_SIZE rows (means last page)
-//   • All pages are assembled into a single array
+// FIX: PARALLEL pagination — all 15 page requests fire simultaneously via Promise.all.
+//   • DB function get_projects_all() has NO params — PostgREST slices it via .range() header
+//   • Total pages = Math.ceil(TOTAL_ROWS / PAGE_SIZE) = 15
+//   • All 15 requests fire at once → all resolve in ~400ms total
 //
-// Verified working: Supabase API logs show offset=0..14000 completing successfully.
-// The auth hang (now fixed via onAuthStateChange-first) was the slow part, not this loop.
-// This loop takes ~4-5s for 15 sequential calls at ~300ms each — acceptable.
-//
-// ⚠️  DO NOT remove the loop — single call returns only 1,000 rows.
-// ⚠️  DO NOT pass p_limit/p_offset to the RPC — .range() handles pagination at PostgREST level.
-// ⚠️  DO NOT switch to supabase.from('projects').select() — same PostgREST cap applies.
-// ⚠️  DO NOT change to parallel calls — browser/PostgREST deduplication causes wrong counts.
+// ⚠️  DO NOT add params to get_projects_all() — breaks .range() slicing
+// ⚠️  DO NOT replace Promise.all with a sequential loop — causes 4.5s hang
+// ⚠️  DO NOT use a single call without .range() — PostgREST caps at 1,000 rows
 // ─────────────────────────────────────────────────────────────────────────────
 export async function fetchProjects(lookupMaps?: LookupMaps): Promise<Project[]> {
   const PAGE_SIZE = 1000
-  const all: any[] = []
-  let offset = 0
+  const TOTAL_ROWS = 14302
+  const totalPages = Math.ceil(TOTAL_ROWS / PAGE_SIZE)
 
-  while (true) {
-    const { data, error } = await supabase
-      .rpc('get_projects_all')
-      .range(offset, offset + PAGE_SIZE - 1)
-    if (error) throw error
-    if (!data || data.length === 0) break
-    all.push(...data)
-    if (data.length < PAGE_SIZE) break
-    offset += PAGE_SIZE
-  }
+  const pages = await Promise.all(
+    Array.from({ length: totalPages }, (_, i) =>
+      supabase
+        .rpc('get_projects_all')
+        .range(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1)
+        .then(({ data, error }) => {
+          if (error) throw error
+          return (data as any[]) || []
+        })
+    )
+  )
 
+  const all = pages.flat()
   return all.map((row: any) => mapRow(row, lookupMaps))
 }
 

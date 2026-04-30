@@ -1162,6 +1162,7 @@ export async function fetchDeliveryFiles(projectId: string): Promise<DeliveryFil
     uploader_name: row.profiles?.full_name || null,
     uploader_email: row.profiles?.email || null,
     download_count: countMap[row.id] || 0,
+    expires_at: row.expires_at || null,
   }))
 }
 

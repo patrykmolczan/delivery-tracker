@@ -33,6 +33,26 @@ const columns: { key: SortField; label: string }[] = [
   { key: 'job_count', label: 'Jobs' },
 ]
 
+// Column widths as percentages — must sum to 100 (without Actions col)
+// With Actions col the last col takes 5% and others shrink proportionally via table-fixed
+const COL_WIDTHS = {
+  id_number: '4%',
+  status: '7%',
+  project_owner: '7%',
+  analyst: '6%',
+  client_type: '8%',
+  client_name: '12%',
+  requestor: '7%',
+  date_received: '7%',
+  expected_delivery_date: '7%',
+  date_delivered: '7%',
+  days_to_complete: '4%',
+  country: '8%',
+  industry: '9%',
+  job_count: '3%',
+  actions: '4%',
+}
+
 export const ProjectTable: React.FC<ProjectTableProps> = ({
   projects,
   sort,
@@ -68,11 +88,11 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   }
 
   const SortIcon: React.FC<{ field: SortField }> = ({ field }) => {
-    if (sort.field !== field) return <ArrowUpDown size={12} className="opacity-30" />
+    if (sort.field !== field) return <ArrowUpDown size={11} className="opacity-30 flex-shrink-0" />
     return sort.direction === 'asc' ? (
-      <ArrowUp size={12} className="text-primary" />
+      <ArrowUp size={11} className="text-primary flex-shrink-0" />
     ) : (
-      <ArrowDown size={12} className="text-primary" />
+      <ArrowDown size={11} className="text-primary flex-shrink-0" />
     )
   }
 
@@ -86,7 +106,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
 
   return (
     <div className="space-y-2">
-      {/* Row count + hint */}
+      {/* Row count */}
       <div className="flex items-center justify-between px-1">
         <span className="text-xs text-base-content/50">
           Showing{' '}
@@ -107,30 +127,37 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
 
       {/* Table wrapper */}
       <div className="rounded-xl border border-base-300/50 bg-base-200 overflow-hidden">
-        {/* Horizontal + vertical scroll container */}
         <div
           ref={parentRef}
-          className="overflow-auto"
+          className="overflow-y-auto overflow-x-hidden"
           style={{ height: 'calc(100vh - 310px)', minHeight: '420px' }}
         >
-          <table className="table table-sm min-w-full">
+          {/* table-fixed + w-full = columns share available width, no horizontal scroll */}
+          <table className="table table-sm table-fixed w-full">
+            <colgroup>
+              {columns.map(col => (
+                <col key={col.key} style={{ width: COL_WIDTHS[col.key as keyof typeof COL_WIDTHS] }} />
+              ))}
+              {onEdit && <col style={{ width: COL_WIDTHS.actions }} />}
+            </colgroup>
+
             {/* Sticky header */}
             <thead className="sticky top-0 z-20">
               <tr className="bg-base-300/95 backdrop-blur-sm shadow-sm">
                 {columns.map(col => (
                   <th
                     key={col.key}
-                    className="cursor-pointer hover:bg-base-300 transition-colors text-xs uppercase tracking-wider font-semibold whitespace-nowrap select-none"
+                    className="cursor-pointer hover:bg-base-300 transition-colors text-xs uppercase tracking-wider font-semibold select-none overflow-hidden"
                     onClick={() => handleSort(col.key)}
                   >
-                    <span className="flex items-center gap-1">
-                      {col.label}
+                    <span className="flex items-center gap-1 truncate">
+                      <span className="truncate">{col.label}</span>
                       <SortIcon field={col.key} />
                     </span>
                   </th>
                 ))}
                 {onEdit && (
-                  <th className="text-xs uppercase tracking-wider font-semibold whitespace-nowrap">
+                  <th className="text-xs uppercase tracking-wider font-semibold">
                     Actions
                   </th>
                 )}
@@ -146,7 +173,6 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                 </tr>
               ) : (
                 <>
-                  {/* Top spacer — fills space above rendered rows */}
                   {paddingTop > 0 && (
                     <tr aria-hidden="true">
                       <td
@@ -156,7 +182,6 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                     </tr>
                   )}
 
-                  {/* Only the visible rows */}
                   {virtualItems.map(virtualRow => {
                     const p = projects[virtualRow.index]
                     return (
@@ -174,49 +199,78 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                         onClick={() => onSelectProject(p)}
                         style={{ height: ROW_HEIGHT }}
                       >
-                        <td className="text-base-content/60 whitespace-nowrap font-mono text-xs">
-                          {p.id_number ?? '—'}
+                        {/* ID # */}
+                        <td className="text-base-content/60 font-mono text-xs overflow-hidden">
+                          <span className="block truncate">{p.id_number ?? '—'}</span>
                         </td>
-                        <td className="whitespace-nowrap">
+
+                        {/* Status */}
+                        <td className="overflow-hidden">
                           <span
-                            className={`badge badge-sm ${getStatusColor(
-                              p.status
-                            )} font-medium whitespace-nowrap inline-flex items-center`}
+                            className={`badge badge-sm ${getStatusColor(p.status)} font-medium whitespace-nowrap inline-flex items-center`}
                           >
                             {p.status}
                           </span>
                         </td>
-                        <td className="font-medium text-base-content whitespace-nowrap">
-                          {p.project_owner}
+
+                        {/* Owner */}
+                        <td className="font-medium text-base-content overflow-hidden">
+                          <span className="block truncate" title={p.project_owner ?? ''}>
+                            {p.project_owner || '—'}
+                          </span>
                         </td>
-                        <td className="text-base-content/70 whitespace-nowrap">
-                          {p.analyst || '—'}
+
+                        {/* Analyst */}
+                        <td className="text-base-content/70 overflow-hidden">
+                          <span className="block truncate" title={p.analyst ?? ''}>
+                            {p.analyst || '—'}
+                          </span>
                         </td>
-                        <td className="text-base-content/70 whitespace-nowrap">
-                          {p.client_type || '—'}
+
+                        {/* Client Type */}
+                        <td className="text-base-content/70 overflow-hidden">
+                          <span className="block truncate" title={p.client_type ?? ''}>
+                            {p.client_type || '—'}
+                          </span>
                         </td>
-                        <td className="font-medium text-base-content whitespace-nowrap max-w-[180px] truncate">
-                          {p.client_name}
+
+                        {/* Client */}
+                        <td className="font-medium text-base-content overflow-hidden">
+                          <span className="block truncate" title={p.client_name ?? ''}>
+                            {p.client_name}
+                          </span>
                         </td>
-                        <td className="text-base-content/70 whitespace-nowrap">
-                          {p.requestor || '—'}
+
+                        {/* Requestor */}
+                        <td className="text-base-content/70 overflow-hidden">
+                          <span className="block truncate" title={p.requestor ?? ''}>
+                            {p.requestor || '—'}
+                          </span>
                         </td>
-                        <td className="text-base-content/70 whitespace-nowrap">
-                          {formatDate(p.date_received)}
+
+                        {/* Received */}
+                        <td className="text-base-content/70 text-xs overflow-hidden">
+                          <span className="block truncate">{formatDate(p.date_received)}</span>
                         </td>
+
+                        {/* Due Date */}
                         <td
-                          className={`whitespace-nowrap ${
+                          className={`text-xs overflow-hidden ${
                             isOverdue(p)
                               ? 'text-error font-semibold'
                               : 'text-base-content/70'
                           }`}
                         >
-                          {formatDate(p.expected_delivery_date)}
+                          <span className="block truncate">{formatDate(p.expected_delivery_date)}</span>
                         </td>
-                        <td className="text-base-content/70 whitespace-nowrap">
-                          {formatDate(p.date_delivered)}
+
+                        {/* Delivered */}
+                        <td className="text-base-content/70 text-xs overflow-hidden">
+                          <span className="block truncate">{formatDate(p.date_delivered)}</span>
                         </td>
-                        <td className="text-center whitespace-nowrap">
+
+                        {/* Days */}
+                        <td className="text-center overflow-hidden">
                           {p.days_to_complete != null ? (
                             <span
                               className={`badge badge-sm ${
@@ -230,26 +284,38 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                               {p.days_to_complete}d
                             </span>
                           ) : (
-                            '—'
+                            <span className="text-base-content/40">—</span>
                           )}
                         </td>
-                        <td className="text-base-content/70 whitespace-nowrap">
-                          {p.country || '—'}
+
+                        {/* Country */}
+                        <td className="text-base-content/70 overflow-hidden">
+                          <span className="block truncate" title={p.country ?? ''}>
+                            {p.country || '—'}
+                          </span>
                         </td>
-                        <td className="text-base-content/70 whitespace-nowrap">
-                          {p.industry || '—'}
+
+                        {/* Industry */}
+                        <td className="text-base-content/70 overflow-hidden">
+                          <span className="block truncate" title={p.industry ?? ''}>
+                            {p.industry || '—'}
+                          </span>
                         </td>
-                        <td className="text-center text-base-content/70 whitespace-nowrap">
-                          {p.job_count ?? '—'}
+
+                        {/* Jobs */}
+                        <td className="text-center text-base-content/70 overflow-hidden">
+                          <span className="block truncate">{p.job_count ?? '—'}</span>
                         </td>
+
+                        {/* Actions */}
                         {onEdit && (
-                          <td onClick={e => e.stopPropagation()} className="whitespace-nowrap">
+                          <td onClick={e => e.stopPropagation()} className="overflow-hidden">
                             {(!canEditProject || canEditProject(p)) && (
                               <button
                                 className="btn btn-ghost btn-xs gap-1"
                                 onClick={() => onEdit(p)}
                               >
-                                <Edit2 size={12} /> Edit
+                                <Edit2 size={11} /> Edit
                               </button>
                             )}
                           </td>
@@ -258,7 +324,6 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                     )
                   })}
 
-                  {/* Bottom spacer — fills space below rendered rows */}
                   {paddingBottom > 0 && (
                     <tr aria-hidden="true">
                       <td

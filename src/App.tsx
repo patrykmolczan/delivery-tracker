@@ -266,7 +266,7 @@ const Dashboard: React.FC = () => {
         <main className="flex-1 p-4 md:p-6">
           {/* Dashboard View */}
           {view === 'dashboard' && (
-            <div className="space-y-6 max-w-[1400px]">
+            <div className="space-y-6">
               <KPICards kpis={kpis} />
               <Charts statusCounts={statusCounts} ownerCounts={ownerCounts} />
               <div className="space-y-4">
@@ -297,7 +297,7 @@ const Dashboard: React.FC = () => {
 
           {/* Table View */}
           {view === 'table' && (
-            <div className="space-y-4 max-w-[1400px]">
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold">All Projects</h2>
                 <button

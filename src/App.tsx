@@ -4,6 +4,7 @@ import { LoginPage } from './pages/LoginPage'
 import { NewProjectPage } from './pages/NewProjectPage'
 import { ImportPage } from './pages/ImportPage'
 import { AdminPage } from './pages/AdminPage'
+import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { AIPage } from './pages/AIPage'
 import { KPICards } from './components/KPICards'
 import { FilterBar } from './components/FilterBar'
@@ -377,13 +378,15 @@ const Dashboard: React.FC = () => {
 }
 
 const AppInner: React.FC = () => {
-  const { user, loading } = useAuth()
+  const { user, loading, passwordChangeRequired } = useAuth()
   if (loading) return (
     <div className="min-h-screen bg-base-100 flex items-center justify-center">
       <Loader2 size={32} className="animate-spin text-primary" />
     </div>
   )
-  return user ? <Dashboard /> : <LoginPage />
+  if (!user) return <LoginPage />
+  if (passwordChangeRequired) return <ChangePasswordPage />
+  return <Dashboard />
 }
 
 export default function App() {

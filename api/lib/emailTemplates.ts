@@ -546,3 +546,112 @@ export async function buildStatusChangeEmail(to: string, project: any, newStatus
     html: shell(logoUrl, accentColor, content),
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Template 4 — Welcome / Account Created
+// ═══════════════════════════════════════════════════════════════════════════════
+export async function buildWelcomeEmail(
+  to: string,
+  fullName: string,
+  tempPassword: string,
+  appUrl: string = APP_URL
+): Promise<EmailPayload> {
+  const logoUrl = await getLogoUrl()
+
+  const content = `
+    <!-- Hero -->
+    <tr>
+      <td style="padding:36px 40px 28px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr>
+            <td>
+              <span style="display:inline-block;background-color:#EEF2FF;color:#4338CA;font-size:11px;font-weight:700;padding:5px 14px;border-radius:100px;text-transform:uppercase;letter-spacing:0.8px;">
+                New Account
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 0 6px;">
+              <h1 style="margin:0;font-size:22px;font-weight:700;color:${BRAND};line-height:1.3;letter-spacing:-0.3px;">
+                Welcome to Delivery Tracker
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <p style="margin:0;font-size:14px;color:${GREY};line-height:1.7;">
+                Hello <strong style="color:${BRAND};">${fullName || to}</strong>,<br />
+                Your account has been created. Use the credentials below to sign in for the first time.
+                You will be required to set a new password immediately upon login.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Divider -->
+    <tr><td style="padding:0 40px;"><div style="height:1px;background-color:${BORDER};"></div></td></tr>
+
+    <!-- Credentials box -->
+    <tr>
+      <td style="padding:24px 40px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#F8FAFC;border:1px solid ${BORDER};border-radius:10px;overflow:hidden;">
+          <tr>
+            <td style="padding:14px 20px;border-bottom:1px solid ${BORDER};">
+              <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#94A3B8;">Your Login Credentials</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td width="120" style="padding-bottom:12px;">
+                    <span style="font-size:11px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:0.8px;">Username</span>
+                  </td>
+                  <td style="padding-bottom:12px;">
+                    <span style="font-size:14px;font-weight:600;color:${BRAND};font-family:monospace;">${to}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td width="120">
+                    <span style="font-size:11px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:0.8px;">Temp Password</span>
+                  </td>
+                  <td>
+                    <span style="font-size:15px;font-weight:700;color:${BLUE};font-family:monospace;background-color:#EFF6FF;padding:4px 10px;border-radius:6px;border:1px solid #BFDBFE;">${tempPassword}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Security warning -->
+    <tr>
+      <td style="padding:16px 40px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;">
+          <tr>
+            <td style="padding:14px 20px;">
+              <p style="margin:0;font-size:13px;color:#92400E;line-height:1.6;">
+                <strong>Security Notice:</strong> This is a one-time temporary password.
+                You will be prompted to set a new password immediately after signing in.
+                Do not share this email or your credentials with anyone.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- CTA -->
+    ${ctaButton(appUrl, 'Sign In Now', BLUE)}
+  `
+
+  return {
+    to,
+    subject: `Your Delivery Tracker account is ready`,
+    html: shell(logoUrl, BLUE, content),
+  }
+}

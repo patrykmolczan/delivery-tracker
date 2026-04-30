@@ -17,7 +17,7 @@ function exportIssuesCSV(result: TemplateQualityResult) {
   const rows: string[][] = [['Category', 'Severity', 'Job Title / Detail', 'Issue', 'Suggestion']]
 
   result.duplicates.forEach(d => {
-    rows.push(['Duplicate', d.severity, d.titles.join(' · '), d.reason, d.suggestion])
+    rows.push(['Duplicate', d.severity, d.titles.join(' / '), d.reason, d.suggestion])
   })
   result.levelingIssues.forEach(l => {
     rows.push(['Leveling', l.severity, l.jobTitle, l.issue, l.suggestion])
@@ -30,7 +30,8 @@ function exportIssuesCSV(result: TemplateQualityResult) {
   })
 
   const csv = rows.map(r => r.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')).join('\n')
-  const blob = new Blob([csv], { type: 'text/csv' })
+  const BOM = '\uFEFF'
+  const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -266,7 +267,7 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
                         {d.severity}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-sm text-base-content">{d.titles.join(' · ')}</div>
+                        <div className="font-semibold text-sm text-base-content">{d.titles.join(' / ')}</div>
                         <div className="text-xs text-base-content/60 mt-0.5">{d.reason}</div>
                         <div className="text-xs text-primary mt-1">💡 {d.suggestion}</div>
                       </div>

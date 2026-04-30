@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { Loader2, AlertCircle } from 'lucide-react'
 import { useLogo } from '../hooks/useLogo'
+import { useTheme } from '../contexts/ThemeContext'
 
 export const LoginPage: React.FC = () => {
   const { signIn } = useAuth()
@@ -10,6 +11,7 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const { logoUrl, loginIconUrl } = useLogo()
+  const { isDark } = useTheme()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,11 +30,13 @@ export const LoginPage: React.FC = () => {
           {/* Company Logo — shown if set, hidden entirely if not */}
           {logoUrl && (
             <div className="flex justify-center">
-              <img
-                src={logoUrl}
-                alt="Company Logo"
-                className="max-h-20 max-w-xs object-contain"
-              />
+              <div className={isDark ? 'bg-white/90 rounded-xl px-4 py-2' : ''}>
+                <img
+                  src={logoUrl}
+                  alt="Company Logo"
+                  className="max-h-20 max-w-xs object-contain"
+                />
+              </div>
             </div>
           )}
 

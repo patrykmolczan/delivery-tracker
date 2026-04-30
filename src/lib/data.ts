@@ -61,39 +61,27 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
 // Fetch ALL projects via RPC function — single call with explicit LIMIT/OFFSET in SQL,
 // bypassing PostgREST's server-side max-rows cap entirely.
 // ─── fetchProjects ────────────────────────────────────────────────────────────
-// CRITICAL: PostgREST enforces a server-side max-rows cap of 1,000 per request.
-// A single RPC call WILL silently return only 1,000 of 14,302 rows.
+// HOW THIS WORKS — READ BEFORE TOUCHING:
 //
-// FIX: Parallel pagination — fire all page requests simultaneously.
-//   • get_projects_all() has NO SQL LIMIT so PostgREST can slice it freely with .range()
-//   • MAX_PAGES=20 supports up to 20,000 rows; adjust if dataset grows past that
-//   • All pages fire in parallel → total time ≈ one round-trip (~400ms) not 15× sequential
+// get_projects_all() is a SECURITY DEFINER SQL function with:
+//   LIMIT p_limit OFFSET p_offset  (p_limit defaults to 100000, p_offset to 0)
 //
-// ⚠️  DO NOT "simplify" this to a single .rpc() call — it will break row count.
-// ⚠️  DO NOT add p_limit/p_offset params to the RPC call — breaks PostgREST slicing.
-// ⚠️  DO NOT switch to a while-loop — sequential calls are 10× slower.
+// Calling supabase.rpc('get_projects_all') with NO args uses the defaults,
+// so SQL executes: LIMIT 100000 OFFSET 0 → returns all 14,302 rows in ONE call.
+//
+// PostgREST does NOT apply its own max-rows cap to SECURITY DEFINER function results.
+// This is why a single RPC call works and table queries (which ARE capped) would not.
+//
+// ⚠️  DO NOT add .range() — it conflicts with the function's own LIMIT/OFFSET.
+// ⚠️  DO NOT add a pagination loop — single call is correct and fast (~3-4s).
+// ⚠️  DO NOT pass p_limit/p_offset params explicitly — defaults are correct.
+// ⚠️  DO NOT switch to supabase.from('projects').select() — PostgREST caps that at 1,000.
+// ⚠️  DO NOT drop the p_limit/p_offset params from the DB function — they are the key.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function fetchProjects(lookupMaps?: LookupMaps): Promise<Project[]> {
-  const PAGE_SIZE = 1000
-  const MAX_PAGES = 20 // supports up to 20,000 rows
-
-  const results = await Promise.all(
-    Array.from({ length: MAX_PAGES }, (_, i) =>
-      supabase
-        .rpc('get_projects_all')
-        .range(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1)
-    )
-  )
-
-  const all: any[] = []
-  for (const { data, error } of results) {
-    if (error) throw error
-    if (!data || data.length === 0) break
-    all.push(...data)
-    if (data.length < PAGE_SIZE) break
-  }
-
-  return all.map((row: any) => mapRow(row, lookupMaps))
+  const { data, error } = await supabase.rpc('get_projects_all')
+  if (error) throw error
+  return (data || []).map((row: any) => mapRow(row, lookupMaps))
 }
 
 export async function fetchLookups(): Promise<{

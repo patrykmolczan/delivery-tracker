@@ -272,6 +272,7 @@ export const AdminPage: React.FC = () => {
   const [userPage, setUserPage] = useState(1)
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
   const [bulkDeactivating, setBulkDeactivating] = useState(false)
+  const [sendingWelcomeFor, setSendingWelcomeFor] = useState<string | null>(null)
   const USERS_PER_PAGE = 25
 
   const uploadLogo = async (file: File) => {
@@ -467,6 +468,59 @@ export const AdminPage: React.FC = () => {
       showSuccess(`${user.full_name || user.email} ${newActive ? 'activated' : 'deactivated'}.`)
     } else {
       setError(error.message)
+    }
+  }
+
+  const handleResendWelcome = async (userEmail: string, userFullName: string) => {
+    setSendingWelcomeFor(userEmail)
+    try {
+      // Generate new temp password and reset in DB
+      const upper   = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+      const lower   = 'abcdefghjkmnpqrstuvwxyz'
+      const digits  = '23456789'
+      const special = '!@#$%^&*'
+      const pick = (charset: string) => {
+        const arr = new Uint32Array(1)
+        crypto.getRandomValues(arr)
+        return charset[arr[0] % charset.length]
+      }
+      const all = upper + lower + digits + special
+      const chars = [
+        pick(upper), pick(upper), pick(lower), pick(lower),
+        pick(digits), pick(digits), pick(special), pick(special),
+        ...Array.from({ length: 4 }, () => pick(all))
+      ]
+      for (let i = chars.length - 1; i > 0; i--) {
+        const arr = new Uint32Array(1)
+        crypto.getRandomValues(arr)
+        const j = arr[0] % (i + 1)
+        ;[chars[i], chars[j]] = [chars[j], chars[i]]
+      }
+      const tempPassword = chars.join('')
+
+      // Reset password in DB + set password_change_required = true
+      const { error: resetErr } = await supabase.rpc('admin_reset_user_password', {
+        p_email: userEmail,
+        p_new_password: tempPassword,
+      })
+      if (resetErr) throw new Error(resetErr.message)
+
+      // Send welcome email
+      const res = await fetch('/api/send-welcome', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: userEmail, full_name: userFullName, temp_password: tempPassword }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `HTTP ${res.status}`)
+      }
+
+      alert(`Welcome email sent to ${userEmail}. Their password has been reset and they must change it on next login.`)
+    } catch (err: any) {
+      alert(`Failed to send welcome email: ${err.message}`)
+    } finally {
+      setSendingWelcomeFor(null)
     }
   }
 
@@ -1024,6 +1078,19 @@ export const AdminPage: React.FC = () => {
                                 >
                                   {user.is_active !== false ? <><UserX size={12} /> Deactivate</> : <><UserCheck size={12} /> Activate</>}
                                 </button>
+                                {user.role !== 'admin' && (
+                                  <button
+                                    className="btn btn-ghost btn-xs gap-1 text-info"
+                                    onClick={() => handleResendWelcome(user.email, user.full_name)}
+                                    disabled={sendingWelcomeFor === user.email}
+                                    title="Reset password and send welcome email"
+                                  >
+                                    {sendingWelcomeFor === user.email
+                                      ? <span className="loading loading-spinner loading-xs" />
+                                      : <Mail className="w-3.5 h-3.5" />
+                                    }
+                                  </button>
+                                )}
                               </>
                             )}
                           </div>

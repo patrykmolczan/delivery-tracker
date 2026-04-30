@@ -8,6 +8,7 @@ interface AuthContextType {
   session: Session | null
   profile: UserProfile | null
   isAdmin: boolean
+  passwordChangeRequired: boolean
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
@@ -70,7 +71,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [])
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (!error && data.user) {
+      // Log login event (non-blocking)
+      void (async () => {
+        try {
+          await supabase.from('audit_log').insert({
+            project_id: null,
+            user_id: data.user!.id,
+            action: 'USER_LOGIN',
+            field_changed: null,
+            old_value: null,
+            new_value: null,
+            metadata: { email, login_at: new Date().toISOString() },
+          })
+        } catch { /* non-blocking */ }
+      })()
+    }
     return { error }
   }
 
@@ -102,9 +119,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const isAdmin = profile?.role === 'admin'
+  const passwordChangeRequired = !!(profile?.password_change_required)
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, isAdmin, loading, signIn, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, isAdmin, passwordChangeRequired, loading, signIn, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )

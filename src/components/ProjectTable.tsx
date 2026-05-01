@@ -109,6 +109,18 @@ const CountryPopover: React.FC<{
   )
 }
 
+// ─── Row status left-border color ─────────────────────────────────────────────
+const getRowBorderClass = (status: string): string => {
+  switch (status) {
+    case 'Completed':  return 'border-l-2 border-l-success'
+    case 'In Process': return 'border-l-2 border-l-info'
+    case 'Overdue':    return 'border-l-2 border-l-error'
+    case 'On Hold':    return 'border-l-2 border-l-warning'
+    case 'Cancelled':  return 'border-l-2 border-l-base-content/25'
+    default:           return 'border-l-2 border-l-base-300'
+  }
+}
+
 // ─── Main component ────────────────────────────────────────────────────────────
 export const ProjectTable: React.FC<ProjectTableProps> = ({
   projects,
@@ -275,7 +287,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                         className={[
                           'cursor-pointer hover:bg-primary/5 transition-colors',
                           selectedId === p.id ? 'bg-primary/10' : '',
-                          isOverdue(p) ? 'border-l-2 border-l-error' : '',
+                          getRowBorderClass(p.status),
                         ]
                           .filter(Boolean)
                           .join(' ')}
@@ -352,21 +364,26 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                           <span className="block truncate">{formatDate(p.date_delivered)}</span>
                         </td>
 
-                        {/* Days */}
+                        {/* Days — negative = early (green), 0 = on time, positive = late */}
                         <td className="text-center overflow-hidden">
-                          {p.days_to_complete != null ? (
-                            <span
-                              className={`badge badge-sm ${
-                                p.days_to_complete <= 14
-                                  ? 'badge-success'
-                                  : p.days_to_complete <= 30
-                                  ? 'badge-warning'
-                                  : 'badge-error'
-                              } badge-outline`}
-                            >
-                              {p.days_to_complete}d
-                            </span>
-                          ) : (
+                          {p.days_to_complete != null ? (() => {
+                            const d = p.days_to_complete as number
+                            if (d < 0) return (
+                              <span className="badge badge-sm badge-success badge-outline whitespace-nowrap font-semibold">
+                                {Math.abs(d)}d early
+                              </span>
+                            )
+                            if (d === 0) return (
+                              <span className="badge badge-sm badge-ghost badge-outline whitespace-nowrap font-semibold">
+                                On time
+                              </span>
+                            )
+                            return (
+                              <span className={`badge badge-sm ${d <= 14 ? 'badge-warning' : 'badge-error'} badge-outline whitespace-nowrap font-semibold`}>
+                                {d}d
+                              </span>
+                            )
+                          })() : (
                             <span className="text-base-content/40">—</span>
                           )}
                         </td>
@@ -381,7 +398,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                         >
                           <div className="flex items-center gap-1 overflow-hidden">
                             <span
-                              className="block truncate text-xs"
+                              className="min-w-0 flex-1 truncate text-xs"
                               title={allCountries[0] ?? ''}
                             >
                               {allCountries[0] || '—'}

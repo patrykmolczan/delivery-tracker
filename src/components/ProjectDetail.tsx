@@ -718,6 +718,119 @@ export const ProjectDetail: React.FC<{
 
             <div className="divider my-1"></div>
             <div className="text-xs font-semibold uppercase tracking-wider text-base-content/40 pt-2 pb-1">Timeline</div>
+
+            {/* ── Visual progress timeline ─────────────────────────────────── */}
+            {(() => {
+              const toDay = (s: string | null | undefined) => {
+                if (!s) return null
+                const d = new Date(s + 'T00:00:00')
+                return isNaN(d.getTime()) ? null : d
+              }
+              const received  = toDay(localProject.date_received)
+              const due       = toDay(localProject.expected_delivery_date)
+              const delivered = toDay(localProject.date_delivered)
+              const today     = new Date(); today.setHours(0,0,0,0)
+              if (!received || !due) return null
+
+              // Build span: from received to slightly past the latest milestone
+              const candidates = [due, delivered ?? today, today]
+              const maxMs = Math.max(...candidates.map(d => d.getTime()))
+              const spanMs = maxMs - received.getTime()
+              const endMs  = received.getTime() + spanMs * 1.10 // 10% right buffer
+
+              const pct = (d: Date) =>
+                Math.max(0, Math.min(99, (d.getTime() - received.getTime()) / (endMs - received.getTime()) * 100))
+
+              const duePct       = pct(due)
+              const todayPct     = pct(today)
+              const deliveredPct = delivered ? pct(delivered) : null
+
+              const isCompleted = delivered != null
+              const isLate      = delivered ? delivered > due : today > due
+              const fillPct     = deliveredPct ?? Math.min(todayPct, 99)
+              const fillColor   = isCompleted
+                ? (isLate ? 'bg-error/60' : 'bg-success/60')
+                : (isLate ? 'bg-error/40' : 'bg-info/50')
+
+              // Days early/late from date arithmetic
+              const MS_PER_DAY = 86400000
+              const diffDays = delivered
+                ? Math.round((due.getTime() - delivered.getTime()) / MS_PER_DAY)
+                : Math.round((due.getTime() - today.getTime()) / MS_PER_DAY)
+
+              return (
+                <div className="my-3 px-0.5">
+                  {/* Rail */}
+                  <div className="relative h-1.5 bg-base-300 rounded-full">
+                    {/* Progress fill */}
+                    <div
+                      className={`absolute left-0 top-0 h-full rounded-full transition-all ${fillColor}`}
+                      style={{ width: `${fillPct}%` }}
+                    />
+                    {/* Start dot */}
+                    <div className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-base-content/30 ring-2 ring-base-100"
+                         style={{ left: '-4px' }} />
+                    {/* Due date marker — amber vertical stripe */}
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 w-px h-5 bg-warning/80"
+                      style={{ left: `${duePct}%` }}
+                      title={`Due: ${formatDate(localProject.expected_delivery_date)}`}
+                    />
+                    {/* Today marker — primary line (only while in progress) */}
+                    {!isCompleted && todayPct < 99 && (
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 w-px h-5 bg-primary"
+                        style={{ left: `${todayPct}%` }}
+                        title="Today"
+                      />
+                    )}
+                    {/* Delivered dot — green/red based on lateness */}
+                    {deliveredPct != null && (
+                      <div
+                        className={`absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full ring-2 ring-base-100 ${isLate ? 'bg-error' : 'bg-success'}`}
+                        style={{ left: `calc(${deliveredPct}% - 5px)` }}
+                        title={`Delivered: ${formatDate(localProject.date_delivered)}`}
+                      />
+                    )}
+                  </div>
+
+                  {/* Labels row */}
+                  <div className="flex items-start justify-between mt-2">
+                    <span className="text-[10px] text-base-content/40 font-medium leading-tight">
+                      {formatDate(localProject.date_received)}
+                    </span>
+                    <span className="text-[10px] text-warning/80 font-semibold leading-tight text-right">
+                      Due {formatDate(localProject.expected_delivery_date)}
+                    </span>
+                  </div>
+
+                  {/* Status pill */}
+                  <div className="mt-2 flex justify-center">
+                    {isCompleted ? (
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                        isLate
+                          ? 'bg-error/10 text-error'
+                          : 'bg-success/10 text-success'
+                      }`}>
+                        {isLate
+                          ? `${Math.abs(diffDays)}d late`
+                          : diffDays === 0 ? 'On time' : `${diffDays}d early`}
+                      </span>
+                    ) : (
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                        isLate
+                          ? 'bg-error/10 text-error'
+                          : 'bg-info/10 text-info'
+                      }`}>
+                        {isLate ? 'Overdue' : `${diffDays}d remaining`}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })()}
+            {/* ──────────────────────────────────────────────────────────────── */}
+
             <Field icon={<Calendar size={14} />} label="Date Received" value={formatDate(localProject.date_received)} />
             <Field icon={<Calendar size={14} />} label="Expected Delivery" value={formatDate(localProject.expected_delivery_date)} />
             <Field icon={<Calendar size={14} />} label="Date Delivered" value={formatDate(localProject.date_delivered)} />

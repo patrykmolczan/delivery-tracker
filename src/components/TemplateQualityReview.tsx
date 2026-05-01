@@ -9,6 +9,7 @@ import type { TemplateQualityResult } from '../lib/templateQualityAnalyzer'
 interface Props {
   result: TemplateQualityResult | null
   isLoading: boolean
+  locationValidationWarnings?: string[]
 }
 
 
@@ -97,15 +98,16 @@ function ScrollableContainer({ children, maxRows = 7 }: { children: React.ReactN
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function TemplateQualityReview({ result, isLoading }: Props) {
+export function TemplateQualityReview({ result, isLoading, locationValidationWarnings = [] }: Props) {
   // Auto-open sections that have issues; empty sections start closed
   const getInitialOpen = useCallback(() => {
-    if (!result) return new Set<string>(['duplicates', 'leveling', 'missing', 'location'])
+    if (!result) return new Set<string>(locationValidationWarnings.length > 0 ? ['location'] : [])
     const open = new Set<string>()
     if (result.duplicates.length > 0) open.add('duplicates')
     if (result.levelingIssues.length > 0) open.add('leveling')
     if (result.missingDataRows.length > 0) open.add('missing')
     if (result.locationIssues.length > 0) open.add('location')
+    if (locationValidationWarnings.length > 0) open.add('location')
   if ((result.multiLocationRows || []).length > 0) open.add('multiloc')
     return open
   }, [result])
@@ -123,7 +125,7 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
   const collapseAll = () => setOpenSections(new Set())
   const expandAll  = () => setOpenSections(new Set(['duplicates', 'leveling', 'missing', 'location']))
 
-  if (!isLoading && !result) return null
+  if (!isLoading && !result && locationValidationWarnings.length === 0) return null
 
   // ── Loading skeleton ──
   if (isLoading) {
@@ -194,6 +196,31 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
   )
 
   // ── 5-Level matrix ──
+
+  // If AI analysis hasn't run yet but we have parse location warnings, show minimal card
+  if (!result && locationValidationWarnings.length > 0) {
+    return (
+      <div className="rounded-xl border border-base-300 bg-base-100 overflow-hidden mt-4">
+        <div className="p-4 border-b border-base-300 bg-warning/5 border-warning/20">
+          <div className="flex items-center gap-3">
+            <MapPin className="w-5 h-5 text-warning" />
+            <div>
+              <div className="font-bold text-base text-warning">Location Issues Detected</div>
+              <div className="text-xs text-base-content/60 mt-0.5">{locationValidationWarnings.length} invalid value{locationValidationWarnings.length !== 1 ? 's' : ''} found in upload</div>
+            </div>
+          </div>
+        </div>
+        <div className="px-4 py-3 space-y-1.5">
+          {locationValidationWarnings.map((w, i) => (
+            <div key={i} className="flex items-start gap-2 text-xs py-1.5 px-2 rounded bg-warning/10">
+              <span className="badge badge-xs badge-warning shrink-0 mt-0.5">Invalid value</span>
+              <span className="text-base-content/70">{w}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="rounded-xl border border-base-300 bg-base-100 overflow-hidden mt-4">
@@ -455,12 +482,31 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
           </div>
         )}
 
-        <SectionHeader sectionKey="location" icon={MapPin} label="Location Issues" count={result.locationIssues.length} />
+        <SectionHeader sectionKey="location" icon={MapPin} label="Location Issues" count={(result?.locationIssues.length ?? 0) + locationValidationWarnings.length} />
         {openSections.has('location') && (
-          <div className="px-4 pb-3">
-            {result.locationIssues.length === 0 ? (
+          <div className="px-4 pb-3 space-y-2">
+            {/* Parser-level validation warnings (work arrangements, invalid states) */}
+            {locationValidationWarnings.length > 0 && (
+              <div className="space-y-1">
+                {locationValidationWarnings.map((w, i) => (
+                  <div
+                    key={`parse-${i}`}
+                    className="flex items-start gap-2 text-xs py-1.5 px-2 rounded bg-warning/10"
+                  >
+                    <span className="badge badge-xs badge-warning shrink-0 mt-0.5">Invalid value</span>
+                    <span className="text-base-content/70">{w}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* AI-detected location issues */}
+            {result && result.locationIssues.length === 0 && locationValidationWarnings.length === 0 && (
               <EmptyState text="Location data looks complete" />
-            ) : (
+            )}
+            {result && result.locationIssues.length === 0 && locationValidationWarnings.length > 0 && (
+              <div className="px-2 py-1 text-xs text-base-content/40">No additional AI-detected location issues</div>
+            )}
+            {result && result.locationIssues.length > 0 && (
               <ScrollableContainer maxRows={8}>
                 <div className="space-y-1">
                   {result.locationIssues.map((loc, i) => (
@@ -477,6 +523,9 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
                   ))}
                 </div>
               </ScrollableContainer>
+            )}
+            {!result && locationValidationWarnings.length === 0 && (
+              <EmptyState text="Location data looks complete" />
             )}
           </div>
         )}

@@ -29,6 +29,7 @@ export interface TemplateParseResult {
   totalJobs: number
   unmatched: string[]    // raw names that could not be resolved
   parseWarnings: string[]
+  locationWarnings: string[]  // work-arrangement / invalid-state warnings per row
 }
 
 // ─── ISO 2-letter → canonical name ──────────────────────────────────────────
@@ -388,12 +389,12 @@ function parseRateCard(
 ): TemplateParseResult {
   const ws = wb.Sheets['Rate Request']
   if (!ws) {
-    return { countries: [], totalJobs: 0, unmatched: [], parseWarnings: ['Sheet "Rate Request" not found in file.'] }
+    return { countries: [], totalJobs: 0, unmatched: [], parseWarnings: ['Sheet "Rate Request" not found in file.'], locationWarnings: [] }
   }
 
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
   if (rows.length < 2) {
-    return { countries: [], totalJobs: 0, unmatched: [], parseWarnings: ['No data rows found.'] }
+    return { countries: [], totalJobs: 0, unmatched: [], parseWarnings: ['No data rows found.'], locationWarnings: [] }
   }
 
   // Find column indices from header row
@@ -404,7 +405,7 @@ function parseRateCard(
   const cityColIdx = headerRow.findIndex(h => h === 'city' || h.includes('city'))
 
   if (countryColIdx === -1) {
-    return { countries: [], totalJobs: 0, unmatched: [], parseWarnings: ['Could not find "Country" column in Rate Request sheet.'] }
+    return { countries: [], totalJobs: 0, unmatched: [], parseWarnings: ['Could not find "Country" column in Rate Request sheet.'], locationWarnings: [] }
   }
 
   const countryCounts: Record<string, number> = {}
@@ -428,9 +429,7 @@ function parseRateCard(
   }
 
   const result = buildResult(countryCounts, totalJobs, dbCountries)
-  if (locationWarnings.length > 0) {
-    result.parseWarnings.push(...locationWarnings)
-  }
+  result.locationWarnings = locationWarnings
   return result
 }
 
@@ -464,7 +463,7 @@ function parseMagnitVMS(
 
   const ws = wb.Sheets[sheetName]
   if (!ws) {
-    return { countries: [], totalJobs: 0, unmatched: [], parseWarnings: [`Sheet not found. Available: ${wb.SheetNames.join(', ')}`] }
+    return { countries: [], totalJobs: 0, unmatched: [], parseWarnings: [`Sheet not found. Available: ${wb.SheetNames.join(', ')}`], locationWarnings: [] }
   }
 
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
@@ -507,6 +506,7 @@ function parseMagnitVMS(
       totalJobs,
       unmatched: [],
       parseWarnings: [`Found ${totalJobs} job title(s). No Country column found — please add countries manually.`],
+      locationWarnings: [],
     }
   }
 
@@ -563,7 +563,7 @@ function buildResult(
     return b.jobCount - a.jobCount
   })
 
-  return { countries, totalJobs, unmatched, parseWarnings: [] }
+  return { countries, totalJobs, unmatched, parseWarnings: [], locationWarnings: [] }
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────

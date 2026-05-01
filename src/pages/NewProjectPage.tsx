@@ -280,7 +280,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
 
   // ── Template parse state ─────────────────────────────────────────────────────
   const [isParsing, setIsParsing] = useState(false)
-  const [parseResult, setParseResult] = useState<{ warnings: string[]; fuzzyMatches: string[]; unmatchedCount: number } | null>(null)
+  const [parseResult, setParseResult] = useState<{ warnings: string[]; fuzzyMatches: string[]; unmatchedCount: number; locationWarnings: string[] } | null>(null)
   const [qualityResult, setQualityResult] = useState<TemplateQualityResult | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const parseInputRef = useRef<HTMLInputElement>(null)
@@ -327,6 +327,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
         warnings: result.parseWarnings,
         fuzzyMatches,
         unmatchedCount: result.unmatched.length,
+        locationWarnings: result.locationWarnings,
       })
       // Fire quality analysis async — don't block the parse result display
       setIsAnalyzing(true)
@@ -339,6 +340,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
         warnings: [`Failed to parse file: ${err instanceof Error ? err.message : 'Unknown error'}`],
         fuzzyMatches: [],
         unmatchedCount: 0,
+        locationWarnings: [],
       })
     } finally {
       setIsParsing(false)
@@ -718,7 +720,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                           ⚠️ {parseResult.unmatchedCount} country name(s) could not be matched — please add them manually below.
                         </div>
                       )}
-                      {parseResult.warnings.length === 0 && parseResult.unmatchedCount === 0 && (
+                      {parseResult.warnings.length === 0 && parseResult.unmatchedCount === 0 && parseResult.locationWarnings.length === 0 && (
                         <div className="alert alert-success py-1 px-3 text-xs">
                           ✅ Countries and job counts pre-filled from your file. Review below and adjust as needed.
                         </div>
@@ -726,7 +728,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                     </div>
                   )}
                   {/* AI Quality Review Panel */}
-                  <TemplateQualityReview result={qualityResult} isLoading={isAnalyzing} />
+                  <TemplateQualityReview result={qualityResult} isLoading={isAnalyzing} locationValidationWarnings={parseResult?.locationWarnings ?? []} />
                 </div>
 
                 {/* Country picker row */}

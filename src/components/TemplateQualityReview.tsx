@@ -9,6 +9,7 @@ import type { TemplateQualityResult } from '../lib/templateQualityAnalyzer'
 interface Props {
   result: TemplateQualityResult | null
   isLoading: boolean
+  extraLocationWarnings?: string[]
 }
 
 
@@ -97,7 +98,7 @@ function ScrollableContainer({ children, maxRows = 7 }: { children: React.ReactN
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function TemplateQualityReview({ result, isLoading }: Props) {
+export function TemplateQualityReview({ result, isLoading, extraLocationWarnings = [] }: Props) {
   // Auto-open sections that have issues; empty sections start closed
   const getInitialOpen = useCallback(() => {
     if (!result) return new Set<string>(['duplicates', 'leveling', 'missing', 'location'])
@@ -106,6 +107,7 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
     if (result.levelingIssues.length > 0) open.add('leveling')
     if (result.missingDataRows.length > 0) open.add('missing')
     if (result.locationIssues.length > 0) open.add('location')
+    if (extraLocationWarnings.length > 0) open.add('location')
   if ((result.multiLocationRows || []).length > 0) open.add('multiloc')
     return open
   }, [result])
@@ -455,14 +457,22 @@ export function TemplateQualityReview({ result, isLoading }: Props) {
           </div>
         )}
 
-        <SectionHeader sectionKey="location" icon={MapPin} label="Location Issues" count={result.locationIssues.length} />
+        <SectionHeader sectionKey="location" icon={MapPin} label="Location Issues" count={result.locationIssues.length + extraLocationWarnings.length} />
         {openSections.has('location') && (
           <div className="px-4 pb-3">
-            {result.locationIssues.length === 0 ? (
+            {result.locationIssues.length === 0 && extraLocationWarnings.length === 0 ? (
               <EmptyState text="Location data looks complete" />
             ) : (
-              <ScrollableContainer maxRows={8}>
+              <ScrollableContainer maxRows={10}>
                 <div className="space-y-1">
+                  {/* Invalid city/state values from parser */}
+                  {extraLocationWarnings.map((w, i) => (
+                    <div key={`loc-extra-${i}`} className="flex items-start gap-2 text-xs py-1.5 px-2 rounded bg-error/10">
+                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-error bg-error/20 px-1.5 py-0.5 rounded">Invalid value</span>
+                      <span className="text-base-content/70">{w}</span>
+                    </div>
+                  ))}
+                  {/* Missing location data from quality analyzer */}
                   {result.locationIssues.map((loc, i) => (
                     <div
                       key={i}

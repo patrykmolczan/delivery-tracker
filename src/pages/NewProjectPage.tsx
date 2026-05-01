@@ -706,24 +706,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                   {/* Parse result feedback */}
                   {parseResult && (
                     <div className="mt-3 space-y-2">
-                      {/* Location issues — grouped card */}
-                      {parseResult.locationWarnings.length > 0 && (
-                        <div className="rounded-lg border border-warning/40 bg-warning/10 p-3">
-                          <div className="flex items-center gap-2 mb-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-warning shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                            <span className="text-warning font-semibold text-xs">
-                              Location issues detected ({parseResult.locationWarnings.length} {parseResult.locationWarnings.length === 1 ? 'row' : 'rows'})
-                            </span>
-                          </div>
-                          <ul className="space-y-1 pl-6">
-                            {parseResult.locationWarnings.map((w, i) => (
-                              <li key={i} className="text-xs text-base-content/70 list-disc">{w}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+
                       {/* General parse warnings */}
                       {parseResult.warnings.map((w, i) => (
                         <div key={i} className="alert alert-warning py-1 px-3 text-xs">{w}</div>
@@ -742,7 +725,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                         </div>
                       )}
                       {/* All clear */}
-                      {parseResult.locationWarnings.length === 0 && parseResult.warnings.length === 0 && parseResult.unmatchedCount === 0 && (
+                      {parseResult.warnings.length === 0 && parseResult.unmatchedCount === 0 && (
                         <div className="alert alert-success py-1 px-3 text-xs">
                           ✅ Countries and job counts pre-filled from your file. Review below and adjust as needed.
                         </div>
@@ -750,7 +733,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                     </div>
                   )}
                   {/* AI Quality Review Panel */}
-                  <TemplateQualityReview result={qualityResult} isLoading={isAnalyzing} />
+                  <TemplateQualityReview result={qualityResult} isLoading={isAnalyzing} extraLocationWarnings={parseResult?.locationWarnings ?? []} />
                 </div>
 
                 {/* Country picker row */}

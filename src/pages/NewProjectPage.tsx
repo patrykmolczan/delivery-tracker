@@ -440,7 +440,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
           }
         }
       } else {
-        savedProject = await createProject(form, user.id)
+        savedProject = await createProject(form, user.id, eta)
         // Upload staged files now that we have a project ID
         if (stagedFiles.length > 0) {
           for (let i = 0; i < stagedFiles.length; i++) {

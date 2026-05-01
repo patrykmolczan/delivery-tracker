@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import type {
   Project, KPIData, StatusCount, OwnerCount, FilterState, SortState,
   LookupItem, ProjectFormData, ProjectCountry, ProjectCountryInput, ProjectTask,
+  ProjectETAHistory,
 } from '../types'
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
@@ -55,6 +56,13 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
     notifications_enabled: row.notifications_enabled ?? true,
     created_by: row.created_by,
     created_at: row.created_at,
+    ai_eta_days: row.ai_eta_days ?? null,
+    ai_eta_confidence: row.ai_eta_confidence ?? null,
+    ai_eta_breakdown: row.ai_eta_breakdown ?? null,
+    ai_eta_override_days: row.ai_eta_override_days ?? null,
+    ai_eta_override_by: row.ai_eta_override_by ?? null,
+    ai_eta_override_at: row.ai_eta_override_at ?? null,
+    ai_eta_override_reason: row.ai_eta_override_reason ?? null,
   }
 }
 
@@ -174,7 +182,11 @@ export async function fetchLookups(): Promise<{
   }
 }
 
-export async function createProject(form: ProjectFormData, userId: string): Promise<Project> {
+export async function createProject(
+  form: ProjectFormData,
+  userId: string,
+  eta?: { estimate: number; confidence: string; breakdown: string } | null
+): Promise<Project> {
   const insertData: any = {
     project_owner: form.project_owner,
     analyst: form.analyst || null,
@@ -194,6 +206,9 @@ export async function createProject(form: ProjectFormData, userId: string): Prom
     project_type: form.project_type || null,
     time_allocation: form.time_allocation ? parseFloat(form.time_allocation as string) : null,
     created_by: userId,
+    ai_eta_days: eta?.estimate ?? null,
+    ai_eta_confidence: eta?.confidence ?? null,
+    ai_eta_breakdown: eta?.breakdown ?? null,
   }
 
   const { data, error } = await supabase
@@ -205,6 +220,8 @@ export async function createProject(form: ProjectFormData, userId: string): Prom
       project_summary, job_count, days_to_complete, created_by, created_at,
       project_type, status_id, client_type_id, country_id, industry_id,
       id_number, time_allocation,
+      ai_eta_days, ai_eta_confidence, ai_eta_breakdown,
+      ai_eta_override_days, ai_eta_override_by, ai_eta_override_at, ai_eta_override_reason,
       project_statuses!inner(name),
       client_types(name),
       countries(name),
@@ -251,6 +268,13 @@ export async function createProject(form: ProjectFormData, userId: string): Prom
     time_allocation: (data as any).time_allocation ?? null,
     created_by: data.created_by,
     created_at: data.created_at,
+    ai_eta_days: (data as any).ai_eta_days ?? null,
+    ai_eta_confidence: (data as any).ai_eta_confidence ?? null,
+    ai_eta_breakdown: (data as any).ai_eta_breakdown ?? null,
+    ai_eta_override_days: (data as any).ai_eta_override_days ?? null,
+    ai_eta_override_by: (data as any).ai_eta_override_by ?? null,
+    ai_eta_override_at: (data as any).ai_eta_override_at ?? null,
+    ai_eta_override_reason: (data as any).ai_eta_override_reason ?? null,
   }
 }
 
@@ -1476,4 +1500,80 @@ export async function deleteDeliveryNote(noteId: string): Promise<void> {
     .eq('id', noteId)
 
   if (error) throw new Error(`Failed to delete delivery note: ${error.message}`)
+}
+
+// ─── AI ETA ───────────────────────────────────────────────────────────────────
+
+export async function fetchProjectETAData(projectId: string): Promise<{
+  ai_eta_days: number | null
+  ai_eta_confidence: string | null
+  ai_eta_breakdown: string | null
+  ai_eta_override_days: number | null
+  ai_eta_override_by: string | null
+  ai_eta_override_at: string | null
+  ai_eta_override_reason: string | null
+} | null> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('ai_eta_days, ai_eta_confidence, ai_eta_breakdown, ai_eta_override_days, ai_eta_override_by, ai_eta_override_at, ai_eta_override_reason')
+    .eq('id', projectId)
+    .single()
+  if (error || !data) return null
+  return data as any
+}
+
+export async function updateProjectETA(
+  projectId: string,
+  newDays: number,
+  reason: string | null,
+  adminUserId: string,
+  oldDays: number | null,
+  notifyRequester: boolean
+): Promise<void> {
+  const { error: updateError } = await supabase
+    .from('projects')
+    .update({
+      ai_eta_override_days: newDays,
+      ai_eta_override_by: adminUserId,
+      ai_eta_override_at: new Date().toISOString(),
+      ai_eta_override_reason: reason || null,
+    })
+    .eq('id', projectId)
+  if (updateError) throw new Error(`Failed to update ETA: ${updateError.message}`)
+
+  const { error: histError } = await supabase
+    .from('project_eta_history')
+    .insert({
+      project_id: projectId,
+      changed_by: adminUserId,
+      old_days: oldDays,
+      new_days: newDays,
+      reason: reason || null,
+      notified_requester: notifyRequester,
+    })
+  if (histError) throw new Error(`Failed to record ETA history: ${histError.message}`)
+}
+
+export async function fetchProjectETAHistory(projectId: string): Promise<ProjectETAHistory[]> {
+  const { data, error } = await supabase
+    .from('project_eta_history')
+    .select('*, profiles!changed_by(full_name)')
+    .eq('project_id', projectId)
+    .order('changed_at', { ascending: false })
+    .limit(20)
+  if (error) {
+    console.warn('project_eta_history fetch error:', error.message)
+    return []
+  }
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    project_id: row.project_id,
+    changed_by: row.changed_by,
+    changed_at: row.changed_at,
+    old_days: row.old_days,
+    new_days: row.new_days,
+    reason: row.reason,
+    notified_requester: row.notified_requester,
+    changed_by_name: row.profiles?.full_name || null,
+  })) as ProjectETAHistory[]
 }

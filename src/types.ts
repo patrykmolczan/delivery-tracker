@@ -46,6 +46,14 @@ export interface Project {
   created_by?: string | null
   created_at?: string | null
   notifications_enabled?: boolean
+  // ── AI Delivery Estimate fields ─────────────────────────────────────────────
+  ai_eta_days?: number | null
+  ai_eta_confidence?: string | null
+  ai_eta_breakdown?: string | null
+  ai_eta_override_days?: number | null
+  ai_eta_override_by?: string | null
+  ai_eta_override_at?: string | null
+  ai_eta_override_reason?: string | null
 }
 
 // Input type for multi-country form entries
@@ -156,4 +164,17 @@ export interface AIChatMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
+}
+
+// ── AI ETA History ────────────────────────────────────────────────────────────
+export interface ProjectETAHistory {
+  id: string
+  project_id: string
+  changed_by: string | null
+  changed_at: string
+  old_days: number | null
+  new_days: number
+  reason: string | null
+  notified_requester: boolean
+  changed_by_name?: string | null
 }

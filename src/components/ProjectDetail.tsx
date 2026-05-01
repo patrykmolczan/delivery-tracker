@@ -4,9 +4,9 @@ import {
   FileText, Edit2, History, CheckCircle2, Loader2,
   Paperclip, Upload, Download, Trash2, AlertCircle, File,
   Globe, ListTodo, Tag, PackageOpen, Eye, Bell, BellOff,
-  MessageSquare, Plus, Send,
+  MessageSquare, Plus, Send, Zap,
 } from 'lucide-react'
-import type { Project, ProjectCountry, ProjectTask } from '../types'
+import type { Project, ProjectCountry, ProjectTask, ProjectETAHistory } from '../types'
 import {
   formatDate, getStatusColor,
   updateProjectStatus, fetchProjectHistory,
@@ -14,6 +14,7 @@ import {
   fetchProjectFiles, uploadProjectFile, deleteProjectFile, getProjectFileUrl,
   formatFileSize, MAX_FILES_PER_PROJECT,
   fetchProjectCountries, fetchProjectTasks,
+  fetchProjectETAData, updateProjectETA, fetchProjectETAHistory,
   fetchDeliveryFiles, uploadDeliveryFile, deleteDeliveryFile,
   updateDeliveryFile, getDeliveryFileUrl, trackDeliveryDownload,
   fetchDeliveryFileDownloads,
@@ -128,9 +129,29 @@ export const ProjectDetail: React.FC<{
   const [projectCountries, setProjectCountries] = useState<ProjectCountry[]>([])
   const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([])
 
+  // ── AI ETA state ───────────────────────────────────────────────────────────
+  const [etaData, setEtaData] = useState<{
+    ai_eta_days: number | null
+    ai_eta_confidence: string | null
+    ai_eta_breakdown: string | null
+    ai_eta_override_days: number | null
+    ai_eta_override_by: string | null
+    ai_eta_override_at: string | null
+    ai_eta_override_reason: string | null
+  } | null>(null)
+  const [etaHistory, setEtaHistory] = useState<ProjectETAHistory[]>([])
+  const [etaEditing, setEtaEditing] = useState(false)
+  const [etaNewDays, setEtaNewDays] = useState('')
+  const [etaReason, setEtaReason] = useState('')
+  const [etaNotify, setEtaNotify] = useState(false)
+  const [etaSaving, setEtaSaving] = useState(false)
+  const [etaSaveError, setEtaSaveError] = useState<string | null>(null)
+
   useEffect(() => {
     fetchProjectCountries(project.id).then(setProjectCountries).catch(() => {})
     fetchProjectTasks(project.id).then(setProjectTasks).catch(() => {})
+    fetchProjectETAData(project.id).then(d => setEtaData(d)).catch(() => {})
+    fetchProjectETAHistory(project.id).then(setEtaHistory).catch(() => {})
   }, [project.id])
 
   // ── Files state ─────────────────────────────────────────────────────────────
@@ -534,6 +555,58 @@ export const ProjectDetail: React.FC<{
 
   const statusChanged = selectedStatusId !== localProject.status_id
 
+  // ── AI ETA save handler (admin only) ─────────────────────────────────────
+  const handleEtaSave = async () => {
+    if (!etaNewDays || !user) return
+    const newDays = parseInt(etaNewDays)
+    if (isNaN(newDays) || newDays < 1) return
+    setEtaSaving(true)
+    setEtaSaveError(null)
+    try {
+      const oldDays = etaData?.ai_eta_override_days ?? etaData?.ai_eta_days ?? null
+      await updateProjectETA(localProject.id, newDays, etaReason || null, user.id, oldDays, etaNotify)
+      if (etaNotify && localProject.created_by) {
+        const ownerEmail = await fetchProjectOwnerEmail(localProject.created_by)
+        if (ownerEmail) {
+          sendNotification({
+            type: 'eta_changed',
+            to: ownerEmail,
+            project: localProject,
+            oldDays,
+            newDays,
+            reason: etaReason || null,
+          }).catch(() => {})
+        }
+      }
+      setEtaData(prev => ({
+        ai_eta_days: prev?.ai_eta_days ?? null,
+        ai_eta_confidence: prev?.ai_eta_confidence ?? null,
+        ai_eta_breakdown: prev?.ai_eta_breakdown ?? null,
+        ai_eta_override_days: newDays,
+        ai_eta_override_by: user.id,
+        ai_eta_override_at: new Date().toISOString(),
+        ai_eta_override_reason: etaReason || null,
+      }))
+      setEtaHistory(prev => [{
+        id: `local-${Date.now()}`,
+        project_id: localProject.id,
+        changed_by: user.id,
+        changed_at: new Date().toISOString(),
+        old_days: oldDays,
+        new_days: newDays,
+        reason: etaReason || null,
+        notified_requester: etaNotify,
+        changed_by_name: 'You',
+      }, ...prev])
+      setEtaEditing(false)
+    } catch (err: any) {
+      setEtaSaveError(err.message || 'Failed to save ETA change')
+    } finally {
+      setEtaSaving(false)
+    }
+  }
+
+
   return (
     <div className="fixed inset-y-0 right-0 w-[420px] bg-base-100 border-l border-base-300 shadow-2xl z-50 flex flex-col">
       {/* Header */}
@@ -859,6 +932,162 @@ export const ProjectDetail: React.FC<{
                 </div>
               </>
             )}
+
+            {/* ── AI Delivery Estimate Box ──────────────────────────────── */}
+            <>
+              <div className="divider my-1"></div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-base-content/40 pt-2 pb-1 flex items-center gap-1.5">
+                <Zap size={12} />
+                AI Delivery Estimate
+              </div>
+              <div className="rounded-xl border border-base-300 bg-base-200 p-3 mt-1">
+                {/* Original AI estimate */}
+                {etaData?.ai_eta_days != null && (
+                  <div className="mb-2 pb-2 border-b border-base-300">
+                    <div className="text-xs text-base-content/45 mb-1">Original AI Estimate</div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm">~{etaData.ai_eta_days} business days</span>
+                      {etaData.ai_eta_confidence && (
+                        <span className={`badge badge-xs ${etaData.ai_eta_confidence === 'High' ? 'badge-success' : etaData.ai_eta_confidence === 'Medium' ? 'badge-warning' : 'badge-info'}`}>
+                          {etaData.ai_eta_confidence}
+                        </span>
+                      )}
+                    </div>
+                    {etaData.ai_eta_breakdown && (
+                      <p className="text-xs text-base-content/35 mt-0.5 leading-relaxed">{etaData.ai_eta_breakdown}</p>
+                    )}
+                  </div>
+                )}
+                {/* Current effective ETA or no-data placeholder */}
+                {(etaData?.ai_eta_days != null || etaData?.ai_eta_override_days != null) ? (
+                  <div className="flex items-start justify-between gap-1">
+                    <div>
+                      <div className="text-xs text-base-content/45 mb-1">
+                        {etaData?.ai_eta_override_days != null ? 'Current (Admin Override)' : 'Current Estimate'}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold">
+                          ~{etaData?.ai_eta_override_days ?? etaData?.ai_eta_days} business days
+                        </span>
+                        {etaData?.ai_eta_override_days != null && (
+                          <span className="badge badge-xs badge-warning">Override</span>
+                        )}
+                      </div>
+                      {etaData?.ai_eta_override_reason && (
+                        <p className="text-xs text-base-content/50 mt-0.5 italic">"{etaData.ai_eta_override_reason}"</p>
+                      )}
+                      {etaData?.ai_eta_override_at && (
+                        <p className="text-xs text-base-content/35 mt-0.5">
+                          by {etaHistory[0]?.changed_by_name || 'Admin'} · {timeAgo(etaData.ai_eta_override_at)}
+                        </p>
+                      )}
+                    </div>
+                    {isAdmin && !etaEditing && (
+                      <button
+                        className="btn btn-ghost btn-xs btn-circle shrink-0 mt-0.5"
+                        title="Edit ETA"
+                        onClick={() => {
+                          setEtaEditing(true)
+                          setEtaNewDays(String(etaData?.ai_eta_override_days ?? etaData?.ai_eta_days ?? ''))
+                          setEtaReason('')
+                          setEtaNotify(false)
+                          setEtaSaveError(null)
+                        }}
+                      >
+                        <Edit2 size={12} />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-base-content/40 flex-1">No AI estimate available for this project</span>
+                    {isAdmin && !etaEditing && (
+                      <button
+                        className="btn btn-ghost btn-xs gap-1"
+                        onClick={() => { setEtaEditing(true); setEtaNewDays(''); setEtaReason(''); setEtaNotify(false); setEtaSaveError(null) }}
+                      >
+                        <Plus size={11} /> Add
+                      </button>
+                    )}
+                  </div>
+                )}
+                {/* Admin edit form */}
+                {isAdmin && etaEditing && (
+                  <div className={`space-y-2 ${(etaData?.ai_eta_days != null || etaData?.ai_eta_override_days != null) ? 'border-t border-base-300 mt-3 pt-3' : 'mt-2'}`}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label className="text-xs text-base-content/60 shrink-0">New estimate:</label>
+                      <input
+                        type="number"
+                        min="1"
+                        className="input input-bordered input-xs w-20"
+                        value={etaNewDays}
+                        onChange={e => setEtaNewDays(e.target.value)}
+                        placeholder="Days"
+                        autoFocus
+                      />
+                      <span className="text-xs text-base-content/50">business days</span>
+                    </div>
+                    <input
+                      className="input input-bordered input-xs w-full"
+                      placeholder="Reason for change (optional)"
+                      value={etaReason}
+                      onChange={e => setEtaReason(e.target.value)}
+                    />
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        className="checkbox checkbox-xs"
+                        checked={etaNotify}
+                        onChange={e => setEtaNotify(e.target.checked)}
+                      />
+                      <span className="text-xs">Notify requester via email</span>
+                    </label>
+                    {etaSaveError && (
+                      <p className="text-xs text-error">{etaSaveError}</p>
+                    )}
+                    <div className="flex gap-2 justify-end pt-1">
+                      <button
+                        className="btn btn-ghost btn-xs"
+                        onClick={() => { setEtaEditing(false); setEtaSaveError(null) }}
+                        disabled={etaSaving}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className={`btn btn-primary btn-xs gap-1 ${etaSaving ? 'loading' : ''}`}
+                        onClick={handleEtaSave}
+                        disabled={!etaNewDays || etaSaving}
+                      >
+                        {!etaSaving && <CheckCircle2 size={11} />}
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {/* ETA override history */}
+              {etaHistory.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <div className="text-xs text-base-content/35 flex items-center gap-1 mb-1">
+                    <History size={11} />
+                    Override history
+                  </div>
+                  {etaHistory.map(h => (
+                    <div key={h.id} className="flex items-start gap-2 text-xs p-2 bg-base-100 rounded-lg border border-base-200">
+                      <span className="text-base-content/35 shrink-0 tabular-nums">{timeAgo(h.changed_at)}</span>
+                      <span className="flex-1 text-base-content/60">
+                        <span className="font-medium text-base-content/80">{h.changed_by_name || 'Admin'}</span>
+                        {': '}
+                        {h.old_days ? `${h.old_days}d → ` : ''}
+                        <span className="font-medium">{h.new_days}d</span>
+                        {h.reason && <span className="text-base-content/40 italic"> · "{h.reason}"</span>}
+                        {h.notified_requester && <span className="ml-1 text-info/70"> · notified</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           </div>
         </div>
       )}

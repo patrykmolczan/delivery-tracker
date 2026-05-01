@@ -546,3 +546,122 @@ export async function buildStatusChangeEmail(to: string, project: any, newStatus
     html: shell(logoUrl, accentColor, content),
   }
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Template 4 — ETA Changed (admin override notification)
+// ═══════════════════════════════════════════════════════════════════════════════
+export async function buildETAChangeEmail(
+  to: string,
+  project: any,
+  oldDays: number | null,
+  newDays: number,
+  reason: string | null
+): Promise<EmailPayload> {
+  const logoUrl = await getLogoUrl()
+
+  const changeDesc = oldDays
+    ? `from <strong>${oldDays} business day${oldDays !== 1 ? 's' : ''}</strong> to <strong>${newDays} business day${newDays !== 1 ? 's' : ''}</strong>`
+    : `to <strong>${newDays} business day${newDays !== 1 ? 's' : ''}</strong>`
+
+  const content = `
+    <!-- Hero -->
+    <tr>
+      <td style="padding:36px 40px 28px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr>
+            <td>
+              <span style="display:inline-block;background-color:#EEF2FF;color:#4338CA;font-size:11px;font-weight:700;padding:5px 14px;border-radius:100px;text-transform:uppercase;letter-spacing:0.8px;">
+                ETA Updated
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 0 6px;">
+              <h1 style="margin:0;font-size:22px;font-weight:700;color:${BRAND};line-height:1.3;letter-spacing:-0.3px;">
+                Delivery Estimate Updated
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <p style="margin:0;font-size:14px;color:${GREY};line-height:1.7;">
+                The estimated delivery time for <strong style="color:${BRAND};">${project.client_name || 'your project'}</strong>
+                has been revised ${changeDesc}.
+                ${reason ? `<br/><em style="color:${GREY};">Reason: ${reason}</em>` : ''}
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Divider -->
+    <tr><td style="padding:0 40px;"><div style="height:1px;background-color:${BORDER};"></div></td></tr>
+
+    <!-- ETA highlight box -->
+    <tr>
+      <td style="padding:24px 40px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#F8FAFC;border:1px solid ${BORDER};border-radius:10px;overflow:hidden;">
+          <tr>
+            <td style="padding:16px 20px;border-bottom:1px solid ${BORDER};">
+              <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#94A3B8;">Delivery Estimate</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  ${oldDays ? `
+                  <td align="center" width="40%">
+                    <div style="font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">Previous</div>
+                    <div style="font-size:22px;font-weight:700;color:#94A3B8;">${oldDays}<span style="font-size:13px;"> days</span></div>
+                  </td>
+                  <td align="center" width="20%">
+                    <div style="font-size:20px;color:#94A3B8;">→</div>
+                  </td>` : ''}
+                  <td align="center" ${oldDays ? 'width="40%"' : 'width="100%"'}>
+                    <div style="font-size:10px;font-weight:700;color:#4338CA;text-transform:uppercase;letter-spacing:0.8px;margin-bottom:8px;">New Estimate</div>
+                    <div style="font-size:28px;font-weight:800;color:${BLUE};">${newDays}<span style="font-size:14px;"> days</span></div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Project details -->
+    <tr>
+      <td style="padding:16px 40px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#F8FAFC;border:1px solid ${BORDER};border-radius:10px;overflow:hidden;">
+          <tr>
+            <td style="padding:14px 20px;border-bottom:1px solid ${BORDER};">
+              <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#94A3B8;">Project Details</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 20px 12px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                ${detailRow('Client', project.client_name)}
+                ${detailRow('Country', project.country)}
+                ${detailRow('Project Type', project.project_type)}
+                ${detailRow('Analyst', project.analyst, true)}
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- CTA -->
+    ${ctaButton(APP_URL, 'View Project', BLUE)}
+  `
+
+  return {
+    to,
+    subject: `Delivery estimate updated — ${project.client_name || 'Your project'} (${newDays} business days)`,
+    html: shell(logoUrl, BLUE, content),
+  }
+}

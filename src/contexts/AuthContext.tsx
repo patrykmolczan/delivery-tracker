@@ -91,30 +91,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error }
   }
 
-  const signOut = async () => {
-    try {
-      await supabase.auth.signOut()
-    } catch {
-      // Safari may throw or silently fail — continue regardless
-    }
+  const signOut = () => {
+    // SAFARI FIX: Safari blocks navigation that fires after an `await` (async-initiated
+    // navigation is suppressed by ITP unless it originates directly from a user gesture).
+    // Solution: do everything synchronously first, THEN fire signOut in the background.
 
-    // Immediately clear local state — don't wait for onAuthStateChange
-    // Safari's ITP can suppress the SIGNED_OUT event, so we force it here.
+    // 1. Immediately clear React state
     setUser(null)
     setSession(null)
     setProfile(null)
 
-    // Wipe all Supabase auth keys from localStorage (Safari-safe)
+    // 2. Wipe all Supabase auth keys from localStorage synchronously
     try {
       Object.keys(localStorage)
         .filter(k => k.startsWith('sb-') || k === 'delivery-tracker-auth')
         .forEach(k => localStorage.removeItem(k))
     } catch {
-      // localStorage may be restricted in some Safari private-mode contexts
+      // localStorage may be restricted in Safari private-mode — safe to ignore
     }
 
-    // Hard redirect as final fallback — guarantees the login page shows
-    // even if React state update doesn't trigger a re-render in Safari
+    // 3. Fire Supabase signOut in background (don't await — avoids async navigation block)
+    supabase.auth.signOut().catch(() => {})
+
+    // 4. Hard redirect immediately — synchronous, always works in Safari
     window.location.href = '/'
   }
 

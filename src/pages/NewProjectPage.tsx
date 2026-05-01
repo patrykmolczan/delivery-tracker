@@ -181,6 +181,16 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     }
   }, [isAdmin, profile?.full_name, user?.email, editProject])
 
+  // For normal users: auto-set status to "Under Review" on new project creation
+  useEffect(() => {
+    if (!isAdmin && !editProject && lookups) {
+      const underReview = lookups.statuses.find(s => s.name === 'Under Review')
+      if (underReview) {
+        setForm(f => ({ ...f, status_id: underReview.id }))
+      }
+    }
+  }, [isAdmin, editProject, lookups])
+
   // Load prediction stats in background — wait for lookups so client_type/industry/status are resolved
   useEffect(() => {
     if (!lookups) return
@@ -807,18 +817,24 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
             <div className="card-body gap-5">
               <Section icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>} title="Project Details">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Status" required error={errors.status_id}>
-                    <select
-                      className={`select select-bordered w-full ${errors.status_id ? 'select-error' : ''}`}
-                      value={form.status_id ?? ''}
-                      onChange={e => set('status_id', e.target.value ? parseInt(e.target.value) : null)}
-                      onBlur={() => setTouched(t => ({ ...t, status_id: true }))}
-                    >
-                      <option value="">— Select status —</option>
-                      {lookups!.statuses.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
+                  <Field label="Status" required={isAdmin} error={isAdmin ? errors.status_id : undefined}>
+                    {isAdmin ? (
+                      <select
+                        className={`select select-bordered w-full ${errors.status_id ? 'select-error' : ''}`}
+                        value={form.status_id ?? ''}
+                        onChange={e => set('status_id', e.target.value ? parseInt(e.target.value) : null)}
+                        onBlur={() => setTouched(t => ({ ...t, status_id: true }))}
+                      >
+                        <option value="">— Select status —</option>
+                        {lookups!.statuses.map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="input input-bordered w-full bg-base-300/50 flex items-center text-sm text-base-content/70 cursor-not-allowed">
+                        {lookups!.statuses.find(s => s.id === form.status_id)?.name || 'Under Review'}
+                      </div>
+                    )}
                   </Field>
                   <Field label="Total Job Count" hint={form.project_countries.length > 0 ? `${totalJobsFromCountries} from countries` : undefined}>
                     <input
@@ -831,15 +847,16 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                     />
                   </Field>
                   {/* Time Allocation */}
-                  <Field label="Time Allocation (hrs)">
+                  <Field label="Time Allocation (hrs)" hint={!isAdmin ? 'Admin only' : undefined}>
                     <input
                       type="number"
                       step="0.5"
                       min="0"
-                      className="input input-bordered w-full"
+                      className={`input input-bordered w-full ${!isAdmin ? 'bg-base-300/50 cursor-not-allowed text-base-content/40' : ''}`}
                       placeholder="e.g. 2.5"
                       value={form.time_allocation}
-                      onChange={e => setForm(prev => ({ ...prev, time_allocation: e.target.value }))}
+                      disabled={!isAdmin}
+                      onChange={e => { if (isAdmin) setForm(prev => ({ ...prev, time_allocation: e.target.value })) }}
                     />
                   </Field>
                 </div>

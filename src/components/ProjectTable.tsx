@@ -43,12 +43,12 @@ const COL_WIDTHS = {
   project_owner: '7%',
   analyst: '6%',
   client_type: '8%',
-  client_name: '12%',
+  client_name: '10%',
   requestor: '7%',
   date_received: '7%',
   expected_delivery_date: '7%',
   date_delivered: '7%',
-  days_to_complete: '3%', // -1% (short numbers fit fine)
+  days_to_complete: '5%',
   country: '8%',
   industry: '9%',
   job_count: '2%',        // -1% (single digits only)
@@ -369,18 +369,18 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                           {p.days_to_complete != null ? (() => {
                             const d = p.days_to_complete as number
                             if (d < 0) return (
-                              <span className="badge badge-sm badge-success badge-outline whitespace-nowrap font-semibold">
-                                {Math.abs(d)}d early
+                              <span className="text-success font-bold text-xs leading-none">
+                                -{Math.abs(d)}d
                               </span>
                             )
                             if (d === 0) return (
-                              <span className="badge badge-sm badge-ghost badge-outline whitespace-nowrap font-semibold">
-                                On time
+                              <span className="text-base-content/40 font-semibold text-xs leading-none">
+                                0d
                               </span>
                             )
                             return (
-                              <span className={`badge badge-sm ${d <= 14 ? 'badge-warning' : 'badge-error'} badge-outline whitespace-nowrap font-semibold`}>
-                                {d}d
+                              <span className={`font-bold text-xs leading-none ${d <= 14 ? 'text-warning' : 'text-error'}`}>
+                                +{d}d
                               </span>
                             )
                           })() : (

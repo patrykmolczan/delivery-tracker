@@ -1,6 +1,7 @@
-import React, { useRef } from 'react'
+import React, { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowUpDown, ArrowUp, ArrowDown, Edit2 } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, Edit2, Globe } from 'lucide-react'
 import type { Project, SortState, SortField } from '../types'
 import { formatDate, getStatusColor } from '../lib/data'
 
@@ -12,6 +13,7 @@ interface ProjectTableProps {
   selectedId: string | null
   onEdit?: (project: Project) => void
   canEditProject?: (project: Project) => boolean
+  countriesMap?: Map<string, string[]>
 }
 
 const ROW_HEIGHT = 44
@@ -53,6 +55,61 @@ const COL_WIDTHS = {
   actions: '4%',
 }
 
+// ─── Country hover popover ─────────────────────────────────────────────────────
+interface PopoverState {
+  countries: string[]
+  rect: DOMRect
+}
+
+const CountryPopover: React.FC<{
+  popover: PopoverState
+  onMouseEnter: () => void
+  onMouseLeave: () => void
+}> = ({ popover, onMouseEnter, onMouseLeave }) => {
+  const POPOVER_W = 260
+  const headerH = 44
+  const rowH = 32
+  const estimatedH = Math.min(popover.countries.length * rowH + headerH + 12, 344)
+
+  const vp = { w: window.innerWidth, h: window.innerHeight }
+  const left = Math.min(popover.rect.left, vp.w - POPOVER_W - 8)
+  const fitsBelow = popover.rect.bottom + 6 + estimatedH <= vp.h
+  const top = fitsBelow
+    ? popover.rect.bottom + 6
+    : popover.rect.top - estimatedH - 6
+
+  return createPortal(
+    <div
+      className="fixed z-[9999] bg-base-100 border border-base-300 rounded-xl shadow-2xl overflow-hidden"
+      style={{ top, left, width: POPOVER_W }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-base-300 bg-base-200">
+        <Globe size={13} className="text-primary shrink-0" />
+        <span className="text-xs font-bold uppercase tracking-widest text-base-content/60">
+          {popover.countries.length} {popover.countries.length === 1 ? 'Country' : 'Countries'}
+        </span>
+      </div>
+      {/* Scrollable list */}
+      <div className="overflow-y-auto max-h-72 py-1.5 px-2">
+        {popover.countries.map((c, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-primary/50 shrink-0" />
+            <span className="text-sm text-base-content/85 leading-tight">{c}</span>
+          </div>
+        ))}
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+// ─── Main component ────────────────────────────────────────────────────────────
 export const ProjectTable: React.FC<ProjectTableProps> = ({
   projects,
   sort,
@@ -61,8 +118,11 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   selectedId,
   onEdit,
   canEditProject,
+  countriesMap,
 }) => {
   const parentRef = useRef<HTMLDivElement>(null)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [popover, setPopover] = useState<PopoverState | null>(null)
 
   const virtualizer = useVirtualizer({
     count: projects.length,
@@ -88,11 +148,11 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   }
 
   const SortIcon: React.FC<{ field: SortField }> = ({ field }) => {
-    if (sort.field !== field) return <ArrowUpDown size={11} className="opacity-30 flex-shrink-0" />
+    if (sort.field !== field) return <ArrowUpDown size={10} className="opacity-25 flex-shrink-0" />
     return sort.direction === 'asc' ? (
-      <ArrowUp size={11} className="text-primary flex-shrink-0" />
+      <ArrowUp size={10} className="text-primary flex-shrink-0" />
     ) : (
-      <ArrowDown size={11} className="text-primary flex-shrink-0" />
+      <ArrowDown size={10} className="text-primary flex-shrink-0" />
     )
   }
 
@@ -100,6 +160,19 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
     if (['Completed', 'Cancelled'].includes(p.status)) return false
     if (!p.expected_delivery_date) return false
     return p.expected_delivery_date < new Date().toISOString().slice(0, 10)
+  }
+
+  const showPopover = (e: React.MouseEvent<HTMLTableCellElement>, countries: string[]) => {
+    if (hideTimer.current) clearTimeout(hideTimer.current)
+    setPopover({ countries, rect: e.currentTarget.getBoundingClientRect() })
+  }
+
+  const scheduleHide = () => {
+    hideTimer.current = setTimeout(() => setPopover(null), 180)
+  }
+
+  const cancelHide = () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current)
   }
 
   const colCount = columns.length + (onEdit ? 1 : 0)
@@ -141,24 +214,28 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
               {onEdit && <col style={{ width: COL_WIDTHS.actions }} />}
             </colgroup>
 
-            {/* Sticky header */}
+            {/* ── Sticky header ─────────────────────────────────────────────── */}
             <thead className="sticky top-0 z-20">
-              <tr className="bg-base-300/95 backdrop-blur-sm shadow-sm">
+              <tr className="bg-base-300 border-b-2 border-base-content/10">
                 {columns.map(col => (
                   <th
                     key={col.key}
-                    className="cursor-pointer hover:bg-base-300 transition-colors text-xs uppercase tracking-wider font-semibold select-none overflow-hidden"
+                    className="cursor-pointer select-none px-2 py-3 transition-colors hover:bg-primary/10 group"
                     onClick={() => handleSort(col.key)}
                   >
-                    <span className="flex items-center gap-1 truncate">
-                      <span className="truncate">{col.label}</span>
+                    <span className="flex items-center gap-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-base-content/50 group-hover:text-primary transition-colors whitespace-nowrap">
+                        {col.label}
+                      </span>
                       <SortIcon field={col.key} />
                     </span>
                   </th>
                 ))}
                 {onEdit && (
-                  <th className="text-xs uppercase tracking-wider font-semibold">
-                    Actions
+                  <th className="px-2 py-3">
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-base-content/50">
+                      Actions
+                    </span>
                   </th>
                 )}
               </tr>
@@ -184,6 +261,12 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
 
                   {virtualItems.map(virtualRow => {
                     const p = projects[virtualRow.index]
+                    // Resolve all countries: prefer multi-country map, fall back to legacy single-country field
+                    const allCountries = (countriesMap?.get(p.id) && countriesMap.get(p.id)!.length > 0)
+                      ? countriesMap.get(p.id)!
+                      : (p.country ? [p.country] : [])
+                    const hasMultiple = allCountries.length > 1
+
                     return (
                       <tr
                         key={p.id}
@@ -288,11 +371,27 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                           )}
                         </td>
 
-                        {/* Country */}
-                        <td className="text-base-content/70 overflow-hidden">
-                          <span className="block truncate" title={p.country ?? ''}>
-                            {p.country || '—'}
-                          </span>
+                        {/* Country — hover to see all */}
+                        <td
+                          className="text-base-content/70 overflow-hidden"
+                          onMouseEnter={(e) => {
+                            if (hasMultiple) showPopover(e, allCountries)
+                          }}
+                          onMouseLeave={scheduleHide}
+                        >
+                          <div className="flex items-center gap-1 overflow-hidden">
+                            <span
+                              className="block truncate text-xs"
+                              title={allCountries[0] ?? ''}
+                            >
+                              {allCountries[0] || '—'}
+                            </span>
+                            {hasMultiple && (
+                              <span className="badge badge-xs badge-primary shrink-0 font-semibold cursor-default">
+                                +{allCountries.length - 1}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Industry */}
@@ -338,6 +437,15 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Country hover popover — rendered in document.body via portal */}
+      {popover && (
+        <CountryPopover
+          popover={popover}
+          onMouseEnter={cancelHide}
+          onMouseLeave={scheduleHide}
+        />
+      )}
     </div>
   )
 }

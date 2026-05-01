@@ -344,6 +344,31 @@ export async function fetchProjectCountries(projectId: string): Promise<ProjectC
   }))
 }
 
+// Bulk-fetch ALL project_countries at once → Map<projectId, countryName[]>
+// Used by ProjectTable to show multi-country hover popover without touching fetchProjects.
+export async function fetchAllProjectCountries(): Promise<Map<string, string[]>> {
+  const { data, error } = await supabase
+    .from('project_countries')
+    .select('project_id, countries(name)')
+    .order('sort_order')
+
+  if (error) {
+    console.warn('fetchAllProjectCountries error:', error.message)
+    return new Map()
+  }
+
+  const map = new Map<string, string[]>()
+  for (const row of (data || []) as any[]) {
+    const name: string | undefined = row.countries?.name
+    if (!name) continue
+    const pid: string = row.project_id
+    const existing = map.get(pid) || []
+    existing.push(name)
+    map.set(pid, existing)
+  }
+  return map
+}
+
 export async function syncProjectCountries(
   projectId: string,
   entries: ProjectCountryInput[]

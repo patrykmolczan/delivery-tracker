@@ -12,7 +12,7 @@ import { ProjectDetail } from './components/ProjectDetail'
 import { Charts } from './components/Charts'
 import {
   fetchProjects, fetchStatusCounts, fetchOwnerCounts, buildLookupMaps, fetchLookups,
-  fetchFilterOptions, computeKPIs, filterProjects, sortProjects
+  fetchFilterOptions, computeKPIs, filterProjects, sortProjects, fetchAllProjectCountries
 } from './lib/data'
 import { useLogo } from './hooks/useLogo'
 import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode } from './types'
@@ -47,6 +47,7 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [countriesMap, setCountriesMap] = useState<Map<string, string[]>>(new Map())
 
   const loadData = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -68,6 +69,8 @@ const Dashboard: React.FC = () => {
       setStatusCounts(sc)
       setOwnerCounts(oc)
       setFilterOptions(optsWithOwners)
+      // Fire-and-forget — loads multi-country data for hover popover without blocking spinner
+      fetchAllProjectCountries().then(setCountriesMap).catch(console.warn)
     } catch (err) {
       console.error('Failed to load data:', err)
     } finally {
@@ -283,6 +286,7 @@ const Dashboard: React.FC = () => {
                   onSort={setSort}
                   onSelectProject={setSelectedProject}
                   selectedId={selectedProject?.id || null}
+                  countriesMap={countriesMap}
                 />
                 {sorted.length > 10 && (
                   <div className="text-center">
@@ -322,6 +326,7 @@ const Dashboard: React.FC = () => {
                 selectedId={selectedProject?.id || null}
                 onEdit={handleEditProject}
                 canEditProject={(p) => isAdmin || p.created_by === user?.id}
+                countriesMap={countriesMap}
               />
             </div>
           )}

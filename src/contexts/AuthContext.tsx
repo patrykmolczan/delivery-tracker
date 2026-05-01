@@ -11,7 +11,7 @@ interface AuthContextType {
   passwordChangeRequired: boolean
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
-  signOut: () => Promise<void>
+  signOut: () => void
   refreshProfile: () => Promise<void>
 }
 

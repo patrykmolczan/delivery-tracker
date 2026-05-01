@@ -506,6 +506,7 @@ function parseMagnitVMS(
       totalJobs,
       unmatched: [],
       parseWarnings: [`Found ${totalJobs} job title(s). No Country column found — please add countries manually.`],
+      locationWarnings: [],
     }
   }
 

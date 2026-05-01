@@ -228,6 +228,74 @@ const ALIASES: Record<string, string> = {
   'zimbabe': 'Zimbabwe',
 }
 
+// ─── Work-arrangement terms that are not valid locations ─────────────────────
+const WORK_ARRANGEMENT_TERMS = new Set([
+  'remote', 'hybrid', 'on-site', 'onsite', 'on site', 'wfh',
+  'work from home', 'work-from-home', 'telecommute', 'telecommuting',
+  'virtual', 'anywhere', 'flexible', 'distributed',
+  'bay area', 'greater bay area', 'tri-state area', 'tri state area',
+])
+
+// ─── Valid US state names & abbreviations (lowercase keys) ───────────────────
+const US_STATES: Record<string, string> = {
+  // Full names
+  'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
+  'colorado':'CO','connecticut':'CT','delaware':'DE','florida':'FL','georgia':'GA',
+  'hawaii':'HI','idaho':'ID','illinois':'IL','indiana':'IN','iowa':'IA',
+  'kansas':'KS','kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD',
+  'massachusetts':'MA','michigan':'MI','minnesota':'MN','mississippi':'MS',
+  'missouri':'MO','montana':'MT','nebraska':'NE','nevada':'NV',
+  'new hampshire':'NH','new jersey':'NJ','new mexico':'NM','new york':'NY',
+  'north carolina':'NC','north dakota':'ND','ohio':'OH','oklahoma':'OK',
+  'oregon':'OR','pennsylvania':'PA','rhode island':'RI','south carolina':'SC',
+  'south dakota':'SD','tennessee':'TN','texas':'TX','utah':'UT','vermont':'VT',
+  'virginia':'VA','washington':'WA','west virginia':'WV','wisconsin':'WI',
+  'wyoming':'WY','district of columbia':'DC','washington d.c.':'DC',
+  'washington dc':'DC','d.c.':'DC',
+  // 2-letter abbreviations
+  'al':'AL','ak':'AK','az':'AZ','ar':'AR','ca':'CA','co':'CO','ct':'CT',
+  'de':'DE','fl':'FL','ga':'GA','hi':'HI','id':'ID','il':'IL','in':'IN',
+  'ia':'IA','ks':'KS','ky':'KY','la':'LA','me':'ME','md':'MD','ma':'MA',
+  'mi':'MI','mn':'MN','ms':'MS','mo':'MO','mt':'MT','ne':'NE','nv':'NV',
+  'nh':'NH','nj':'NJ','nm':'NM','ny':'NY','nc':'NC','nd':'ND','oh':'OH',
+  'ok':'OK','or':'OR','pa':'PA','ri':'RI','sc':'SC','sd':'SD','tn':'TN',
+  'tx':'TX','ut':'UT','vt':'VT','va':'VA','wa':'WA','wv':'WV','wi':'WI',
+  'wy':'WY','dc':'DC',
+}
+
+function isUSCountry(raw: string): boolean {
+  const v = raw.trim().toUpperCase()
+  return v === 'US' || v === 'USA' || v === 'UNITED STATES' || v === 'U.S.' || v === 'U.S.A.' || v === 'AMERICA'
+}
+
+function validateLocationRow(
+  rowNum: number,
+  city: string,
+  state: string,
+  country: string,
+): string[] {
+  const warnings: string[] = []
+  const cityL = city.toLowerCase().trim()
+  const stateL = state.toLowerCase().trim()
+
+  // Flag work-arrangement terms in City
+  if (cityL && WORK_ARRANGEMENT_TERMS.has(cityL)) {
+    warnings.push(`Row ${rowNum}: City column contains "${city}" — this is a work arrangement, not a city. Please enter a real city name or leave blank.`)
+  }
+
+  // Flag work-arrangement terms in State
+  if (stateL && WORK_ARRANGEMENT_TERMS.has(stateL)) {
+    warnings.push(`Row ${rowNum}: State column contains "${state}" — this is a work arrangement, not a state. Please enter a real state/province or leave blank.`)
+  }
+
+  // Validate US states
+  if (stateL && country && isUSCountry(country) && !US_STATES[stateL]) {
+    warnings.push(`Row ${rowNum}: State "${state}" is not a recognised US state. Please enter a valid state name or abbreviation.`)
+  }
+
+  return warnings
+}
+
 // ─── Levenshtein distance ────────────────────────────────────────────────────
 function levenshtein(a: string, b: string): number {
   const m = a.length
@@ -332,6 +400,8 @@ function parseRateCard(
   const headerRow = (rows[0] as string[]).map(h => String(h).trim().toLowerCase())
   const countryColIdx = headerRow.findIndex(h => h.includes('country'))
   const jobTitleColIdx = headerRow.findIndex(h => h.includes('job title'))
+  const stateColIdx = headerRow.findIndex(h => h === 'state' || h.includes('state/province'))
+  const cityColIdx = headerRow.findIndex(h => h === 'city' || h.includes('city'))
 
   if (countryColIdx === -1) {
     return { countries: [], totalJobs: 0, unmatched: [], parseWarnings: ['Could not find "Country" column in Rate Request sheet.'] }
@@ -339,6 +409,7 @@ function parseRateCard(
 
   const countryCounts: Record<string, number> = {}
   let totalJobs = 0
+  const locationWarnings: string[] = []
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i] as unknown[]
@@ -348,9 +419,19 @@ function parseRateCard(
     if (!rawCountry) continue
     countryCounts[rawCountry] = (countryCounts[rawCountry] ?? 0) + 1
     totalJobs++
+
+    // Validate city & state
+    const rawCity = cityColIdx !== -1 ? String(row[cityColIdx] ?? '').trim() : ''
+    const rawState = stateColIdx !== -1 ? String(row[stateColIdx] ?? '').trim() : ''
+    const rowWarnings = validateLocationRow(i + 1, rawCity, rawState, rawCountry)
+    locationWarnings.push(...rowWarnings)
   }
 
-  return buildResult(countryCounts, totalJobs, dbCountries)
+  const result = buildResult(countryCounts, totalJobs, dbCountries)
+  if (locationWarnings.length > 0) {
+    result.parseWarnings.push(...locationWarnings)
+  }
+  return result
 }
 
 /**

@@ -327,11 +327,22 @@ Today's date: ${ctx.todayDate}
 ${JSON.stringify(ctx, null, 2)}
 === END OF DATA ===
 
+SCHEMA LEGEND — understand these fields before answering:
+- "Client" or "client_name": the actual company/organization name (e.g. "NYCHH", "Johnson & Johnson", "Amazon"). Use the "topClients" array in the data. NEVER use byClientType for client name questions.
+- "Client Type" or "client_type": a category/segment bucket (e.g. "Existing Client", "New Client", "MSP", "Direct"). Use the "byClientType" object. These are NOT company names — they are categories.
+- "Analyst": the internal team member assigned to deliver the project (Joanna, Kim, Allie, Megan, Patryk, Tricia). Use the "byAnalyst" object.
+- "Project Owner" or "owner": the client-side owner/sponsor of the project.
+- "Requestor": the person who submitted the request.
+- "Status": Completed | In Process | On Hold | Overdue | Cancelled.
+- "Days to complete" (days_to_complete): calendar days from Date Received to Date Delivered. Negative = delivered early. Positive = delivered late.
+- "Project Type": type of delivery work (e.g. "Pay Intel (Rate Card)", "Pay Intel (Right Sourcing)", "Magnit VMS").
+
 INSTRUCTIONS:
 - Answer based strictly on the data above. Do not guess or make up numbers.
 - Be conversational but precise. Give exact counts, names, and dates when asked.
 - Format responses with markdown: **bold** for key numbers/names, bullet lists for multiple items, tables when comparing data.
 - For analyst questions: include their project count, active workload, avg delivery time, and overdue items.
+- For "client" or "which client" questions: ALWAYS use topClients (real company names) unless the user explicitly says "client type" or "client category".
 - For "show me" or "list" questions: show all items if ≤10, otherwise show top 10 with a note.
 - For trend questions: use the volumeByMonth data.
 - For delivery time questions: use avgDeliveryDays from the relevant breakdown.

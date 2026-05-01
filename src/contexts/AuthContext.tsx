@@ -57,6 +57,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (event === 'INITIAL_SESSION') {
           setLoading(false)
         }
+
+        // When the refresh token is invalid/rotated-away, Supabase clears the
+        // session automatically but leaves the UI in a zombie auth state.
+        // Redirect to login immediately so the user gets a clean sign-in screen.
+        if ((event as string) === 'TOKEN_REFRESH_FAILED') {
+          window.location.href = '/'
+        }
       }
     )
 

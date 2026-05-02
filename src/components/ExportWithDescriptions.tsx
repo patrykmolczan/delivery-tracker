@@ -55,9 +55,9 @@ export default function ExportWithDescriptions({ originalFile }: Props) {
       )}
 
       {step === 'confirm' && (
-        <div className="flex flex-wrap items-center gap-2 p-2 rounded-md bg-violet-950/40 border border-violet-700/40 text-xs">
-          <span className="text-slate-300">
-            Generate AI descriptions for <strong className="text-white">{missingRows.length} row{missingRows.length !== 1 ? 's' : ''}</strong> ({uniqueTitles.length} unique title{uniqueTitles.length !== 1 ? 's' : ''}) and download a filled Excel?
+        <div className="flex flex-wrap items-center gap-2 p-2 rounded-md bg-violet-50 border border-violet-200 text-xs">
+          <span className="text-violet-900">
+            Generate AI descriptions for <strong>{missingRows.length} row{missingRows.length !== 1 ? 's' : ''}</strong> ({uniqueTitles.length} unique title{uniqueTitles.length !== 1 ? 's' : ''}) and download a filled Excel?
           </span>
           <div className="flex gap-1.5">
             <button
@@ -70,7 +70,7 @@ export default function ExportWithDescriptions({ originalFile }: Props) {
             <button
               type="button"
               onClick={() => setStep('idle')}
-              className="flex items-center gap-1 px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 rounded bg-base-200 hover:bg-base-300 text-base-content/70 transition-colors"
             >
               <X className="w-3 h-3" /> Cancel
             </button>
@@ -79,22 +79,22 @@ export default function ExportWithDescriptions({ originalFile }: Props) {
       )}
 
       {step === 'loading' && (
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-violet-950/40 border border-violet-700/40 text-xs text-slate-300">
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-400" />
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-violet-50 border border-violet-200 text-xs text-violet-800">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />
           Generating descriptions with GPT-4.1…
         </div>
       )}
 
       {step === 'done' && (
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-950/40 border border-emerald-700/40 text-xs text-emerald-300">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-green-50 border border-green-200 text-xs text-green-700">
           ✓ Downloaded! Ready to resubmit.
         </div>
       )}
 
       {step === 'error' && (
-        <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-md bg-red-950/40 border border-red-700/40 text-xs text-red-300">
+        <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-md bg-red-50 border border-red-200 text-xs text-red-700">
           <span>Error: {errorMsg}</span>
-          <button type="button" onClick={() => setStep('idle')} className="text-red-400 hover:text-red-200"><X className="w-3 h-3" /></button>
+          <button type="button" onClick={() => setStep('idle')} className="text-red-500 hover:text-red-700"><X className="w-3 h-3" /></button>
         </div>
       )}
     </div>

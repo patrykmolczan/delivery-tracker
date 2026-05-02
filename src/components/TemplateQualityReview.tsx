@@ -207,18 +207,18 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
   if (!result && locationValidationWarnings.length > 0) {
     return (
       <div className="rounded-xl border border-base-300 bg-base-100 overflow-hidden mt-4">
-        <div className="p-4 border-b border-base-300 bg-warning/5 border-warning/20">
+        <div className="p-4 border-b border-base-300 bg-amber-50 border-amber-200">
           <div className="flex items-center gap-3">
-            <MapPin className="w-5 h-5 text-warning" />
+            <MapPin className="w-5 h-5 text-amber-600" />
             <div>
-              <div className="font-bold text-base text-warning">Location Issues Detected</div>
+              <div className="font-bold text-base text-amber-700">Location Issues Detected</div>
               <div className="text-xs text-base-content/60 mt-0.5">{locationValidationWarnings.length} invalid value{locationValidationWarnings.length !== 1 ? 's' : ''} found in upload</div>
             </div>
           </div>
         </div>
         <div className="px-4 py-3 space-y-1.5">
           {locationValidationWarnings.map((w, i) => (
-            <div key={i} className="flex items-start gap-2 text-xs py-1.5 px-2 rounded bg-warning/10">
+            <div key={i} className="flex items-start gap-2 text-xs py-1.5 px-2 rounded bg-amber-50 border border-amber-200">
               <span className="badge badge-xs badge-warning shrink-0 mt-0.5">Invalid value</span>
               <span className="text-base-content/70">{w}</span>
             </div>
@@ -528,14 +528,14 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
           <div className="px-4 pb-3 space-y-2">
             {/* Parser-level validation warnings (work arrangements, invalid states) */}
             {locationValidationWarnings.length > 0 && (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 {locationValidationWarnings.map((w, i) => (
                   <div
                     key={`parse-${i}`}
-                    className="flex items-start gap-2 text-xs py-1.5 px-2 rounded bg-warning/10"
+                    className="flex items-start gap-2 text-xs py-2 px-3 rounded-lg bg-amber-50 border border-amber-200"
                   >
                     <span className="badge badge-xs badge-warning shrink-0 mt-0.5">Invalid value</span>
-                    <span className="text-base-content/70">{w}</span>
+                    <span className="text-base-content/80">{w}</span>
                   </div>
                 ))}
               </div>
@@ -549,11 +549,15 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
             )}
             {result && result.locationIssues.length > 0 && (
               <ScrollableContainer maxRows={8}>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {result.locationIssues.map((loc, i) => (
                     <div
                       key={i}
-                      className={`flex items-start gap-2 text-xs py-1.5 px-2 rounded ${loc.severity === 'critical' ? 'bg-error/10' : 'bg-warning/10'}`}
+                      className={`flex items-start gap-2 text-xs py-2 px-3 rounded-lg ${
+                        loc.severity === 'critical'
+                          ? 'bg-red-50 border border-red-200'
+                          : 'bg-amber-50 border border-amber-200'
+                      }`}
                     >
                       <span className="text-base-content/40 shrink-0">#{loc.rowIndex}</span>
                       <span className="font-medium text-base-content shrink-0 truncate max-w-[140px]" title={loc.jobTitle}>

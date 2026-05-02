@@ -287,12 +287,14 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   const [qualityResult, setQualityResult] = useState<TemplateQualityResult | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const parseInputRef = useRef<HTMLInputElement>(null)
+  const [templateFile, setTemplateFile] = useState<File | null>(null)
 
   // ── Country builder ──────────────────────────────────────────────────────────
 
   // ── Template file parser ──────────────────────────────────────────────────────
   const handleTemplateParse = async (file: File) => {
     if (!lookups) return
+    setTemplateFile(file)
     setIsParsing(true)
     setParseResult(null)
     setQualityResult(null)
@@ -731,7 +733,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                     </div>
                   )}
                   {/* AI Quality Review Panel */}
-                  <TemplateQualityReview result={qualityResult} isLoading={isAnalyzing} locationValidationWarnings={parseResult?.locationWarnings ?? []} passingScore={PASSING_QUALITY_SCORE} />
+                  <TemplateQualityReview result={qualityResult} isLoading={isAnalyzing} locationValidationWarnings={parseResult?.locationWarnings ?? []} passingScore={PASSING_QUALITY_SCORE} originalFile={templateFile} />
                 </div>
 
                 {/* Country picker row */}

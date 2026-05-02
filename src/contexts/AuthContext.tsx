@@ -112,6 +112,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLoading(false)
         }
 
+        // SAFARI / INACTIVITY FIX: supabase-js bug — when a proactive token refresh
+        // fails (e.g. after Safari freezes a tab for 2-3h), _callRefreshToken silently
+        // deletes the session and fires SIGNED_OUT even though the user never signed out.
+        // Without this redirect the app shows an infinite "Loading delivery data…" spinner.
+        if (event === 'SIGNED_OUT') {
+          window.location.href = '/'
+          return
+        }
+
         // When the refresh token is invalid/rotated-away, Supabase clears the
         // session automatically but leaves the UI in a zombie auth state.
         // Redirect to login immediately so the user gets a clean sign-in screen.
@@ -121,6 +130,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     )
 
+    // SAFARI TAB VISIBILITY FIX: Safari aggressively throttles background tabs.
+    // When the user returns to the tab after 2-3h, the token may have expired and
+    // the SDK's auto-refresh timer may not have fired. Re-validate the session the
+    // moment the tab becomes visible so we catch dead sessions before data fetching.
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== 'visible') return
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession()
+        if (!currentSession) {
+          // Tab was hidden, session is now gone — clean up and redirect to login
+          try {
+            Object.keys(localStorage)
+              .filter(k => k.startsWith('sb-') || k === 'delivery-tracker-auth')
+              .forEach(k => localStorage.removeItem(k))
+          } catch { /* Safari private-mode safe */ }
+          window.location.href = '/'
+        }
+      } catch { /* safe to ignore — don't block UI */ }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     // Safety net: if INITIAL_SESSION never fires (e.g. no stored session at all
     // and Supabase doesn't emit the event), unblock after 3 seconds.
     const timeout = setTimeout(() => setLoading(false), 3000)
@@ -128,6 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       subscription.unsubscribe()
       clearTimeout(timeout)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [])
 

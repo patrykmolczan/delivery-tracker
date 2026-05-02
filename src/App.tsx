@@ -14,6 +14,7 @@ import {
   fetchProjects, fetchStatusCounts, fetchOwnerCounts, buildLookupMaps, fetchLookups,
   fetchFilterOptions, computeKPIs, filterProjects, sortProjects, fetchAllProjectCountries
 } from './lib/data'
+import { supabase } from './lib/supabase'
 import { useLogo } from './hooks/useLogo'
 import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode } from './types'
 import {
@@ -83,6 +84,21 @@ const Dashboard: React.FC = () => {
   }
 
   useEffect(() => { loadData() }, [])
+
+  // SAFARI INACTIVITY SAFETY NET: if loadData() hangs for >12s (common when Supabase
+  // SDK is stuck retrying a failed token refresh after Safari freezes a tab),
+  // check whether the session is still alive. If not, redirect to login so the user
+  // doesn't stare at an infinite "Loading delivery data..." spinner indefinitely.
+  useEffect(() => {
+    if (!loading) return
+    const timer = setTimeout(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) window.location.href = '/'
+      } catch { /* safe to ignore */ }
+    }, 12000)
+    return () => clearTimeout(timer)
+  }, [loading])
 
   const filtered = useMemo(() => filterProjects(projects, filters), [projects, filters])
   const sorted = useMemo(() => sortProjects(filtered, sort), [filtered, sort])

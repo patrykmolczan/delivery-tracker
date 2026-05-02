@@ -3,7 +3,7 @@ import { Sparkles, Download, Loader2, X } from 'lucide-react'
 import { findRowsMissingDescriptions, generateDescriptions, buildExcelWithDescriptions } from '../lib/descriptionGenerator'
 
 interface Props {
-  originalFile: File
+  originalFile: File | null
 }
 
 export default function ExportWithDescriptions({ originalFile }: Props) {
@@ -12,16 +12,18 @@ export default function ExportWithDescriptions({ originalFile }: Props) {
   const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
+    if (!originalFile) { setMissingRows([]); return }
     findRowsMissingDescriptions(originalFile).then(setMissingRows)
   }, [originalFile])
 
   const uniqueTitles = [...new Set(missingRows.map(r => r.jobTitle).filter(Boolean))]
 
   const handleGenerate = useCallback(async () => {
+    if (!originalFile) return
     setStep('loading')
     try {
       const descriptions = await generateDescriptions(uniqueTitles)
-      const blob = await buildExcelWithDescriptions(originalFile, missingRows, descriptions)
+      const blob = await buildExcelWithDescriptions(originalFile, descriptions)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -35,14 +37,15 @@ export default function ExportWithDescriptions({ originalFile }: Props) {
       setErrorMsg(e instanceof Error ? e.message : 'Unknown error')
       setStep('error')
     }
-  }, [originalFile, missingRows, uniqueTitles])
+  }, [originalFile, uniqueTitles])
 
-  if (missingRows.length === 0) return null
+  if (!originalFile || missingRows.length === 0) return null
 
   return (
     <div className="flex flex-col gap-2">
       {step === 'idle' && (
         <button
+          type="button"
           onClick={() => setStep('confirm')}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-violet-600 hover:bg-violet-700 text-white transition-colors"
         >
@@ -58,12 +61,14 @@ export default function ExportWithDescriptions({ originalFile }: Props) {
           </span>
           <div className="flex gap-1.5">
             <button
+              type="button"
               onClick={handleGenerate}
               className="flex items-center gap-1 px-2.5 py-1 rounded bg-violet-600 hover:bg-violet-700 text-white font-medium transition-colors"
             >
               <Download className="w-3 h-3" /> Generate &amp; download
             </button>
             <button
+              type="button"
               onClick={() => setStep('idle')}
               className="flex items-center gap-1 px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
             >
@@ -89,7 +94,7 @@ export default function ExportWithDescriptions({ originalFile }: Props) {
       {step === 'error' && (
         <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-md bg-red-950/40 border border-red-700/40 text-xs text-red-300">
           <span>Error: {errorMsg}</span>
-          <button onClick={() => setStep('idle')} className="text-red-400 hover:text-red-200"><X className="w-3 h-3" /></button>
+          <button type="button" onClick={() => setStep('idle')} className="text-red-400 hover:text-red-200"><X className="w-3 h-3" /></button>
         </div>
       )}
     </div>

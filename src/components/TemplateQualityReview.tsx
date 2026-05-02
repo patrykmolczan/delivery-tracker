@@ -5,7 +5,7 @@ import {
   ChevronsUpDown, ChevronsDownUp, Download
 } from 'lucide-react'
 import type { TemplateQualityResult } from '../lib/templateQualityAnalyzer'
-import { ExportWithDescriptions } from './ExportWithDescriptions'
+import ExportWithDescriptions from './ExportWithDescriptions'
 
 interface Props {
   result: TemplateQualityResult | null
@@ -292,28 +292,32 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
         })()}
       </div>
 
-      {/* ── Toolbar ── */}
-      {totalIssues > 0 && (
-        <div className="flex items-center justify-between px-4 py-2 bg-base-200/40 border-b border-base-300 gap-2">
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={expandAll}
-              className="btn btn-xs btn-ghost gap-1 text-base-content/60 hover:text-base-content"
-            >
-              <ChevronsUpDown className="w-3 h-3" /> Expand all
-            </button>
-            <span className="text-base-content/20 select-none">|</span>
-            <button
-              type="button"
-              onClick={collapseAll}
-              className="btn btn-xs btn-ghost gap-1 text-base-content/60 hover:text-base-content"
-            >
-              <ChevronsDownUp className="w-3 h-3" /> Collapse all
-            </button>
-          </div>
-          <div className="flex items-center gap-1">
-            <ExportWithDescriptions originalFile={originalFile} />
+      {/* ── Toolbar — always shown so Fill Descriptions button is always accessible ── */}
+      <div className="flex items-center justify-between px-4 py-2 bg-base-200/40 border-b border-base-300 gap-2">
+        <div className="flex items-center gap-1">
+          {totalIssues > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={expandAll}
+                className="btn btn-xs btn-ghost gap-1 text-base-content/60 hover:text-base-content"
+              >
+                <ChevronsUpDown className="w-3 h-3" /> Expand all
+              </button>
+              <span className="text-base-content/20 select-none">|</span>
+              <button
+                type="button"
+                onClick={collapseAll}
+                className="btn btn-xs btn-ghost gap-1 text-base-content/60 hover:text-base-content"
+              >
+                <ChevronsDownUp className="w-3 h-3" /> Collapse all
+              </button>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <ExportWithDescriptions originalFile={originalFile} />
+          {totalIssues > 0 && (
             <button
               type="button"
               onClick={() => exportIssuesCSV(result, locationValidationWarnings)}
@@ -321,9 +325,9 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
             >
               <Download className="w-3 h-3" /> Export issues CSV
             </button>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* ── Section 1: Duplicates ── */}
       <div className="border-b border-base-300">

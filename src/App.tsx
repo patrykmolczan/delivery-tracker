@@ -31,6 +31,9 @@ const NAV_ITEMS: Array<{ id: ViewMode; label: string; icon: React.ReactNode; adm
   { id: 'admin', label: 'Admin', icon: <Shield size={16} />, adminOnly: true },
 ]
 
+// Number of rows shown in the dashboard preview table — change this one value to adjust
+const DASHBOARD_TABLE_ROWS = 25
+
 const Dashboard: React.FC = () => {
   const { user, profile, isAdmin, signOut } = useAuth()
   const { logoUrl } = useLogo()
@@ -281,14 +284,14 @@ const Dashboard: React.FC = () => {
                   totalCount={projects.length}
                 />
                 <ProjectTable
-                  projects={sorted.slice(0, 10)}
+                  projects={sorted.slice(0, DASHBOARD_TABLE_ROWS)}
                   sort={sort}
                   onSort={setSort}
                   onSelectProject={setSelectedProject}
                   selectedId={selectedProject?.id || null}
                   countriesMap={countriesMap}
                 />
-                {sorted.length > 10 && (
+                {sorted.length > DASHBOARD_TABLE_ROWS && (
                   <div className="text-center">
                     <button className="btn btn-ghost btn-sm gap-1.5" onClick={() => navigate('table')}>
                       View all {sorted.length} projects <ChevronRight size={14} />

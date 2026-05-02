@@ -15,7 +15,6 @@ import {
   fetchFilterOptions, computeKPIs, filterProjects, sortProjects, fetchAllProjectCountries,
   bulkUpdateProjectStatus
 } from './lib/data'
-import { supabase } from './lib/supabase'
 import { useLogo } from './hooks/useLogo'
 import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode, LookupItem } from './types'
 import {

@@ -636,11 +636,17 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                         <div className="absolute z-50 w-full mt-1 bg-base-100 border border-base-300 rounded-xl shadow-lg max-h-56 overflow-y-auto">
                           {(() => {
                             const q = (clientSearch || '').toLowerCase()
-                            const filtered = clients.filter(c => c.name.toLowerCase().includes(q))
+                            const allFiltered = clients.filter(c => c.name.toLowerCase().includes(q))
+                            const CAP = 50
+                            const filtered = allFiltered.slice(0, CAP)
+                            const hasMore = allFiltered.length > CAP
                             return (
                               <>
-                                {filtered.length === 0 && !q && (
+                                {clients.length === 0 && (
                                   <div className="px-3 py-2 text-xs text-base-content/40">No clients loaded yet</div>
+                                )}
+                                {clients.length > 0 && !q && (
+                                  <div className="px-3 py-2 text-xs text-base-content/40 italic">Type to search {clients.length} clients…</div>
                                 )}
                                 {filtered.map(c => (
                                   <button
@@ -658,7 +664,12 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                                     {c.external_id && <span className="text-xs text-base-content/40 shrink-0">{c.external_id}</span>}
                                   </button>
                                 ))}
-                                {/* Request to add option */}
+                                                          {hasMore && (
+                                  <div className="px-3 py-2 text-xs text-base-content/40 italic">
+                                    {allFiltered.length - CAP} more — type to narrow results
+                                  </div>
+                                )}
+      {/* Request to add option */}
                                 <button
                                   type="button"
                                   className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-primary/10 border-t border-base-300 flex items-center gap-2"

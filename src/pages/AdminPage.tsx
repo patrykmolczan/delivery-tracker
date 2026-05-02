@@ -252,6 +252,8 @@ export const AdminPage: React.FC = () => {
   // Clients
   const [clients, setClients] = useState<Client[]>([])
   const [clientsLoading, setClientsLoading] = useState(true)
+  const [clientSearch, setClientSearch] = useState('')
+  const [clientPage, setClientPage] = useState(0)
   const [clientsError, setClientsError] = useState<string | null>(null)
   const [clientRequests, setClientRequests] = useState<ClientRequest[]>([])
   const [requestsLoading, setRequestsLoading] = useState(true)
@@ -970,11 +972,33 @@ export const AdminPage: React.FC = () => {
           ) : clients.length === 0 ? (
             <p className="text-xs text-base-content/40">No clients yet — add one above or import CSV.</p>
           ) : (
-            <div className="overflow-x-auto max-h-64 overflow-y-auto">
+            <>
+              {/* search + count bar */}
+              <div className="flex items-center gap-2 mb-2">
+                <div className="relative flex-1">
+                  <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-base-content/40" />
+                  <input
+                    className="input input-bordered input-xs w-full pl-7"
+                    placeholder="Search by name or ID…"
+                    value={clientSearch}
+                    onChange={e => { setClientSearch(e.target.value); setClientPage(0) }}
+                  />
+                </div>
+                <span className="text-xs text-base-content/40 shrink-0">
+                  {clients.filter(c => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase()) || (c.external_id || '').toLowerCase().includes(clientSearch.toLowerCase())).length} / {clients.length}
+                </span>
+              </div>
+              <div className="overflow-x-auto max-h-72 overflow-y-auto">
               <table className="table table-xs w-full">
                 <thead className="sticky top-0 bg-base-100 z-10"><tr><th>Name</th><th>Client ID</th><th>Status</th><th></th></tr></thead>
                 <tbody>
-                  {clients.map(c => (
+                  {(() => {
+                    const filtered = clients.filter(c => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase()) || (c.external_id || '').toLowerCase().includes(clientSearch.toLowerCase()))
+                    const PAGE_SIZE = 25
+                    const page = clientPage
+                    const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+                    return paged
+                  })().map(c => (
                     <tr key={c.id} className={!c.is_active ? 'opacity-40' : ''}>
                       {editClientId === c.id ? (
                         <td colSpan={3}>
@@ -1016,7 +1040,26 @@ export const AdminPage: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+              {/* pagination */}
+              {(() => {
+                const filtered = clients.filter(c => !clientSearch || c.name.toLowerCase().includes(clientSearch.toLowerCase()) || (c.external_id || '').toLowerCase().includes(clientSearch.toLowerCase()))
+                const PAGE_SIZE = 25
+                const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+                if (totalPages <= 1) return null
+                return (
+                  <div className="flex items-center justify-between mt-2">
+                    <button className="btn btn-ghost btn-xs" disabled={clientPage === 0} onClick={() => setClientPage(p => p - 1)}>
+                      <ChevronLeft size={12} /> Prev
+                    </button>
+                    <span className="text-xs text-base-content/50">Page {clientPage + 1} of {totalPages}</span>
+                    <button className="btn btn-ghost btn-xs" disabled={clientPage >= totalPages - 1} onClick={() => setClientPage(p => p + 1)}>
+                      Next <ChevronRight size={12} />
+                    </button>
+                  </div>
+                )
+              })()}
+            </>
           )}
           {(() => {
             const pending = clientRequests.filter(r => r.status === 'pending')

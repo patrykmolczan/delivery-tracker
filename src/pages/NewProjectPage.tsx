@@ -9,12 +9,13 @@ import {
   buildLookupMaps, buildPredictionStats, predictDeliveryTime,
   uploadProjectFile, MAX_FILE_SIZE_BYTES, MAX_FILES_PER_PROJECT,
   fetchProjectCountries, fetchProjectTasks, formatFileSize,
-  fetchAnalysts, fetchProjectTypes,
+  fetchAnalysts, fetchProjectTypes, fetchClients, submitClientRequest,
 } from '../lib/data'
 import type {
   LookupItem, Project, ProjectFormData,
   ProjectCountryInput, ProjectTaskInput,
 } from '../types'
+import type { Client } from '../lib/data'
 import type { ProjectType } from '../lib/data'
 import { parseTemplateFile, type DBCountry } from '../lib/templateParser'
 import { analyzeTemplateQuality, type TemplateQualityResult } from '../lib/templateQualityAnalyzer'
@@ -136,6 +137,15 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   // Analysts list
   const [analysts, setAnalysts] = useState<import('../lib/data').Analyst[]>([])
 
+  // Client name list
+  const [clients, setClients] = useState<Client[]>([])
+  const [clientSearch, setClientSearch] = useState('')
+  const [clientDropOpen, setClientDropOpen] = useState(false)
+  const [clientRequestName, setClientRequestName] = useState('')
+  const [clientRequestMode, setClientRequestMode] = useState(false)
+  const [clientRequestSubmitting, setClientRequestSubmitting] = useState(false)
+  const [clientRequestDone, setClientRequestDone] = useState(false)
+
   // Project types list
   const [projectTypes, setProjectTypes] = useState<ProjectType[]>([])
 
@@ -161,10 +171,11 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
 
   // Load lookups
   useEffect(() => {
-    Promise.all([fetchLookups(), fetchProjectTypes()])
-      .then(([lu, pts]) => {
+    Promise.all([fetchLookups(), fetchProjectTypes(), fetchClients()])
+      .then(([lu, pts, cls]) => {
         setLookups(lu)
         setProjectTypes(pts)
+        setClients(cls as Client[])
       })
       .catch(err => {
         setError('Failed to load form options: ' + (err.message || 'Unknown error'))
@@ -602,13 +613,122 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
               <Section icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>} title="Client">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Client Name" required error={errors.client_name}>
-                    <input
-                      className={`input input-bordered w-full ${errors.client_name ? 'input-error' : ''}`}
-                      value={form.client_name}
-                      onChange={e => set('client_name', e.target.value)}
-                      onBlur={() => setTouched(t => ({ ...t, client_name: true }))}
-                      placeholder="e.g. Acme Corp"
-                    />
+                    <div className="relative">
+                      {/* Combobox input */}
+                      <input
+                        className={`input input-bordered w-full ${errors.client_name ? 'input-error' : ''}`}
+                        value={clientSearch || form.client_name}
+                        onChange={e => {
+                          const v = e.target.value
+                          setClientSearch(v)
+                          setClientDropOpen(true)
+                          setClientRequestMode(false)
+                          setClientRequestDone(false)
+                          if (!v) set('client_name', '')
+                        }}
+                        onFocus={() => setClientDropOpen(true)}
+                        onBlur={() => setTimeout(() => setClientDropOpen(false), 150)}
+                        placeholder="Search or type client name…"
+                        autoComplete="off"
+                      />
+                      {/* Dropdown */}
+                      {clientDropOpen && (
+                        <div className="absolute z-50 w-full mt-1 bg-base-100 border border-base-300 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                          {(() => {
+                            const q = (clientSearch || '').toLowerCase()
+                            const filtered = clients.filter(c => c.name.toLowerCase().includes(q))
+                            return (
+                              <>
+                                {filtered.length === 0 && !q && (
+                                  <div className="px-3 py-2 text-xs text-base-content/40">No clients loaded yet</div>
+                                )}
+                                {filtered.map(c => (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-primary/10 flex items-center justify-between gap-2"
+                                    onMouseDown={() => {
+                                      set('client_name', c.name)
+                                      setClientSearch('')
+                                      setClientDropOpen(false)
+                                      setClientRequestMode(false)
+                                    }}
+                                  >
+                                    <span>{c.name}</span>
+                                    {c.external_id && <span className="text-xs text-base-content/40 shrink-0">{c.external_id}</span>}
+                                  </button>
+                                ))}
+                                {/* Request to add option */}
+                                <button
+                                  type="button"
+                                  className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-primary/10 border-t border-base-300 flex items-center gap-2"
+                                  onMouseDown={() => {
+                                    setClientRequestMode(true)
+                                    setClientRequestName(clientSearch)
+                                    setClientDropOpen(false)
+                                  }}
+                                >
+                                  <span>➕</span>
+                                  <span>Can't find your client? <strong>Request to add</strong>{clientSearch ? ` "${clientSearch}"` : ''}</span>
+                                </button>
+                              </>
+                            )
+                          })()}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Selected client display */}
+                    {form.client_name && !clientDropOpen && !clientRequestMode && (
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="badge badge-success badge-sm gap-1">✓ {form.client_name}</span>
+                        <button type="button" className="text-xs text-base-content/40 hover:text-error" onClick={() => { set('client_name', ''); setClientSearch('') }}>change</button>
+                      </div>
+                    )}
+
+                    {/* Request to add flow */}
+                    {clientRequestMode && !clientRequestDone && (
+                      <div className="mt-2 p-3 rounded-lg bg-info/10 border border-info/30 space-y-2">
+                        <p className="text-xs font-semibold text-info">Request to add a new client</p>
+                        <input
+                          className="input input-bordered input-sm w-full"
+                          placeholder="Client name to request…"
+                          value={clientRequestName}
+                          onChange={e => setClientRequestName(e.target.value)}
+                        />
+                        <p className="text-xs text-base-content/50">An admin will review and approve your request. You can continue filling out this form — your project will use this name once approved.</p>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className="btn btn-info btn-xs"
+                            disabled={!clientRequestName.trim() || clientRequestSubmitting || !user}
+                            onClick={async () => {
+                              if (!clientRequestName.trim() || !user) return
+                              setClientRequestSubmitting(true)
+                              try {
+                                await submitClientRequest(clientRequestName.trim(), user.id)
+                                set('client_name', clientRequestName.trim())
+                                setClientRequestDone(true)
+                                setClientRequestMode(false)
+                              } catch { /* ignore */ } finally {
+                                setClientRequestSubmitting(false)
+                              }
+                            }}
+                          >
+                            {clientRequestSubmitting ? <span className="loading loading-spinner loading-xs" /> : 'Submit Request'}
+                          </button>
+                          <button type="button" className="btn btn-ghost btn-xs" onClick={() => { setClientRequestMode(false); setClientRequestName('') }}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Request submitted confirmation */}
+                    {clientRequestDone && (
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="badge badge-info badge-sm gap-1">⏳ Pending: {form.client_name}</span>
+                        <span className="text-xs text-base-content/40">request submitted — you can continue</span>
+                      </div>
+                    )}
                   </Field>
                   <Field label="Client Type">
                     <select

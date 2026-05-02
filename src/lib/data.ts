@@ -1592,3 +1592,150 @@ export async function fetchProjectETAHistory(projectId: string): Promise<Project
     changed_by_name: row.profiles?.full_name || null,
   })) as ProjectETAHistory[]
 }
+
+// ─── Client Name Management ────────────────────────────────────────────────────
+
+export interface Client {
+  id: number
+  name: string
+  external_id: string | null
+  is_active: boolean
+  created_at: string
+}
+
+export interface ClientRequest {
+  id: number
+  requested_name: string
+  requested_by: string
+  status: 'pending' | 'approved' | 'rejected' | 'reassigned'
+  assigned_client_id: number | null
+  notes: string | null
+  created_at: string
+  requester_name?: string | null
+  assigned_client_name?: string | null
+}
+
+export async function fetchClients(): Promise<Client[]> {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('*')
+    .eq('is_active', true)
+    .order('name', { ascending: true })
+  if (error) throw new Error(`Failed to fetch clients: ${error.message}`)
+  return (data || []) as Client[]
+}
+
+export async function fetchAllClients(): Promise<Client[]> {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('*')
+    .order('name', { ascending: true })
+  if (error) throw new Error(`Failed to fetch clients: ${error.message}`)
+  return (data || []) as Client[]
+}
+
+export async function createClient(name: string, externalId?: string): Promise<Client> {
+  const { data, error } = await supabase
+    .from('clients')
+    .insert({ name: name.trim(), external_id: externalId?.trim() || null })
+    .select()
+    .single()
+  if (error) throw new Error(`Failed to create client: ${error.message}`)
+  return data as Client
+}
+
+export async function updateClient(id: number, name: string, externalId?: string): Promise<void> {
+  const { error } = await supabase
+    .from('clients')
+    .update({ name: name.trim(), external_id: externalId?.trim() || null })
+    .eq('id', id)
+  if (error) throw new Error(`Failed to update client: ${error.message}`)
+}
+
+export async function deactivateClient(id: number): Promise<void> {
+  const { error } = await supabase
+    .from('clients')
+    .update({ is_active: false })
+    .eq('id', id)
+  if (error) throw new Error(`Failed to deactivate client: ${error.message}`)
+}
+
+export async function importClients(rows: { name: string; external_id?: string }[]): Promise<{ inserted: number; skipped: number }> {
+  // Fetch existing names (case-insensitive) to skip duplicates
+  const { data: existing } = await supabase.from('clients').select('name')
+  const existingNames = new Set((existing || []).map((c: any) => c.name.toLowerCase()))
+
+  const toInsert = rows
+    .filter(r => r.name.trim() && !existingNames.has(r.name.trim().toLowerCase()))
+    .map(r => ({ name: r.name.trim(), external_id: r.external_id?.trim() || null }))
+
+  if (toInsert.length === 0) return { inserted: 0, skipped: rows.length }
+
+  const { error } = await supabase.from('clients').insert(toInsert)
+  if (error) throw new Error(`Failed to import clients: ${error.message}`)
+
+  return { inserted: toInsert.length, skipped: rows.length - toInsert.length }
+}
+
+export async function submitClientRequest(requestedName: string, requestedBy: string): Promise<ClientRequest> {
+  const { data, error } = await supabase
+    .from('client_requests')
+    .insert({ requested_name: requestedName.trim(), requested_by: requestedBy })
+    .select()
+    .single()
+  if (error) throw new Error(`Failed to submit client request: ${error.message}`)
+  return data as ClientRequest
+}
+
+export async function fetchClientRequests(): Promise<ClientRequest[]> {
+  const { data, error } = await supabase
+    .from('client_requests')
+    .select('*, profiles!requested_by(full_name), clients!assigned_client_id(name)')
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(`Failed to fetch client requests: ${error.message}`)
+  return (data || []).map((row: any) => ({
+    ...row,
+    requester_name: row.profiles?.full_name || null,
+    assigned_client_name: row.clients?.name || null,
+  })) as ClientRequest[]
+}
+
+export async function approveClientRequest(requestId: number, existingClientId?: number): Promise<Client> {
+  // Fetch the request
+  const { data: req, error: reqErr } = await supabase
+    .from('client_requests')
+    .select('*')
+    .eq('id', requestId)
+    .single()
+  if (reqErr || !req) throw new Error('Request not found')
+
+  let client: Client
+  if (existingClientId) {
+    // Reassign to existing client
+    const { data, error } = await supabase.from('clients').select('*').eq('id', existingClientId).single()
+    if (error || !data) throw new Error('Client not found')
+    client = data as Client
+    const { error: updErr } = await supabase
+      .from('client_requests')
+      .update({ status: 'reassigned', assigned_client_id: existingClientId })
+      .eq('id', requestId)
+    if (updErr) throw new Error(`Failed to reassign request: ${updErr.message}`)
+  } else {
+    // Create new client from the request
+    client = await createClient(req.requested_name)
+    const { error: updErr } = await supabase
+      .from('client_requests')
+      .update({ status: 'approved', assigned_client_id: client.id })
+      .eq('id', requestId)
+    if (updErr) throw new Error(`Failed to approve request: ${updErr.message}`)
+  }
+  return client
+}
+
+export async function rejectClientRequest(requestId: number, notes?: string): Promise<void> {
+  const { error } = await supabase
+    .from('client_requests')
+    .update({ status: 'rejected', notes: notes || null })
+    .eq('id', requestId)
+  if (error) throw new Error(`Failed to reject request: ${error.message}`)
+}

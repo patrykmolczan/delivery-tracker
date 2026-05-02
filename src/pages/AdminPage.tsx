@@ -12,8 +12,10 @@ import {
   fetchProjectTypes, createProjectType, updateProjectType, deactivateProjectType,
   fetchNotificationSettings, updateNotificationSetting,
   fetchAppSettings, updateAppSetting,
+  fetchAllClients, createClient, updateClient, deactivateClient, importClients,
+  fetchClientRequests, approveClientRequest, rejectClientRequest,
 } from '../lib/data'
-import type { Analyst, ClientType, ProjectType } from '../lib/data'
+import type { Analyst, ClientType, ProjectType, Client, ClientRequest } from '../lib/data'
 import type { UserProfile } from '../types'
 
 // ─── Reusable inline-editable list section ────────────────────────────────────
@@ -247,6 +249,27 @@ export const AdminPage: React.FC = () => {
   const [ptLoading, setPtLoading] = useState(false)
   const [ptError, setPtError] = useState<string | null>(null)
 
+  // Clients
+  const [clients, setClients] = useState<Client[]>([])
+  const [clientsLoading, setClientsLoading] = useState(true)
+  const [clientsError, setClientsError] = useState<string | null>(null)
+  const [clientRequests, setClientRequests] = useState<ClientRequest[]>([])
+  const [requestsLoading, setRequestsLoading] = useState(true)
+  const [clientCsvFile, setClientCsvFile] = useState<File | null>(null)
+  const [clientCsvImporting, setClientCsvImporting] = useState(false)
+  const [clientCsvResult, setClientCsvResult] = useState<{ inserted: number; skipped: number } | null>(null)
+  const [clientCsvError, setClientCsvError] = useState<string | null>(null)
+  const [newClientName, setNewClientName] = useState('')
+  const [newClientExtId, setNewClientExtId] = useState('')
+  const [addingClient, setAddingClient] = useState(false)
+  const [editClientId, setEditClientId] = useState<number | null>(null)
+  const [editClientName, setEditClientName] = useState('')
+  const [editClientExtId, setEditClientExtId] = useState('')
+  const [savingClient, setSavingClient] = useState(false)
+  const [reassignRequestId, setReassignRequestId] = useState<number | null>(null)
+  const [reassignClientId, setReassignClientId] = useState<string>('')
+  const clientCsvRef = useRef<HTMLInputElement>(null)
+
   // Branding state
   const [currentLogoUrl, setCurrentLogoUrl] = useState<string | null>(null)
   const [logoUploading, setLogoUploading] = useState(false)
@@ -359,6 +382,8 @@ export const AdminPage: React.FC = () => {
     // Analysts
     setAnalystLoading(true)
     fetchAnalysts().then(list => { setAnalysts(list); setAnalystLoading(false) }).catch(e => { setAnalystError(e.message); setAnalystLoading(false) })
+    fetchAllClients().then(list => { setClients(list); setClientsLoading(false) }).catch(e => { setClientsError(e.message); setClientsLoading(false) })
+    fetchClientRequests().then(list => { setClientRequests(list); setRequestsLoading(false) }).catch(() => { setRequestsLoading(false) })
     // Client types
     setCtLoading(true)
     fetchClientTypesAdmin().then(list => { setClientTypes(list); setCtLoading(false) }).catch(e => { setCtError(e.message); setCtLoading(false) })
@@ -869,6 +894,193 @@ export const AdminPage: React.FC = () => {
       </div>
 
       {/* Managed Lists — 3 columns on large screens */}
+      {/* ── Clients Management ──────────────────────────────────────────────── */}
+      <div className="card bg-base-100 border border-base-300 shadow-sm mb-4">
+        <div className="card-body gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users size={18} className="text-primary" />
+              <div>
+                <h3 className="font-semibold text-base-content">Client Names</h3>
+                <p className="text-xs text-base-content/50">Upload CSV or add manually · 2 columns: Name, ID (optional)</p>
+              </div>
+            </div>
+            <span className="badge badge-ghost">{clients.filter(c => c.is_active).length} active</span>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap p-3 bg-base-200 rounded-lg border border-base-300">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">Import from CSV</p>
+              <p className="text-xs text-base-content/50">First column: Client Name · Second column (optional): Client ID · First row = header (skipped)</p>
+            </div>
+            <input ref={clientCsvRef} type="file" accept=".csv" className="hidden"
+              onChange={e => setClientCsvFile(e.target.files?.[0] || null)} />
+            <button type="button" className="btn btn-outline btn-sm gap-1"
+              onClick={() => clientCsvRef.current?.click()}>
+              <Upload size={14} /> {clientCsvFile ? clientCsvFile.name : 'Choose CSV'}
+            </button>
+            <button type="button" className="btn btn-primary btn-sm" disabled={!clientCsvFile || clientCsvImporting}
+              onClick={async () => {
+                if (!clientCsvFile) return
+                setClientCsvImporting(true); setClientCsvResult(null); setClientCsvError(null)
+                try {
+                  const text = await clientCsvFile.text()
+                  const rows = text.split('\n').slice(1).map(line => {
+                    const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim())
+                    return { name: cols[0] || '', external_id: cols[1] || '' }
+                  }).filter(r => r.name)
+                  const result = await importClients(rows)
+                  setClientCsvResult(result); setClientCsvFile(null)
+                  if (clientCsvRef.current) clientCsvRef.current.value = ''
+                  fetchAllClients().then(setClients)
+                } catch (e: any) { setClientCsvError(e.message) } finally { setClientCsvImporting(false) }
+              }}>
+              {clientCsvImporting ? <span className="loading loading-spinner loading-xs" /> : 'Import'}
+            </button>
+          </div>
+          {clientCsvResult && <div className="alert alert-success py-1 px-3 text-xs">Imported {clientCsvResult.inserted} new · {clientCsvResult.skipped} skipped (duplicates)</div>}
+          {clientCsvError && <div className="alert alert-error py-1 px-3 text-xs">{clientCsvError}</div>}
+          <div className="flex gap-2 flex-wrap items-end">
+            <div className="flex-1 min-w-[160px]">
+              <label className="label py-0"><span className="label-text text-xs">Client Name</span></label>
+              <input className="input input-bordered input-sm w-full" placeholder="e.g. Acme Corp"
+                value={newClientName} onChange={e => setNewClientName(e.target.value)} />
+            </div>
+            <div className="w-32">
+              <label className="label py-0"><span className="label-text text-xs">Client ID (opt)</span></label>
+              <input className="input input-bordered input-sm w-full" placeholder="e.g. 1234"
+                value={newClientExtId} onChange={e => setNewClientExtId(e.target.value)} />
+            </div>
+            <button type="button" className="btn btn-primary btn-sm gap-1" disabled={!newClientName.trim() || addingClient}
+              onClick={async () => {
+                if (!newClientName.trim()) return
+                setAddingClient(true)
+                try {
+                  const c = await createClient(newClientName, newClientExtId || undefined)
+                  setClients(prev => [...prev, c].sort((a, b) => a.name.localeCompare(b.name)))
+                  setNewClientName(''); setNewClientExtId('')
+                } catch (e: any) { setClientsError(e.message) } finally { setAddingClient(false) }
+              }}>
+              {addingClient ? <span className="loading loading-spinner loading-xs" /> : <><Plus size={13} /> Add</>}
+            </button>
+          </div>
+          {clientsLoading ? (
+            <div className="flex justify-center py-4"><span className="loading loading-spinner loading-sm" /></div>
+          ) : clientsError ? (
+            <div className="alert alert-error py-1 px-3 text-xs">{clientsError}</div>
+          ) : clients.length === 0 ? (
+            <p className="text-xs text-base-content/40">No clients yet — add one above or import CSV.</p>
+          ) : (
+            <div className="overflow-x-auto max-h-64 overflow-y-auto">
+              <table className="table table-xs w-full">
+                <thead className="sticky top-0 bg-base-100 z-10"><tr><th>Name</th><th>Client ID</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                  {clients.map(c => (
+                    <tr key={c.id} className={!c.is_active ? 'opacity-40' : ''}>
+                      {editClientId === c.id ? (
+                        <td colSpan={3}>
+                          <div className="flex gap-2">
+                            <input className="input input-bordered input-xs flex-1" value={editClientName} onChange={e => setEditClientName(e.target.value)} />
+                            <input className="input input-bordered input-xs w-24" placeholder="ID" value={editClientExtId} onChange={e => setEditClientExtId(e.target.value)} />
+                          </div>
+                        </td>
+                      ) : (
+                        <><td className="font-medium">{c.name}</td><td className="text-base-content/50">{c.external_id || '—'}</td>
+                        <td><span className={`badge badge-xs ${c.is_active ? 'badge-success' : 'badge-ghost'}`}>{c.is_active ? 'Active' : 'Inactive'}</span></td></>
+                      )}
+                      <td>
+                        {editClientId === c.id ? (
+                          <div className="flex gap-1">
+                            <button className="btn btn-success btn-xs" disabled={savingClient} onClick={async () => {
+                              setSavingClient(true)
+                              try {
+                                await updateClient(c.id, editClientName, editClientExtId || undefined)
+                                setClients(prev => prev.map(x => x.id === c.id ? { ...x, name: editClientName, external_id: editClientExtId || null } : x))
+                                setEditClientId(null)
+                              } catch (e: any) { setClientsError(e.message) } finally { setSavingClient(false) }
+                            }}>{savingClient ? <span className="loading loading-spinner loading-xs" /> : <Save size={11} />}</button>
+                            <button className="btn btn-ghost btn-xs" onClick={() => setEditClientId(null)}><X size={11} /></button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-1">
+                            <button className="btn btn-ghost btn-xs" onClick={() => { setEditClientId(c.id); setEditClientName(c.name); setEditClientExtId(c.external_id || '') }}><Edit2 size={11} /></button>
+                            {c.is_active && <button className="btn btn-ghost btn-xs text-error" onClick={async () => {
+                              if (window.confirm('Deactivate "' + c.name + '"?')) {
+                                await deactivateClient(c.id)
+                                setClients(prev => prev.map(x => x.id === c.id ? { ...x, is_active: false } : x))
+                              }
+                            }}><Trash2 size={11} /></button>}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {(() => {
+            const pending = clientRequests.filter(r => r.status === 'pending')
+            if (requestsLoading || pending.length === 0) return null
+            return (
+              <div className="mt-2 border-t border-base-300 pt-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="badge badge-warning badge-sm">{pending.length}</span>
+                  <span className="text-xs font-semibold text-base-content/60 uppercase tracking-wide">Pending Client Requests</span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {pending.map(req => (
+                    <div key={req.id} className="p-3 bg-warning/10 border border-warning/30 rounded-lg">
+                      <div className="flex items-start justify-between gap-2 flex-wrap">
+                        <div>
+                          <p className="text-sm font-semibold">"{req.requested_name}"</p>
+                          <p className="text-xs text-base-content/50">by {req.requester_name || 'Unknown'} · {new Date(req.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex gap-2 items-center flex-wrap">
+                          {reassignRequestId === req.id ? (
+                            <div className="flex gap-2 items-center">
+                              <select className="select select-bordered select-xs" value={reassignClientId} onChange={e => setReassignClientId(e.target.value)}>
+                                <option value="">— Pick existing —</option>
+                                {clients.filter(c => c.is_active).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                              </select>
+                              <button className="btn btn-warning btn-xs" disabled={!reassignClientId} onClick={async () => {
+                                if (!reassignClientId) return
+                                try {
+                                  await approveClientRequest(req.id, parseInt(reassignClientId))
+                                  setClientRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'reassigned' as const } : r))
+                                  fetchAllClients().then(setClients); setReassignRequestId(null)
+                                } catch (e: any) { setClientsError(e.message) }
+                              }}>Reassign</button>
+                              <button className="btn btn-ghost btn-xs" onClick={() => setReassignRequestId(null)}>Cancel</button>
+                            </div>
+                          ) : (
+                            <>
+                              <button className="btn btn-success btn-xs gap-1" onClick={async () => {
+                                try {
+                                  await approveClientRequest(req.id)
+                                  setClientRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved' as const } : r))
+                                  fetchAllClients().then(setClients)
+                                } catch (e: any) { setClientsError(e.message) }
+                              }}><CheckCircle2 size={11} /> Approve</button>
+                              <button className="btn btn-outline btn-xs gap-1" onClick={() => { setReassignRequestId(req.id); setReassignClientId('') }}><RefreshCw size={11} /> Reassign</button>
+                              <button className="btn btn-ghost btn-xs text-error gap-1" onClick={async () => {
+                                if (window.confirm('Reject this request?')) {
+                                  await rejectClientRequest(req.id)
+                                  setClientRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'rejected' as const } : r))
+                                }
+                              }}><X size={11} /> Reject</button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <ManagedList
           title="Analysts"

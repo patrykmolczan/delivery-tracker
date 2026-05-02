@@ -88,17 +88,13 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => { loadData() }, [])
 
-  // SAFARI INACTIVITY SAFETY NET: if loadData() hangs for >12s (common when Supabase
-  // SDK is stuck retrying a failed token refresh after Safari freezes a tab),
-  // check whether the session is still alive. If not, redirect to login so the user
-  // doesn't stare at an infinite "Loading delivery data..." spinner indefinitely.
+  // SAFETY NET: if loadData() hangs for >12s, redirect to login unconditionally.
+  // Do NOT call supabase.auth.getSession() here — it can itself hang when the SDK
+  // is stuck retrying a dead token refresh (exactly the scenario we're trying to escape).
   useEffect(() => {
     if (!loading) return
-    const timer = setTimeout(async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) window.location.href = '/'
-      } catch { /* safe to ignore */ }
+    const timer = setTimeout(() => {
+      window.location.href = '/'
     }, 12000)
     return () => clearTimeout(timer)
   }, [loading])

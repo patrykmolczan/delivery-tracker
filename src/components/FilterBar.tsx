@@ -1,5 +1,5 @@
 import React from 'react'
-import { Search, X, Filter, SlidersHorizontal, ChevronDown } from 'lucide-react'
+import { Search, X, Filter, SlidersHorizontal, ChevronDown, Bookmark } from 'lucide-react'
 import type { FilterState } from '../types'
 
 interface FilterBarProps {
@@ -72,6 +72,13 @@ const MultiSelect: React.FC<MultiSelectProps> = ({ label, value, options, onChan
   )
 }
 
+const PRESETS_KEY = 'dt_filter_presets'
+
+interface Preset {
+  name: string
+  filters: Omit<FilterState, 'search'>
+}
+
 export const FilterBar: React.FC<FilterBarProps> = ({ filters, onChange, options, resultCount, totalCount }) => {
   const [expanded, setExpanded] = React.useState(false)
 
@@ -85,6 +92,30 @@ export const FilterBar: React.FC<FilterBarProps> = ({ filters, onChange, options
     !!filters.dateFrom,
     !!filters.dateTo,
   ].filter(Boolean).length
+
+  const [presets, setPresets] = React.useState<Preset[]>(() => {
+    try { return JSON.parse(localStorage.getItem(PRESETS_KEY) || '[]') }
+    catch { return [] }
+  })
+
+  const savePreset = () => {
+    const name = window.prompt('Name this filter preset:')
+    if (!name?.trim()) return
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { search, ...rest } = filters
+    const newPreset: Preset = { name: name.trim(), filters: rest }
+    const updated = [...presets.filter(p => p.name !== newPreset.name), newPreset]
+    setPresets(updated)
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(updated))
+  }
+
+  const loadPreset = (p: Preset) => onChange({ ...filters, ...p.filters })
+
+  const deletePreset = (name: string) => {
+    const updated = presets.filter(p => p.name !== name)
+    setPresets(updated)
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(updated))
+  }
 
   const clearAll = () => onChange({
     search: '',
@@ -136,6 +167,11 @@ export const FilterBar: React.FC<FilterBarProps> = ({ filters, onChange, options
             <X size={14} /> Clear
           </button>
         )}
+        {expanded && (
+          <button className="btn btn-ghost btn-sm gap-1 text-xs" onClick={savePreset}>
+            <Bookmark size={12} /> Save
+          </button>
+        )}
       </div>
 
       {expanded && (
@@ -160,6 +196,23 @@ export const FilterBar: React.FC<FilterBarProps> = ({ filters, onChange, options
             value={filters.dateTo}
             onChange={e => setStr('dateTo', e.target.value)}
           />
+          {presets.length > 0 && (
+            <div className="col-span-full flex flex-wrap items-center gap-1.5 pt-1 border-t border-base-300/50">
+              <span className="text-[10px] font-semibold text-base-content/40 uppercase tracking-wider">Presets:</span>
+              {presets.map(p => (
+                <div key={p.name} className="flex items-center gap-0.5">
+                  <button
+                    className="badge badge-sm badge-ghost hover:badge-primary cursor-pointer text-xs px-2"
+                    onClick={() => loadPreset(p)}
+                  >{p.name}</button>
+                  <button
+                    className="btn btn-ghost btn-xs btn-circle opacity-40 hover:opacity-100 hover:text-error h-4 min-h-0 w-4"
+                    onClick={() => deletePreset(p.name)}
+                  ><X size={9} /></button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

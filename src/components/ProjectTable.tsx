@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowUpDown, ArrowUp, ArrowDown, Edit2, Globe } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, Edit2, Globe, Loader2 } from 'lucide-react'
 import type { Project, SortState, SortField } from '../types'
 import { formatDate, getStatusColor } from '../lib/data'
 
@@ -14,6 +14,8 @@ interface ProjectTableProps {
   onEdit?: (project: Project) => void
   canEditProject?: (project: Project) => boolean
   countriesMap?: Map<string, string[]>
+  onBulkStatusUpdate?: (ids: string[], statusId: number) => Promise<void>
+  statusOptions?: { id: number; name: string }[]
 }
 
 const ROW_HEIGHT = 44
@@ -131,10 +133,48 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   onEdit,
   canEditProject,
   countriesMap,
+  onBulkStatusUpdate,
+  statusOptions,
 }) => {
   const parentRef = useRef<HTMLDivElement>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [popover, setPopover] = useState<PopoverState | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkStatusId, setBulkStatusId] = useState<number | ''>('')
+  const [bulkApplying, setBulkApplying] = useState(false)
+
+  // Reset selection when projects list changes
+  React.useEffect(() => {
+    setSelectedIds(new Set())
+    setBulkStatusId('')
+  }, [projects])
+
+  const showBulk = !!onBulkStatusUpdate && !!statusOptions && statusOptions.length > 0
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    if (selectedIds.size === projects.length && projects.length > 0) setSelectedIds(new Set())
+    else setSelectedIds(new Set(projects.map(p => p.id)))
+  }
+
+  const handleBulkApply = async () => {
+    if (!onBulkStatusUpdate || !bulkStatusId || selectedIds.size === 0) return
+    setBulkApplying(true)
+    try {
+      await onBulkStatusUpdate([...selectedIds], Number(bulkStatusId))
+      setSelectedIds(new Set())
+      setBulkStatusId('')
+    } catch (e) { console.error(e) }
+    finally { setBulkApplying(false) }
+  }
+
 
   const virtualizer = useVirtualizer({
     count: projects.length,
@@ -187,7 +227,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
     if (hideTimer.current) clearTimeout(hideTimer.current)
   }
 
-  const colCount = columns.length + (onEdit ? 1 : 0)
+  const colCount = columns.length + (onEdit ? 1 : 0) + (showBulk ? 1 : 0)
 
   return (
     <div className="space-y-2">
@@ -220,6 +260,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
           {/* table-fixed + w-full = columns share available width, no horizontal scroll */}
           <table className="table table-sm table-fixed w-full">
             <colgroup>
+              {showBulk && <col style={{ width: '32px' }} />}
               {columns.map(col => (
                 <col key={col.key} style={{ width: COL_WIDTHS[col.key as keyof typeof COL_WIDTHS] }} />
               ))}
@@ -229,6 +270,17 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
             {/* ── Sticky header ─────────────────────────────────────────────── */}
             <thead className="sticky top-0 z-20">
               <tr className="bg-base-300 border-b-2 border-base-content/10">
+                {showBulk && (
+                  <th style={{ width: 32 }} className="px-2 py-3">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-xs checkbox-primary"
+                      checked={selectedIds.size > 0 && selectedIds.size === projects.length}
+                      ref={(el) => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < projects.length }}
+                      onChange={toggleAll}
+                    />
+                  </th>
+                )}
                 {columns.map(col => (
                   <th
                     key={col.key}
@@ -287,6 +339,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                         className={[
                           'cursor-pointer hover:bg-primary/5 transition-colors',
                           selectedId === p.id ? 'bg-primary/10' : '',
+                          isOverdue(p) && selectedId !== p.id ? 'bg-error/5' : '',
                           getRowBorderClass(p.status),
                         ]
                           .filter(Boolean)
@@ -294,6 +347,17 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                         onClick={() => onSelectProject(p)}
                         style={{ height: ROW_HEIGHT }}
                       >
+                        {/* Bulk checkbox */}
+                        {showBulk && (
+                          <td style={{ width: 32 }} onClick={e => e.stopPropagation()} className="px-2">
+                            <input
+                              type="checkbox"
+                              className="checkbox checkbox-xs checkbox-primary"
+                              checked={selectedIds.has(p.id)}
+                              onChange={() => toggleSelect(p.id)}
+                            />
+                          </td>
+                        )}
                         {/* ID # */}
                         <td className="text-base-content/60 font-mono text-xs overflow-hidden">
                           <span className="block truncate">{p.id_number ?? '—'}</span>
@@ -454,6 +518,34 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Bulk action bar */}
+      {showBulk && selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 p-3 bg-primary/10 border border-primary/30 rounded-xl flex-wrap">
+          <span className="text-sm font-semibold text-primary">{selectedIds.size} selected</span>
+          <select
+            className="select select-bordered select-sm bg-base-100 flex-1 min-w-[180px]"
+            value={bulkStatusId}
+            onChange={e => setBulkStatusId(e.target.value ? Number(e.target.value) : '')}
+          >
+            <option value="">Change status to...</option>
+            {statusOptions!.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+          <button
+            className="btn btn-primary btn-sm gap-1.5"
+            disabled={!bulkStatusId || bulkApplying}
+            onClick={handleBulkApply}
+          >
+            {bulkApplying && <Loader2 size={13} className="animate-spin" />}
+            Apply
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())}>
+            Cancel
+          </button>
+        </div>
+      )}
 
       {/* Country hover popover — rendered in document.body via portal */}
       {popover && (

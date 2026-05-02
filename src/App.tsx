@@ -12,11 +12,12 @@ import { ProjectDetail } from './components/ProjectDetail'
 import { Charts } from './components/Charts'
 import {
   fetchProjects, fetchStatusCounts, fetchOwnerCounts, buildLookupMaps, fetchLookups,
-  fetchFilterOptions, computeKPIs, filterProjects, sortProjects, fetchAllProjectCountries
+  fetchFilterOptions, computeKPIs, filterProjects, sortProjects, fetchAllProjectCountries,
+  bulkUpdateProjectStatus
 } from './lib/data'
 import { supabase } from './lib/supabase'
 import { useLogo } from './hooks/useLogo'
-import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode } from './types'
+import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode, LookupItem } from './types'
 import {
   LayoutDashboard, Table2, RefreshCw, LogOut, Truck, Loader2,
   Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon
@@ -52,6 +53,7 @@ const Dashboard: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [countriesMap, setCountriesMap] = useState<Map<string, string[]>>(new Map())
+  const [statusLookups, setStatusLookups] = useState<LookupItem[]>([])
 
   const loadData = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -59,6 +61,7 @@ const Dashboard: React.FC = () => {
     try {
       // Fetch lookups first (tiny, fast), then projects once (no JOINs)
       const lookups = await fetchLookups()
+      setStatusLookups(lookups.statuses)
       const lookupMaps = buildLookupMaps(lookups)
       const [proj, opts] = await Promise.all([
         fetchProjects(lookupMaps),
@@ -114,6 +117,11 @@ const Dashboard: React.FC = () => {
     loadData(true)
     setEditProject(null)
     setView('table')
+  }
+
+  const handleBulkStatusUpdate = async (ids: string[], statusId: number) => {
+    await bulkUpdateProjectStatus(ids, statusId)
+    await loadData(true)
   }
 
   const handleEditProject = (project: Project) => {
@@ -346,6 +354,8 @@ const Dashboard: React.FC = () => {
                 onEdit={handleEditProject}
                 canEditProject={(p) => isAdmin || p.created_by === user?.id}
                 countriesMap={countriesMap}
+                statusOptions={isAdmin ? statusLookups : undefined}
+                onBulkStatusUpdate={isAdmin ? handleBulkStatusUpdate : undefined}
               />
             </div>
           )}

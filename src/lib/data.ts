@@ -344,6 +344,15 @@ export async function updateProjectStatus(
   return { date_delivered: dateDelivered, days_to_complete: daysToComplete }
 }
 
+export async function bulkUpdateProjectStatus(ids: string[], statusId: number): Promise<void> {
+  if (ids.length === 0) return
+  const { error } = await supabase
+    .from('projects')
+    .update({ status_id: statusId, updated_at: new Date().toISOString() })
+    .in('id', ids)
+  if (error) throw error
+}
+
 // ─── Project Countries ─────────────────────────────────────────────────────────
 
 export async function fetchProjectCountries(projectId: string): Promise<ProjectCountry[]> {
@@ -610,11 +619,17 @@ export function computeKPIs(projects: Project[]): KPIData {
   const totalJobs = projects.reduce((s, p) => s + (p.job_count || 0), 0)
   const completionRate = projects.length > 0 ? Math.round((completed.length / projects.length) * 100) : 0
 
+  const now = new Date()
+  const thisMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const deliveredThisMonth = projects.filter(p =>
+    p.date_delivered && p.date_delivered.startsWith(thisMonthStr)
+  ).length
+
   return {
     total: projects.length, active: active.length, completed: completed.length,
     cancelled: cancelled.length, onHold: onHold.length,
     avgDaysToComplete: avgDays, overdue: overdue.length,
-    totalJobs, completionRate,
+    totalJobs, completionRate, deliveredThisMonth,
   }
 }
 

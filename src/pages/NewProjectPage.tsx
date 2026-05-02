@@ -22,6 +22,9 @@ import { TemplateQualityReview } from '../components/TemplateQualityReview'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+/** Minimum quality score to submit a new project. Change this one number to raise/lower the bar. */
+const PASSING_QUALITY_SCORE = 70
+
 
 const EMPTY_FORM: ProjectFormData = {
   project_owner: '',
@@ -728,7 +731,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                     </div>
                   )}
                   {/* AI Quality Review Panel */}
-                  <TemplateQualityReview result={qualityResult} isLoading={isAnalyzing} locationValidationWarnings={parseResult?.locationWarnings ?? []} />
+                  <TemplateQualityReview result={qualityResult} isLoading={isAnalyzing} locationValidationWarnings={parseResult?.locationWarnings ?? []} passingScore={PASSING_QUALITY_SCORE} />
                 </div>
 
                 {/* Country picker row */}
@@ -1097,12 +1100,38 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
         </div>{/* end flex col */}
 
         {/* ── Actions ──────────────────────────────────────────────────────── */}
-        <div className="flex justify-end gap-3 mt-6">
+        {!editProject && (() => {
+          if (!parseResult) return (
+            <div className="flex items-center gap-2 justify-end mt-4 text-xs text-base-content/50">
+              <span>📋 Upload a template file to enable project submission</span>
+            </div>
+          )
+          if (isAnalyzing) return (
+            <div className="flex items-center gap-2 justify-end mt-4 text-xs text-base-content/50">
+              <span className="loading loading-spinner loading-xs" />
+              <span>Analyzing template quality…</span>
+            </div>
+          )
+          if (qualityResult && qualityResult.overallScore !== -1 && qualityResult.overallScore < PASSING_QUALITY_SCORE) return (
+            <div className="flex items-center gap-2 justify-end mt-4 text-xs text-error/80">
+              <span>Quality score {qualityResult.overallScore}/{PASSING_QUALITY_SCORE} — resolve issues above to enable submission</span>
+            </div>
+          )
+          return null
+        })()}
+        <div className="flex justify-end gap-3 mt-2">
           <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>
           <button
             type="submit"
             className={`btn btn-primary gap-2 ${saving ? 'loading' : ''}`}
-            disabled={!isValid || saving || success}
+            disabled={
+              !isValid || saving || success ||
+              (!editProject && (
+                !parseResult ||
+                isAnalyzing ||
+                (qualityResult !== null && qualityResult.overallScore !== -1 && qualityResult.overallScore < PASSING_QUALITY_SCORE)
+              ))
+            }
           >
             {!saving && <Save size={16} />}
             {saving

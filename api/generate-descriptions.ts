@@ -15,8 +15,20 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: 'Missing or empty titles array' })
   }
 
-  // Deduplicate and cap at 50 titles per call
-  const unique: string[] = [...new Set(titles as string[])].slice(0, 50)
+  // Deduplicate, cap at 50, and filter out annotation rows that aren't real job titles
+  const isJobTitle = (t: string) => {
+    const s = t.trim()
+    if (!s || s.length < 3) return false
+    // Skip obvious annotation patterns: contains a colon with location info, or is a single generic word
+    if (/:\s/.test(s)) return false               // e.g. "Rocket City: Huntsville, AL"
+    if (/^(region|category|note|section|group|header|subtotal|total)$/i.test(s)) return false
+    return true
+  }
+  const unique: string[] = [...new Set((titles as string[]).filter(isJobTitle))].slice(0, 50)
+
+  if (unique.length === 0) {
+    return res.status(200).json({ descriptions: {} })
+  }
 
   const systemPrompt = `You are an expert HR compensation analyst writing professional job descriptions for Pay Intel rate card templates used across all industries globally.
 
@@ -53,7 +65,7 @@ Rules:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        max_tokens: 500 * unique.length,
+        max_tokens: Math.max(1500, 600 * unique.length),
       }),
     })
 
@@ -68,9 +80,11 @@ Rules:
 
     let parsed: { descriptions?: Record<string, string> }
     try {
-      parsed = JSON.parse(content)
+      // Strip markdown code fences if model wrapped the JSON (e.g. ```json ... ```)
+      const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+      parsed = JSON.parse(cleaned)
     } catch {
-      return res.status(502).json({ error: 'Invalid JSON from OpenAI' })
+      return res.status(502).json({ error: 'Invalid JSON from OpenAI', raw: content.slice(0, 300) })
     }
 
     return res.status(200).json({ descriptions: parsed.descriptions ?? {} })

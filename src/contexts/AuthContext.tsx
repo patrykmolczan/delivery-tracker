@@ -11,6 +11,7 @@ interface AuthContextType {
   passwordChangeRequired: boolean
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
+  signInWithSSO: (domain: string) => Promise<{ error: Error | null }>
   signOut: () => void
   refreshProfile: () => Promise<void>
 }
@@ -183,6 +184,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error }
   }
 
+  const signInWithSSO = async (domain: string): Promise<{ error: Error | null }> => {
+    try {
+      // signInWithSSO redirects the browser to the identity provider.
+      // On return, Supabase handles the callback and fires onAuthStateChange(SIGNED_IN).
+      const { error } = await (supabase.auth as any).signInWithSSO({ domain })
+      return { error: error as Error | null }
+    } catch (e) {
+      return { error: e as Error }
+    }
+  }
+
   const signOut = () => {
     // SAFARI FIX: Safari blocks navigation that fires after an `await` (async-initiated
     // navigation is suppressed by ITP unless it originates directly from a user gesture).
@@ -213,7 +225,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const passwordChangeRequired = !!(profile?.password_change_required)
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, isAdmin, passwordChangeRequired, loading, signIn, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, isAdmin, passwordChangeRequired, loading, signIn, signInWithSSO, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )

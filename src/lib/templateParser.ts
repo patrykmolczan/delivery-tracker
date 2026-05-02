@@ -575,10 +575,9 @@ function validateAllLocationRows(rows: LocationRowInput[]): string[] {
       // This row fully defines a city within a country+state — record it
       docRegionMap.set(cityL, { country: countryT, state: row.state.trim() })
     }
-    if (countryT && stateL && !WORK_ARRANGEMENT_TERMS.has(stateL)) {
-      // Also record the state term itself (catches state-column region names)
-      docRegionMap.set(stateL, { country: countryT, state: row.state.trim() })
-    }
+    // Note: we intentionally do NOT record stateL here — real state names
+    // (e.g. "California", "Texas") would otherwise appear in docRegionMap and
+    // be mis-identified as region names by the step-4 check below.
   }
 
   // ── Phase 2: Validate each row ───────────────────────────────────────────

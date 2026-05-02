@@ -778,8 +778,13 @@ function parseRateCard(
     const rawCity    = cityColIdx  !== -1 ? String(row[cityColIdx]  ?? '').trim() : ''
     const rawState   = stateColIdx !== -1 ? String(row[stateColIdx] ?? '').trim() : ''
 
-    // Always collect for location validation (even rows with empty country)
-    locationRows.push({ rowNum: i + 1, city: rawCity, state: rawState, country: rawCountry })
+    // Only validate location when at least one location field is present.
+    // Rows where City, State, AND Country are all blank are annotation/metadata
+    // rows (e.g. region-definition labels in the Job Title column) and must be
+    // skipped — there is nothing to validate and no "Missing country" should fire.
+    if (rawCountry || rawState || rawCity) {
+      locationRows.push({ rowNum: i + 1, city: rawCity, state: rawState, country: rawCountry })
+    }
 
     // Country counting — preserve existing behaviour (only rows with country)
     if (!rawCountry) continue

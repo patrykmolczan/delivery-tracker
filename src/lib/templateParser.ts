@@ -29,7 +29,7 @@ export interface TemplateParseResult {
   totalJobs: number
   unmatched: string[]    // raw names that could not be resolved
   parseWarnings: string[]
-  locationWarnings: string[]  // work-arrangement / invalid-state warnings per row
+  locationWarnings: string[]  // location validation warnings per row
 }
 
 // ─── ISO 2-letter → canonical name ──────────────────────────────────────────
@@ -125,7 +125,7 @@ const ALIASES: Record<string, string> = {
   'czech': 'Czech Republic',
   'czechia': 'Czech Republic',
   "cote d'ivoire": 'Ivory Coast',
-  "côte d'ivoire": 'Ivory Coast',
+  "\u00e7\u00f4te d'ivoire": 'Ivory Coast',
   'trinidad': 'Trinidad and Tobago',
   'trinidad & tobago': 'Trinidad and Tobago',
   'trinidad tobago': 'Trinidad and Tobago',
@@ -229,13 +229,273 @@ const ALIASES: Record<string, string> = {
   'zimbabe': 'Zimbabwe',
 }
 
-// ─── Work-arrangement terms that are not valid locations ─────────────────────
+// ─── Pure work-arrangement terms (no geographic meaning) ─────────────────────
+// NOTE: Metro-area/region names (Bay Area, Greater London, etc.) are NOT here —
+// they are resolved via KNOWN_REGIONS below.
 const WORK_ARRANGEMENT_TERMS = new Set([
   'remote', 'hybrid', 'on-site', 'onsite', 'on site', 'wfh',
   'work from home', 'work-from-home', 'telecommute', 'telecommuting',
   'virtual', 'anywhere', 'flexible', 'distributed',
-  'bay area', 'greater bay area', 'tri-state area', 'tri state area',
 ])
+
+// ─── City-state countries (State/Province is not applicable) ─────────────────
+const CITY_STATE_COUNTRIES = new Set([
+  'singapore', 'hong kong', 'macau', 'macao', 'monaco', 'vatican',
+  'city of vatican state', 'holy see',
+])
+
+function isCityStateCountry(country: string): boolean {
+  return CITY_STATE_COUNTRIES.has(country.toLowerCase().trim())
+}
+
+// ─── Known global metro/regional areas → resolved {country, state} ───────────
+// Used to accept region names in City or State columns when they can be
+// unambiguously resolved to a Country + State/Province.
+interface RegionDef { country: string; state: string }
+
+const KNOWN_REGIONS: Record<string, RegionDef> = {
+  // ── United States ──────────────────────────────────────────────────────────
+  'bay area':                { country: 'United States', state: 'California' },
+  'greater bay area':        { country: 'United States', state: 'California' },
+  'silicon valley':          { country: 'United States', state: 'California' },
+  'socal':                   { country: 'United States', state: 'California' },
+  'so cal':                  { country: 'United States', state: 'California' },
+  'southern california':     { country: 'United States', state: 'California' },
+  'northern california':     { country: 'United States', state: 'California' },
+  'norcal':                  { country: 'United States', state: 'California' },
+  'greater los angeles':     { country: 'United States', state: 'California' },
+  'los angeles metro':       { country: 'United States', state: 'California' },
+  'la metro':                { country: 'United States', state: 'California' },
+  'tri-state area':          { country: 'United States', state: 'New York' },
+  'tri state area':          { country: 'United States', state: 'New York' },
+  'greater new york':        { country: 'United States', state: 'New York' },
+  'new york metro':          { country: 'United States', state: 'New York' },
+  'nyc metro':               { country: 'United States', state: 'New York' },
+  'chicagoland':             { country: 'United States', state: 'Illinois' },
+  'greater chicago':         { country: 'United States', state: 'Illinois' },
+  'chicago metro':           { country: 'United States', state: 'Illinois' },
+  'dfw':                     { country: 'United States', state: 'Texas' },
+  'dallas-fort worth':       { country: 'United States', state: 'Texas' },
+  'dallas fort worth':       { country: 'United States', state: 'Texas' },
+  'greater houston':         { country: 'United States', state: 'Texas' },
+  'houston metro':           { country: 'United States', state: 'Texas' },
+  'research triangle':       { country: 'United States', state: 'North Carolina' },
+  'research triangle park':  { country: 'United States', state: 'North Carolina' },
+  'rtp':                     { country: 'United States', state: 'North Carolina' },
+  'dc metro':                { country: 'United States', state: 'Virginia' },
+  'dmv':                     { country: 'United States', state: 'Virginia' },
+  'greater washington':      { country: 'United States', state: 'Virginia' },
+  'washington dc metro':     { country: 'United States', state: 'Virginia' },
+  'greater boston':          { country: 'United States', state: 'Massachusetts' },
+  'boston metro':            { country: 'United States', state: 'Massachusetts' },
+  'greater seattle':         { country: 'United States', state: 'Washington' },
+  'seattle metro':           { country: 'United States', state: 'Washington' },
+  'puget sound':             { country: 'United States', state: 'Washington' },
+  'greater miami':           { country: 'United States', state: 'Florida' },
+  'miami metro':             { country: 'United States', state: 'Florida' },
+  'south florida':           { country: 'United States', state: 'Florida' },
+  'greater denver':          { country: 'United States', state: 'Colorado' },
+  'denver metro':            { country: 'United States', state: 'Colorado' },
+  'front range':             { country: 'United States', state: 'Colorado' },
+  'greater phoenix':         { country: 'United States', state: 'Arizona' },
+  'phoenix metro':           { country: 'United States', state: 'Arizona' },
+  'greater atlanta':         { country: 'United States', state: 'Georgia' },
+  'atlanta metro':           { country: 'United States', state: 'Georgia' },
+  'twin cities':             { country: 'United States', state: 'Minnesota' },
+  'greater minneapolis':     { country: 'United States', state: 'Minnesota' },
+  'metro detroit':           { country: 'United States', state: 'Michigan' },
+  'greater detroit':         { country: 'United States', state: 'Michigan' },
+  'greater portland':        { country: 'United States', state: 'Oregon' },
+  'portland metro':          { country: 'United States', state: 'Oregon' },
+  'greater san diego':       { country: 'United States', state: 'California' },
+  'san diego metro':         { country: 'United States', state: 'California' },
+  // ── Canada ─────────────────────────────────────────────────────────────────
+  'greater toronto area':    { country: 'Canada', state: 'Ontario' },
+  'gta':                     { country: 'Canada', state: 'Ontario' },
+  'greater toronto':         { country: 'Canada', state: 'Ontario' },
+  'metro toronto':           { country: 'Canada', state: 'Ontario' },
+  'greater vancouver':       { country: 'Canada', state: 'British Columbia' },
+  'lower mainland':          { country: 'Canada', state: 'British Columbia' },
+  'metro vancouver':         { country: 'Canada', state: 'British Columbia' },
+  'greater montreal':        { country: 'Canada', state: 'Quebec' },
+  'montreal metro':          { country: 'Canada', state: 'Quebec' },
+  'greater calgary':         { country: 'Canada', state: 'Alberta' },
+  'greater edmonton':        { country: 'Canada', state: 'Alberta' },
+  'ottawa-gatineau':         { country: 'Canada', state: 'Ontario' },
+  // ── UK & Ireland ───────────────────────────────────────────────────────────
+  'greater london':          { country: 'United Kingdom', state: 'England' },
+  'london metro':            { country: 'United Kingdom', state: 'England' },
+  'greater manchester':      { country: 'United Kingdom', state: 'England' },
+  'west midlands':           { country: 'United Kingdom', state: 'England' },
+  'birmingham metro':        { country: 'United Kingdom', state: 'England' },
+  'west yorkshire':          { country: 'United Kingdom', state: 'England' },
+  'south yorkshire':         { country: 'United Kingdom', state: 'England' },
+  'south east england':      { country: 'United Kingdom', state: 'England' },
+  'home counties':           { country: 'United Kingdom', state: 'England' },
+  'greater glasgow':         { country: 'United Kingdom', state: 'Scotland' },
+  'scottish central belt':   { country: 'United Kingdom', state: 'Scotland' },
+  'greater edinburgh':       { country: 'United Kingdom', state: 'Scotland' },
+  'greater dublin':          { country: 'Ireland', state: 'Leinster' },
+  // ── Germany ────────────────────────────────────────────────────────────────
+  'rhine-ruhr':              { country: 'Germany', state: 'North Rhine-Westphalia' },
+  'rhein-ruhr':              { country: 'Germany', state: 'North Rhine-Westphalia' },
+  'ruhr area':               { country: 'Germany', state: 'North Rhine-Westphalia' },
+  'ruhr':                    { country: 'Germany', state: 'North Rhine-Westphalia' },
+  'greater berlin':          { country: 'Germany', state: 'Berlin' },
+  'berlin metro':            { country: 'Germany', state: 'Berlin' },
+  'greater munich':          { country: 'Germany', state: 'Bavaria' },
+  'munich metro':            { country: 'Germany', state: 'Bavaria' },
+  'greater hamburg':         { country: 'Germany', state: 'Hamburg' },
+  'hamburg metro':           { country: 'Germany', state: 'Hamburg' },
+  'rhine-main':              { country: 'Germany', state: 'Hesse' },
+  'frankfurt metro':         { country: 'Germany', state: 'Hesse' },
+  // ── France ─────────────────────────────────────────────────────────────────
+  '\u00eele-de-france':      { country: 'France', state: '\u00cele-de-France' },
+  'ile-de-france':           { country: 'France', state: '\u00cele-de-France' },
+  'greater paris':           { country: 'France', state: '\u00cele-de-France' },
+  'paris metro':             { country: 'France', state: '\u00cele-de-France' },
+  // ── Netherlands ────────────────────────────────────────────────────────────
+  'randstad':                { country: 'Netherlands', state: 'North Holland' },
+  'greater amsterdam':       { country: 'Netherlands', state: 'North Holland' },
+  // ── Belgium ────────────────────────────────────────────────────────────────
+  'brussels metro':          { country: 'Belgium', state: 'Brussels' },
+  'brussels capital':        { country: 'Belgium', state: 'Brussels' },
+  // ── Switzerland ────────────────────────────────────────────────────────────
+  'zurich metro':            { country: 'Switzerland', state: 'Zurich' },
+  'greater zurich':          { country: 'Switzerland', state: 'Zurich' },
+  // ── Austria ────────────────────────────────────────────────────────────────
+  'vienna metro':            { country: 'Austria', state: 'Vienna' },
+  'greater vienna':          { country: 'Austria', state: 'Vienna' },
+  // ── Spain ──────────────────────────────────────────────────────────────────
+  'greater madrid':          { country: 'Spain', state: 'Community of Madrid' },
+  'madrid metro':            { country: 'Spain', state: 'Community of Madrid' },
+  'greater barcelona':       { country: 'Spain', state: 'Catalonia' },
+  'barcelona metro':         { country: 'Spain', state: 'Catalonia' },
+  // ── Italy ──────────────────────────────────────────────────────────────────
+  'greater milan':           { country: 'Italy', state: 'Lombardy' },
+  'milan metro':             { country: 'Italy', state: 'Lombardy' },
+  'greater rome':            { country: 'Italy', state: 'Lazio' },
+  // ── Portugal ───────────────────────────────────────────────────────────────
+  'greater lisbon':          { country: 'Portugal', state: 'Lisbon' },
+  'lisbon metro':            { country: 'Portugal', state: 'Lisbon' },
+  // ── Poland ─────────────────────────────────────────────────────────────────
+  'greater warsaw':          { country: 'Poland', state: 'Masovian' },
+  'warsaw metro':            { country: 'Poland', state: 'Masovian' },
+  // ── Czech Republic ─────────────────────────────────────────────────────────
+  'greater prague':          { country: 'Czech Republic', state: 'Prague' },
+  'prague metro':            { country: 'Czech Republic', state: 'Prague' },
+  // ── Hungary ────────────────────────────────────────────────────────────────
+  'greater budapest':        { country: 'Hungary', state: 'Budapest' },
+  // ── Romania ────────────────────────────────────────────────────────────────
+  'greater bucharest':       { country: 'Romania', state: 'Ilfov' },
+  // ── Greece ─────────────────────────────────────────────────────────────────
+  'greater athens':          { country: 'Greece', state: 'Attica' },
+  'athens metro':            { country: 'Greece', state: 'Attica' },
+  // ── Turkey ─────────────────────────────────────────────────────────────────
+  'greater istanbul':        { country: 'Turkey', state: 'Istanbul' },
+  'istanbul metro':          { country: 'Turkey', state: 'Istanbul' },
+  // ── Nordics ────────────────────────────────────────────────────────────────
+  'greater stockholm':       { country: 'Sweden', state: 'Stockholm' },
+  'stockholm metro':         { country: 'Sweden', state: 'Stockholm' },
+  'greater oslo':            { country: 'Norway', state: 'Oslo' },
+  'greater copenhagen':      { country: 'Denmark', state: 'Capital Region' },
+  'copenhagen metro':        { country: 'Denmark', state: 'Capital Region' },
+  'greater helsinki':        { country: 'Finland', state: 'Uusimaa' },
+  // ── Australia ──────────────────────────────────────────────────────────────
+  'greater sydney':          { country: 'Australia', state: 'New South Wales' },
+  'sydney metro':            { country: 'Australia', state: 'New South Wales' },
+  'greater melbourne':       { country: 'Australia', state: 'Victoria' },
+  'melbourne metro':         { country: 'Australia', state: 'Victoria' },
+  'greater brisbane':        { country: 'Australia', state: 'Queensland' },
+  'brisbane metro':          { country: 'Australia', state: 'Queensland' },
+  'greater perth':           { country: 'Australia', state: 'Western Australia' },
+  'greater adelaide':        { country: 'Australia', state: 'South Australia' },
+  // ── New Zealand ────────────────────────────────────────────────────────────
+  'greater auckland':        { country: 'New Zealand', state: 'Auckland' },
+  'auckland metro':          { country: 'New Zealand', state: 'Auckland' },
+  // ── India ──────────────────────────────────────────────────────────────────
+  'delhi ncr':               { country: 'India', state: 'Delhi' },
+  'ncr':                     { country: 'India', state: 'Delhi' },
+  'national capital region': { country: 'India', state: 'Delhi' },
+  'greater mumbai':          { country: 'India', state: 'Maharashtra' },
+  'mumbai metro':            { country: 'India', state: 'Maharashtra' },
+  'mumbai metropolitan':     { country: 'India', state: 'Maharashtra' },
+  'greater bangalore':       { country: 'India', state: 'Karnataka' },
+  'bengaluru metro':         { country: 'India', state: 'Karnataka' },
+  'bangalore metro':         { country: 'India', state: 'Karnataka' },
+  'greater hyderabad':       { country: 'India', state: 'Telangana' },
+  'hyderabad metro':         { country: 'India', state: 'Telangana' },
+  'greater chennai':         { country: 'India', state: 'Tamil Nadu' },
+  'chennai metro':           { country: 'India', state: 'Tamil Nadu' },
+  'greater kolkata':         { country: 'India', state: 'West Bengal' },
+  'greater pune':            { country: 'India', state: 'Maharashtra' },
+  // ── China ──────────────────────────────────────────────────────────────────
+  'greater beijing':         { country: 'China', state: 'Beijing' },
+  'beijing metro':           { country: 'China', state: 'Beijing' },
+  'greater shanghai':        { country: 'China', state: 'Shanghai' },
+  'shanghai metro':          { country: 'China', state: 'Shanghai' },
+  'pearl river delta':       { country: 'China', state: 'Guangdong' },
+  'greater guangzhou':       { country: 'China', state: 'Guangdong' },
+  'greater shenzhen':        { country: 'China', state: 'Guangdong' },
+  // ── Japan ──────────────────────────────────────────────────────────────────
+  'greater tokyo':           { country: 'Japan', state: 'Tokyo' },
+  'tokyo metro':             { country: 'Japan', state: 'Tokyo' },
+  'kanto':                   { country: 'Japan', state: 'Tokyo' },
+  'keihanshin':              { country: 'Japan', state: 'Osaka' },
+  'greater osaka':           { country: 'Japan', state: 'Osaka' },
+  // ── South Korea ────────────────────────────────────────────────────────────
+  'greater seoul':           { country: 'South Korea', state: 'Seoul' },
+  'seoul metro':             { country: 'South Korea', state: 'Seoul' },
+  'seoul capital area':      { country: 'South Korea', state: 'Seoul' },
+  // ── Southeast Asia ─────────────────────────────────────────────────────────
+  'greater jakarta':         { country: 'Indonesia', state: 'Jakarta' },
+  'jabodetabek':             { country: 'Indonesia', state: 'Jakarta' },
+  'metro manila':            { country: 'Philippines', state: 'Metro Manila' },
+  'greater manila':          { country: 'Philippines', state: 'Metro Manila' },
+  'klang valley':            { country: 'Malaysia', state: 'Selangor' },
+  'greater kuala lumpur':    { country: 'Malaysia', state: 'Kuala Lumpur' },
+  'greater bangkok':         { country: 'Thailand', state: 'Bangkok' },
+  'bangkok metro':           { country: 'Thailand', state: 'Bangkok' },
+  // ── Middle East ────────────────────────────────────────────────────────────
+  'greater dubai':           { country: 'UAE', state: 'Dubai' },
+  'dubai metro':             { country: 'UAE', state: 'Dubai' },
+  'greater abu dhabi':       { country: 'UAE', state: 'Abu Dhabi' },
+  'riyadh metro':            { country: 'Saudi Arabia', state: 'Riyadh' },
+  'greater tel aviv':        { country: 'Israel', state: 'Tel Aviv' },
+  'gush dan':                { country: 'Israel', state: 'Tel Aviv' },
+  'tel aviv metro':          { country: 'Israel', state: 'Tel Aviv' },
+  // ── Pakistan ───────────────────────────────────────────────────────────────
+  'greater karachi':         { country: 'Pakistan', state: 'Sindh' },
+  'greater lahore':          { country: 'Pakistan', state: 'Punjab' },
+  // ── Bangladesh ─────────────────────────────────────────────────────────────
+  'dhaka metro':             { country: 'Bangladesh', state: 'Dhaka' },
+  // ── Africa ─────────────────────────────────────────────────────────────────
+  'greater nairobi':         { country: 'Kenya', state: 'Nairobi' },
+  'greater lagos':           { country: 'Nigeria', state: 'Lagos' },
+  'greater accra':           { country: 'Ghana', state: 'Greater Accra' },
+  'greater johannesburg':    { country: 'South Africa', state: 'Gauteng' },
+  'cape town metro':         { country: 'South Africa', state: 'Western Cape' },
+  'greater cape town':       { country: 'South Africa', state: 'Western Cape' },
+  'greater cairo':           { country: 'Egypt', state: 'Cairo' },
+  'greater casablanca':      { country: 'Morocco', state: 'Grand Casablanca-Settat' },
+  // ── South America ──────────────────────────────────────────────────────────
+  'greater sao paulo':       { country: 'Brazil', state: 'S\u00e3o Paulo' },
+  'sao paulo metro':         { country: 'Brazil', state: 'S\u00e3o Paulo' },
+  'greater rio de janeiro':  { country: 'Brazil', state: 'Rio de Janeiro' },
+  'rio metro':               { country: 'Brazil', state: 'Rio de Janeiro' },
+  'greater buenos aires':    { country: 'Argentina', state: 'Buenos Aires Province' },
+  'bogota metro':            { country: 'Colombia', state: 'Bogot\u00e1 D.C.' },
+  'greater bogota':          { country: 'Colombia', state: 'Bogot\u00e1 D.C.' },
+  'lima metro':              { country: 'Peru', state: 'Lima' },
+  'greater lima':            { country: 'Peru', state: 'Lima' },
+  'greater santiago':        { country: 'Chile', state: 'Santiago Metropolitan' },
+  'santiago metro':          { country: 'Chile', state: 'Santiago Metropolitan' },
+  // ── Mexico ─────────────────────────────────────────────────────────────────
+  'greater mexico city':     { country: 'Mexico', state: 'Mexico City' },
+  'cdmx metro':              { country: 'Mexico', state: 'Mexico City' },
+  'guadalajara metro':       { country: 'Mexico', state: 'Jalisco' },
+  'monterrey metro':         { country: 'Mexico', state: 'Nuevo Le\u00f3n' },
+}
 
 // ─── Valid US state names & abbreviations (lowercase keys) ───────────────────
 const US_STATES: Record<string, string> = {
@@ -269,29 +529,124 @@ function isUSCountry(raw: string): boolean {
   return v === 'US' || v === 'USA' || v === 'UNITED STATES' || v === 'U.S.' || v === 'U.S.A.' || v === 'AMERICA'
 }
 
-function validateLocationRow(
-  rowNum: number,
-  city: string,
-  state: string,
-  country: string,
+// ─── Region resolution ───────────────────────────────────────────────────────
+// Returns a RegionDef if the term is a known global region (hardcoded map),
+// or if it appears elsewhere in the document with Country + State context.
+function resolveRegion(
+  term: string,
+  docRegionMap: Map<string, RegionDef>
+): RegionDef | null {
+  const lower = term.toLowerCase().trim()
+  if (KNOWN_REGIONS[lower]) return KNOWN_REGIONS[lower]
+  if (docRegionMap.has(lower)) return docRegionMap.get(lower)!
+  return null
+}
+
+// ─── Document-level location validation ──────────────────────────────────────
+// Validates all location rows as a unit so that region names found anywhere in
+// the document can provide context for other rows in the same file.
+//
+// Rules:
+//   • Country is required (can be satisfied by resolving a region in City/State)
+//   • State/Province is required unless the country is a city-state or the
+//     City column resolves to a known region that provides the state
+//   • City is optional (bonus)
+//   • Work-arrangement terms (remote, hybrid, etc.) are always flagged
+//   • Known region names (Bay Area, Greater London, etc.) are accepted when they
+//     resolve to Country + State via hardcoded map or document context
+
+interface LocationRowInput {
+  rowNum: number
+  city: string
+  state: string
+  country: string
+}
+
+function validateAllLocationRows(rows: LocationRowInput[]): string[] {
+  // ── Phase 1: Build document context ─────────────────────────────────────
+  // Collect (city_term → {country, state}) from rows that have full context,
+  // so those terms can resolve ambiguous rows elsewhere in the document.
+  const docRegionMap = new Map<string, RegionDef>()
+  for (const row of rows) {
+    const cityL  = row.city.trim().toLowerCase()
+    const stateL = row.state.trim().toLowerCase()
+    const countryT = row.country.trim()
+    if (countryT && stateL && cityL && !WORK_ARRANGEMENT_TERMS.has(cityL)) {
+      // This row fully defines a city within a country+state — record it
+      docRegionMap.set(cityL, { country: countryT, state: row.state.trim() })
+    }
+    if (countryT && stateL && !WORK_ARRANGEMENT_TERMS.has(stateL)) {
+      // Also record the state term itself (catches state-column region names)
+      docRegionMap.set(stateL, { country: countryT, state: row.state.trim() })
+    }
+  }
+
+  // ── Phase 2: Validate each row ───────────────────────────────────────────
+  const warnings: string[] = []
+  for (const row of rows) {
+    warnings.push(...validateSingleRow(row, docRegionMap))
+  }
+  return warnings
+}
+
+function validateSingleRow(
+  row: LocationRowInput,
+  docRegionMap: Map<string, RegionDef>
 ): string[] {
   const warnings: string[] = []
-  const cityL = city.toLowerCase().trim()
-  const stateL = state.toLowerCase().trim()
+  const cityL    = row.city.trim().toLowerCase()
+  const stateL   = row.state.trim().toLowerCase()
+  const countryT = row.country.trim()
 
-  // Flag work-arrangement terms in City
+  // Resolve any region terms present in city or state columns
+  const cityRegion  = cityL  && !WORK_ARRANGEMENT_TERMS.has(cityL)  ? resolveRegion(cityL, docRegionMap)  : null
+  const stateRegion = stateL && !WORK_ARRANGEMENT_TERMS.has(stateL) ? resolveRegion(stateL, docRegionMap) : null
+
+  // ── 1. Work-arrangement terms ────────────────────────────────────────────
   if (cityL && WORK_ARRANGEMENT_TERMS.has(cityL)) {
-    warnings.push(`Row ${rowNum}: City column contains "${city}" — this is a work arrangement, not a city. Please enter a real city name or leave blank.`)
+    warnings.push(
+      `Row ${row.rowNum}: City column contains "${row.city}" — this is a work-arrangement term, not a location. ` +
+      `Please enter a real city name.`
+    )
   }
-
-  // Flag work-arrangement terms in State
   if (stateL && WORK_ARRANGEMENT_TERMS.has(stateL)) {
-    warnings.push(`Row ${rowNum}: State column contains "${state}" — this is a work arrangement, not a state. Please enter a real state/province or leave blank.`)
+    warnings.push(
+      `Row ${row.rowNum}: State/Province column contains "${row.state}" — this is a work-arrangement term, not a location. ` +
+      `Please enter a valid state, province, or administrative region.`
+    )
   }
 
-  // Validate US states
-  if (stateL && country && isUSCountry(country) && !US_STATES[stateL]) {
-    warnings.push(`Row ${rowNum}: State "${state}" is not a recognised US state. Please enter a valid state name or abbreviation.`)
+  // ── 2. Country required ──────────────────────────────────────────────────
+  // A row is ok if it has an explicit Country OR a city/state term that
+  // resolves unambiguously to a country via hardcoded map / document context.
+  const effectiveCountry = countryT || cityRegion?.country || stateRegion?.country || ''
+  if (!effectiveCountry) {
+    warnings.push(
+      `Row ${row.rowNum}: Country is required — please enter a valid country name.`
+    )
+  }
+
+  // ── 3. State / Province required ────────────────────────────────────────
+  // Skip for city-state countries (Singapore, Hong Kong, etc.).
+  // A region term in the City column that resolves to a state satisfies this.
+  if (!WORK_ARRANGEMENT_TERMS.has(stateL)) {
+    const effectiveState = stateL || cityRegion?.state || stateRegion?.state || ''
+    if (!effectiveState && !isCityStateCountry(effectiveCountry)) {
+      warnings.push(
+        `Row ${row.rowNum}: State/Province is required — please enter a valid state, province, or administrative region.`
+      )
+    }
+  }
+
+  // ── 4. US state validation ───────────────────────────────────────────────
+  // Only run when the effective country is USA and the state column has a value
+  // that is not a known region (which would have already resolved it above).
+  if (stateL && !WORK_ARRANGEMENT_TERMS.has(stateL) && !stateRegion) {
+    if (isUSCountry(effectiveCountry) && !US_STATES[stateL]) {
+      warnings.push(
+        `Row ${row.rowNum}: State "${row.state}" is not a recognised US state name or abbreviation.`
+      )
+    }
   }
 
   return warnings
@@ -399,10 +754,10 @@ function parseRateCard(
 
   // Find column indices from header row
   const headerRow = (rows[0] as string[]).map(h => String(h).trim().toLowerCase())
-  const countryColIdx = headerRow.findIndex(h => h.includes('country'))
+  const countryColIdx  = headerRow.findIndex(h => h.includes('country'))
   const jobTitleColIdx = headerRow.findIndex(h => h.includes('job title'))
-  const stateColIdx = headerRow.findIndex(h => h === 'state' || h.includes('state/province'))
-  const cityColIdx = headerRow.findIndex(h => h === 'city' || h.includes('city'))
+  const stateColIdx    = headerRow.findIndex(h => h === 'state' || h.includes('state/province'))
+  const cityColIdx     = headerRow.findIndex(h => h === 'city' || h.includes('city'))
 
   if (countryColIdx === -1) {
     return { countries: [], totalJobs: 0, unmatched: [], parseWarnings: ['Could not find "Country" column in Rate Request sheet.'], locationWarnings: [] }
@@ -410,23 +765,30 @@ function parseRateCard(
 
   const countryCounts: Record<string, number> = {}
   let totalJobs = 0
-  const locationWarnings: string[] = []
+
+  // ── Collect all data rows for document-level location validation ──────────
+  const locationRows: LocationRowInput[] = []
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i] as unknown[]
     const jobTitle = jobTitleColIdx !== -1 ? String(row[jobTitleColIdx] ?? '').trim() : 'x'
-    if (!jobTitle) continue
+    if (!jobTitle) continue  // skip empty rows
+
     const rawCountry = String(row[countryColIdx] ?? '').trim()
+    const rawCity    = cityColIdx  !== -1 ? String(row[cityColIdx]  ?? '').trim() : ''
+    const rawState   = stateColIdx !== -1 ? String(row[stateColIdx] ?? '').trim() : ''
+
+    // Always collect for location validation (even rows with empty country)
+    locationRows.push({ rowNum: i + 1, city: rawCity, state: rawState, country: rawCountry })
+
+    // Country counting — preserve existing behaviour (only rows with country)
     if (!rawCountry) continue
     countryCounts[rawCountry] = (countryCounts[rawCountry] ?? 0) + 1
     totalJobs++
-
-    // Validate city & state
-    const rawCity = cityColIdx !== -1 ? String(row[cityColIdx] ?? '').trim() : ''
-    const rawState = stateColIdx !== -1 ? String(row[stateColIdx] ?? '').trim() : ''
-    const rowWarnings = validateLocationRow(i + 1, rawCity, rawState, rawCountry)
-    locationWarnings.push(...rowWarnings)
   }
+
+  // Run document-level validation (all rows scanned together)
+  const locationWarnings = validateAllLocationRows(locationRows)
 
   const result = buildResult(countryCounts, totalJobs, dbCountries)
   result.locationWarnings = locationWarnings
@@ -480,7 +842,7 @@ function parseMagnitVMS(
 
   const headerRow = (rows[headerRowIdx] as string[]).map(h => String(h).trim().toLowerCase())
   const jobTitleColIdx = headerRow.findIndex(h => h.includes('job title'))
-  const countryColIdx = headerRow.findIndex(h => h.includes('country'))
+  const countryColIdx  = headerRow.findIndex(h => h.includes('country'))
 
   let totalJobs = 0
   const countryCounts: Record<string, number> = {}

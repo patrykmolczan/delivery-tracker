@@ -5,7 +5,7 @@ import {
   ChevronsUpDown, ChevronsDownUp, Download
 } from 'lucide-react'
 import type { TemplateQualityResult } from '../lib/templateQualityAnalyzer'
-import { ExportWithDescriptions } from './ExportWithDescriptions'
+import ExportWithDescriptions from './ExportWithDescriptions'
 
 interface Props {
   result: TemplateQualityResult | null
@@ -313,7 +313,7 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
             </button>
           </div>
           <div className="flex items-center gap-1">
-            <ExportWithDescriptions originalFile={originalFile} />
+            {originalFile && <ExportWithDescriptions originalFile={originalFile} />}
             <button
               type="button"
               onClick={() => exportIssuesCSV(result, locationValidationWarnings)}

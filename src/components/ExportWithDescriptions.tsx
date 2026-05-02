@@ -21,7 +21,7 @@ export default function ExportWithDescriptions({ originalFile }: Props) {
     setStep('loading')
     try {
       const descriptions = await generateDescriptions(uniqueTitles)
-      const blob = await buildExcelWithDescriptions(originalFile, missingRows, descriptions)
+      const blob = await buildExcelWithDescriptions(originalFile, descriptions)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -35,7 +35,7 @@ export default function ExportWithDescriptions({ originalFile }: Props) {
       setErrorMsg(e instanceof Error ? e.message : 'Unknown error')
       setStep('error')
     }
-  }, [originalFile, missingRows, uniqueTitles])
+  }, [originalFile, uniqueTitles])
 
   if (missingRows.length === 0) return null
 

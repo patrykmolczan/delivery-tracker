@@ -1,4 +1,12 @@
 import { supabase } from './supabase'
+
+// ─── Input sanitization (XSS defense-in-depth) ───────────────────────────────
+// Strips HTML tags from user-supplied text before persisting to the database.
+// React already auto-escapes JSX output, but we sanitize at write time too.
+function sanitizeText(val: string | null | undefined): string | null {
+  if (val == null || val === '') return null
+  return String(val).replace(/<[^>]*>/g, '').trim() || null
+}
 import type {
   Project, KPIData, StatusCount, OwnerCount, FilterState, SortState,
   LookupItem, ProjectFormData, ProjectCountry, ProjectCountryInput, ProjectTask,
@@ -188,15 +196,15 @@ export async function createProject(
   eta?: { estimate: number; confidence: string; breakdown: string } | null
 ): Promise<Project> {
   const insertData: any = {
-    project_owner: form.project_owner,
-    analyst: form.analyst || null,
+    project_owner: sanitizeText(form.project_owner) ?? form.project_owner,
+    analyst: sanitizeText(form.analyst),
     client_type_id: form.client_type_id,
-    client_name: form.client_name,
-    requestor: form.requestor || null,
+    client_name: sanitizeText(form.client_name) ?? form.client_name,
+    requestor: sanitizeText(form.requestor),
     date_received: form.date_received,
     expected_delivery_date: form.expected_delivery_date || null,
     date_delivered: form.date_delivered || null,
-    project_summary: form.project_summary || null,
+    project_summary: sanitizeText(form.project_summary),
     job_count: form.job_count ? parseInt(form.job_count) : null,
     status_id: form.status_id,
     country_id: form.project_countries.length > 0
@@ -280,15 +288,15 @@ export async function createProject(
 
 export async function updateProject(id: string, form: ProjectFormData): Promise<void> {
   const updateData: any = {
-    project_owner: form.project_owner,
-    analyst: form.analyst || null,
+    project_owner: sanitizeText(form.project_owner) ?? form.project_owner,
+    analyst: sanitizeText(form.analyst),
     client_type_id: form.client_type_id,
-    client_name: form.client_name,
-    requestor: form.requestor || null,
+    client_name: sanitizeText(form.client_name) ?? form.client_name,
+    requestor: sanitizeText(form.requestor),
     date_received: form.date_received,
     expected_delivery_date: form.expected_delivery_date || null,
     date_delivered: form.date_delivered || null,
-    project_summary: form.project_summary || null,
+    project_summary: sanitizeText(form.project_summary),
     job_count: form.job_count ? parseInt(form.job_count) : null,
     status_id: form.status_id,
     country_id: form.project_countries.length > 0

@@ -1,5 +1,17 @@
 const APP_URL = process.env.VITE_APP_URL || 'https://delivery-tracker-ashen.vercel.app'
 
+// ─── HTML escape (XSS defense) ───────────────────────────────────────────────
+// All user-supplied values interpolated into email HTML must go through this.
+function escapeHtml(val: string | null | undefined): string {
+  if (val == null) return ''
+  return String(val)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+}
+
 async function getLogoUrl(): Promise<string> {
   try {
     const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://slgtojndmckisjdplhcs.supabase.co'
@@ -116,7 +128,7 @@ function detailRow(label: string, value: string | null | undefined, last = false
       <span style="font-size:11px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:0.8px;">${label}</span>
     </td>
     <td valign="top" style="padding:11px 0;${last ? '' : `border-bottom:1px solid ${BORDER};`}">
-      <span style="font-size:14px;color:${BRAND};font-weight:500;">${value}</span>
+      <span style="font-size:14px;color:${BRAND};font-weight:500;">${escapeHtml(value)}</span>
     </td>
   </tr>`
 }
@@ -148,7 +160,7 @@ function statusPill(status: string): string {
   const s = STATUS_STYLES[status] || { bg: '#F1F5F9', text: '#475569', dot: '#94A3B8' }
   return `<span style="display:inline-flex;align-items:center;gap:6px;background-color:${s.bg};color:${s.text};font-size:13px;font-weight:600;padding:6px 16px;border-radius:100px;white-space:nowrap;">
     <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background-color:${s.dot};"></span>
-    ${status}
+    ${escapeHtml(status)}
   </span>`
 }
 
@@ -234,8 +246,8 @@ export async function buildCompletionEmail(to: string, project: any): Promise<Em
           <tr>
             <td>
               <p style="margin:0;font-size:14px;color:${GREY};line-height:1.7;">
-                Your project for <strong style="color:${BRAND};">${project.client_name || 'your organization'}</strong> has been completed and is ready for review.
-                ${project.analyst ? `It was handled by <strong style="color:${BRAND};">${project.analyst}</strong>.` : ''}
+                Your project for <strong style="color:${BRAND};">${escapeHtml(project.client_name) || 'your organization'}</strong> has been completed and is ready for review.
+                ${project.analyst ? `It was handled by <strong style="color:${BRAND};">${escapeHtml(project.analyst)}</strong>.` : ''}
               </p>
             </td>
           </tr>
@@ -302,7 +314,7 @@ export async function buildCompletionEmail(to: string, project: any): Promise<Em
 
   return {
     to,
-    subject: `Project complete — ${project.client_name || 'Your project'}`,
+    subject: `Project complete — ${escapeHtml(project.client_name) || 'Your project'}`,
     html: shell(logoUrl, GREEN, content),
   }
 }
@@ -323,8 +335,8 @@ export async function buildDeliveryFileEmail(to: string, project: any, files: an
               <div style="width:28px;height:28px;background-color:#EEF2FF;border-radius:6px;text-align:center;line-height:28px;font-size:13px;">&#128196;</div>
             </td>
             <td style="padding-left:12px;" valign="middle">
-              <div style="font-size:13px;font-weight:600;color:${BRAND};">${f.file_name || 'File'}</div>
-              ${f.description ? `<div style="font-size:12px;color:${GREY};margin-top:2px;">${f.description}</div>` : ''}
+              <div style="font-size:13px;font-weight:600;color:${BRAND};">${escapeHtml(f.file_name) || 'File'}</div>
+              ${f.description ? `<div style="font-size:12px;color:${GREY};margin-top:2px;">${escapeHtml(f.description)}</div>` : ''}
             </td>
             <td align="right" valign="middle">
               <span style="font-size:12px;color:#94A3B8;white-space:nowrap;">${f.file_size ? Math.round(f.file_size / 1024) + ' KB' : ''}</span>
@@ -357,7 +369,7 @@ export async function buildDeliveryFileEmail(to: string, project: any, files: an
             <td>
               <p style="margin:0;font-size:14px;color:${GREY};line-height:1.7;">
                 ${files.length === 1 ? 'A new file has' : `${files.length} new files have`} been uploaded
-                for <strong style="color:${BRAND};">${project.client_name || 'your project'}</strong>
+                for <strong style="color:${BRAND};">${escapeHtml(project.client_name) || 'your project'}</strong>
                 and ${files.length === 1 ? 'is' : 'are'} ready to download.
               </p>
             </td>
@@ -422,7 +434,7 @@ export async function buildDeliveryFileEmail(to: string, project: any, files: an
 
   return {
     to,
-    subject: `Delivery files ready — ${project.client_name || 'Your project'} (${files.length} ${files.length === 1 ? 'file' : 'files'})`,
+    subject: `Delivery files ready — ${escapeHtml(project.client_name) || 'Your project'} (${files.length} ${files.length === 1 ? 'file' : 'files'})`,
     html: shell(logoUrl, BLUE, content),
   }
 }
@@ -463,7 +475,7 @@ export async function buildStatusChangeEmail(to: string, project: any, newStatus
           <tr>
             <td style="padding:0 0 16px;">
               <p style="margin:0;font-size:14px;color:${GREY};line-height:1.7;">
-                The status of <strong style="color:${BRAND};">${project.client_name || 'your project'}</strong> has been updated.
+                The status of <strong style="color:${BRAND};">${escapeHtml(project.client_name) || 'your project'}</strong> has been updated.
               </p>
             </td>
           </tr>
@@ -542,7 +554,7 @@ export async function buildStatusChangeEmail(to: string, project: any, newStatus
 
   return {
     to,
-    subject: `Status update: ${newStatus} — ${project.client_name || 'Your project'}`,
+    subject: `Status update: ${newStatus} — ${escapeHtml(project.client_name) || 'Your project'}`,
     html: shell(logoUrl, accentColor, content),
   }
 }
@@ -586,9 +598,9 @@ export async function buildETAChangeEmail(
           <tr>
             <td>
               <p style="margin:0;font-size:14px;color:${GREY};line-height:1.7;">
-                The estimated delivery time for <strong style="color:${BRAND};">${project.client_name || 'your project'}</strong>
+                The estimated delivery time for <strong style="color:${BRAND};">${escapeHtml(project.client_name) || 'your project'}</strong>
                 has been revised ${changeDesc}.
-                ${reason ? `<br/><em style="color:${GREY};">Reason: ${reason}</em>` : ''}
+                ${reason ? `<br/><em style="color:${GREY};">Reason: ${escapeHtml(reason)}</em>` : ''}
               </p>
             </td>
           </tr>
@@ -661,7 +673,7 @@ export async function buildETAChangeEmail(
 
   return {
     to,
-    subject: `Delivery estimate updated — ${project.client_name || 'Your project'} (${newDays} business days)`,
+    subject: `Delivery estimate updated — ${escapeHtml(project.client_name) || 'Your project'} (${newDays} business days)`,
     html: shell(logoUrl, BLUE, content),
   }
 }

@@ -159,14 +159,18 @@ export async function extractRawRows(file: File, _projectType: string): Promise<
     const jobTitle = jobTitleCol !== -1 ? (row[jobTitleCol] || '').toString().trim() : ''
     if (!jobTitle) continue
 
-    result.push({
-      rowIndex: i + 1,
-      jobTitle,
-      country: countryCol !== -1 ? (row[countryCol] || '').toString().trim() : '',
-      state: stateCol !== -1 ? (row[stateCol] || '').toString().trim() : '',
-      city: cityCol !== -1 ? (row[cityCol] || '').toString().trim() : '',
-      description: descriptionCol !== -1 ? (row[descriptionCol] || '').toString().trim() : '',
-    })
+    const country     = countryCol     !== -1 ? (row[countryCol]     || '').toString().trim() : ''
+    const state       = stateCol       !== -1 ? (row[stateCol]       || '').toString().trim() : ''
+    const city        = cityCol        !== -1 ? (row[cityCol]        || '').toString().trim() : ''
+    const description = descriptionCol !== -1 ? (row[descriptionCol] || '').toString().trim() : ''
+
+    // Skip annotation/metadata rows — rows where only the Job Title column has
+    // data and all other key fields (Country, State, City, Description) are blank.
+    // These are reference labels typed by the user (e.g. "Region", "Rocket City: AL")
+    // and must not be reported as missing-data rows by the quality analyzer.
+    if (!country && !state && !city && !description) continue
+
+    result.push({ rowIndex: i + 1, jobTitle, country, state, city, description })
 
     if (result.length >= 200) break
   }
@@ -222,7 +226,7 @@ Your expertise:
 - Level modifiers to FLAG (should be removed from titles): Jr., Jr, Junior, Sr., Sr, Senior, Lead (as prefix/suffix modifier), I, II, III, IV, V (roman numerals as suffix), Associate (as prefix meaning entry-level), Staff (as prefix), Principal (as prefix meaning seniority), SME, Mid-Level, Entry-Level
 - EXCEPTION — Do NOT flag these as leveling issues because the level IS the job title: Manager, Senior Manager, Director, Senior Director, VP, SVP, EVP, Head of, Chief, C-level titles, Team Lead (standalone job title). "Delivery Manager" is correct. "Engineering Manager" is correct. "VP of Finance" is correct.
 - CRITICAL LOCATION RULE: Each row MUST contain only ONE location (one state AND one city). A row with "Kentucky & Indiana" in the State field is invalid — it must be split into two rows: one for Kentucky and one for Indiana. Flag any row where a state, city, or country field appears to contain multiple locations combined with &, and, /, comma, or semicolon separators. This is a structural error — the template cannot be processed correctly until each location is on its own row.
-- LOCATION REQUIREMENTS: Country AND State/Province are both required for every row. City is optional but improves local accuracy. "Remote" is NOT a valid State/Province value — it is a work-arrangement term and will be flagged as invalid. Do NOT suggest leaving State/Province blank for any reason.
+- LOCATION REQUIREMENTS: Country AND State/Province are both required for every row. City is optional but improves local accuracy. "Remote" is NOT a valid State/Province value — it is a work-arrangement term and will be flagged as invalid. Region or metro area names (e.g. "Bay Area", "Greater London") are NOT valid State/Province values — always flag these and suggest the correct state/province (e.g. "Bay Area" → use "California"). Do NOT suggest leaving State/Province blank for any reason.
 - Semantic duplicates are common and harmful: "DevOps Engineer" vs "Development Operations Engineer" vs "DevOps Engineer - Senior" are related and need review.
 - Abbreviations that signal duplicates: Dev/Development, Ops/Operations, Eng/Engineer, Mgr/Manager, Admin/Administrator, Dir/Director, SW/Software, FE/Frontend, BE/Backend
 - Missing job descriptions reduce pricing accuracy — always flag rows without descriptions
@@ -275,8 +279,8 @@ Return a JSON object with EXACTLY this structure:
 Rules:
 - duplicates: only flag clear semantic duplicates; don't flag different seniority levels of the same title as duplicates (Sr. Engineer vs Engineer is expected)
 - levelingIssues: flag ANY job title that contains a level modifier (Jr., Sr., Senior, Junior, II, III, IV, Lead as modifier, Staff as modifier, Principal as modifier, SME, Associate as entry-level modifier, Mid-Level, Entry-Level). These should be removed — Pay Intel delivers all 5 levels automatically. EXCEPTION: do NOT flag titles where the level IS the job (Manager, Director, VP, Head of, Senior Manager, Senior Director, C-suite, Team Lead). For each flagged title, provide the clean base title as the suggestion.
-- missingDataRows: ONLY include rows where country is blank/empty OR state/province is blank/empty OR description is blank/empty. Country and State/Province are both required fields.
-- locationIssues: flag rows missing country; flag rows where state/province is blank (state/province is required — city is optional). Do NOT re-flag multi-location rows — those are handled separately. Do NOT suggest "remote" as a valid state/province value.
+- missingDataRows: ONLY include rows where country is blank/empty OR state/province is blank/empty OR description is blank/empty. Country and State/Province are both required fields. Do NOT include rows where only the Job Title column has data and all other fields are blank — those are annotation rows, not data rows.
+- locationIssues: flag rows missing country; flag rows where state/province is blank or contains a region/metro name instead of an actual state (e.g. "Bay Area" → flag and suggest "California"). Do NOT re-flag multi-location rows — those are handled separately. Do NOT suggest "remote" as a valid state/province value.
 - Be concise in messages — max 120 chars per message field
 - overallScore: start at 100, subtract: 15 per critical duplicate group, 10 per warning duplicate, 5 per missing description row (max -30 total for descriptions), 10 per missing country row (max -20), 8 per leveling issue (title contains unnecessary level modifier that Pay Intel handles automatically)
 - issueCount: sum all items across all categories by their severity field`

@@ -629,8 +629,10 @@ function validateSingleRow(
   // ── 3. State / Province required ────────────────────────────────────────
   // Skip for city-state countries (Singapore, Hong Kong, etc.).
   // A region term in the City column that resolves to a state satisfies this.
+  // NOTE: stateRegion (a region name in the State column) does NOT satisfy this
+  // requirement — region names like "Bay Area" are not valid state/province values.
   if (!WORK_ARRANGEMENT_TERMS.has(stateL)) {
-    const effectiveState = stateL || cityRegion?.state || stateRegion?.state || ''
+    const effectiveState = stateL || cityRegion?.state || ''
     if (!effectiveState && !isCityStateCountry(effectiveCountry)) {
       warnings.push(
         `Row ${row.rowNum}: State/Province is required — please enter a valid state, province, or administrative region.`
@@ -638,9 +640,20 @@ function validateSingleRow(
     }
   }
 
-  // ── 4. US state validation ───────────────────────────────────────────────
-  // Only run when the effective country is USA and the state column has a value
-  // that is not a known region (which would have already resolved it above).
+  // ── 4. Region name in State column ──────────────────────────────────────
+  // Region/metro names (e.g. "Bay Area", "Greater London") are valid in the
+  // City column but are NOT valid state/province values. Flag them and suggest
+  // the correct state.
+  if (stateL && !WORK_ARRANGEMENT_TERMS.has(stateL) && stateRegion) {
+    warnings.push(
+      `Row ${row.rowNum}: State/Province "${row.state}" is a region name, not a valid state or province — ` +
+      `did you mean "${stateRegion.state}"?`
+    )
+  }
+
+  // ── 5. US state validation ───────────────────────────────────────────────
+  // Only run when the effective country is USA, the state column has a value,
+  // and it is not a known region (which is caught above).
   if (stateL && !WORK_ARRANGEMENT_TERMS.has(stateL) && !stateRegion) {
     if (isUSCountry(effectiveCountry) && !US_STATES[stateL]) {
       warnings.push(

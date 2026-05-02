@@ -628,12 +628,12 @@ export function filterProjects(projects: Project[], filters: FilterState): Proje
       ].filter(Boolean).join(' ').toLowerCase()
       if (!searchable.includes(s)) return false
     }
-    if (filters.status.length > 0 && !filters.status.includes(p.status)) return false
-    if (filters.owner.length > 0 && !filters.owner.includes(p.project_owner)) return false
-    if (filters.analyst.length > 0 && !filters.analyst.includes(p.analyst ?? '')) return false
-    if (filters.clientType.length > 0 && !filters.clientType.includes(p.client_type ?? '')) return false
-    if (filters.industry.length > 0 && !filters.industry.includes(p.industry ?? '')) return false
-    if (filters.country.length > 0 && !filters.country.includes(p.country ?? '')) return false
+    if (filters.status && p.status !== filters.status) return false
+    if (filters.owner && p.project_owner !== filters.owner) return false
+    if (filters.analyst && p.analyst !== filters.analyst) return false
+    if (filters.clientType && p.client_type !== filters.clientType) return false
+    if (filters.industry && p.industry !== filters.industry) return false
+    if (filters.country && p.country !== filters.country) return false
     if (filters.dateFrom && p.date_received && p.date_received < filters.dateFrom) return false
     if (filters.dateTo && p.date_received && p.date_received > filters.dateTo) return false
     return true

@@ -5,12 +5,14 @@ import {
   ChevronsUpDown, ChevronsDownUp, Download
 } from 'lucide-react'
 import type { TemplateQualityResult } from '../lib/templateQualityAnalyzer'
+import { ExportWithDescriptions } from './ExportWithDescriptions'
 
 interface Props {
   result: TemplateQualityResult | null
   isLoading: boolean
   locationValidationWarnings?: string[]
   passingScore?: number
+  originalFile?: File | null
 }
 
 
@@ -102,7 +104,7 @@ function ScrollableContainer({ children, maxRows = 7 }: { children: React.ReactN
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function TemplateQualityReview({ result, isLoading, locationValidationWarnings = [], passingScore = 70 }: Props) {
+export function TemplateQualityReview({ result, isLoading, locationValidationWarnings = [], passingScore = 70, originalFile = null }: Props) {
   // Auto-open sections that have issues; empty sections start closed
   const getInitialOpen = useCallback(() => {
     if (!result) return new Set<string>(locationValidationWarnings.length > 0 ? ['location'] : [])
@@ -310,13 +312,16 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
               <ChevronsDownUp className="w-3 h-3" /> Collapse all
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => exportIssuesCSV(result, locationValidationWarnings)}
-            className="btn btn-xs btn-ghost gap-1 text-primary hover:text-primary/80"
-          >
-            <Download className="w-3 h-3" /> Export issues CSV
-          </button>
+          <div className="flex items-center gap-1">
+            <ExportWithDescriptions originalFile={originalFile} />
+            <button
+              type="button"
+              onClick={() => exportIssuesCSV(result, locationValidationWarnings)}
+              className="btn btn-xs btn-ghost gap-1 text-primary hover:text-primary/80"
+            >
+              <Download className="w-3 h-3" /> Export issues CSV
+            </button>
+          </div>
         </div>
       )}
 

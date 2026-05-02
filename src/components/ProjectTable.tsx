@@ -251,14 +251,14 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       </div>
 
       {/* Table wrapper */}
-      <div className="rounded-xl border border-base-300/50 bg-base-200 overflow-hidden">
+      <div className="rounded-xl border border-base-300/50 bg-base-200 overflow-hidden overflow-x-auto">
         <div
           ref={parentRef}
-          className="overflow-y-auto overflow-x-hidden"
+          className="overflow-y-auto overflow-x-auto"
           style={{ height: 'calc(100vh - 310px)', minHeight: '420px' }}
         >
           {/* table-fixed + w-full = columns share available width, no horizontal scroll */}
-          <table className="table table-sm table-fixed w-full">
+          <table className="table table-sm min-w-[950px] w-full">
             <colgroup>
               {showBulk && <col style={{ width: '32px' }} />}
               {columns.map(col => (

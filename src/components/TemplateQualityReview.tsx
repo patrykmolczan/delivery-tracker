@@ -10,6 +10,7 @@ interface Props {
   result: TemplateQualityResult | null
   isLoading: boolean
   locationValidationWarnings?: string[]
+  passingScore?: number
 }
 
 
@@ -98,7 +99,7 @@ function ScrollableContainer({ children, maxRows = 7 }: { children: React.ReactN
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function TemplateQualityReview({ result, isLoading, locationValidationWarnings = [] }: Props) {
+export function TemplateQualityReview({ result, isLoading, locationValidationWarnings = [], passingScore = 70 }: Props) {
   // Auto-open sections that have issues; empty sections start closed
   const getInitialOpen = useCallback(() => {
     if (!result) return new Set<string>(locationValidationWarnings.length > 0 ? ['location'] : [])
@@ -160,9 +161,9 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
   }
 
   // Score colors
-  const scoreColor = result.overallScore >= 80 ? 'text-success' : result.overallScore >= 60 ? 'text-warning' : 'text-error'
-  const scoreBg    = result.overallScore >= 80 ? 'bg-success/10 border-success/30' : result.overallScore >= 60 ? 'bg-warning/10 border-warning/30' : 'bg-error/10 border-error/30'
-  const scoreLabel = result.overallScore >= 90 ? 'Excellent' : result.overallScore >= 80 ? 'Good' : result.overallScore >= 60 ? 'Needs Review' : result.overallScore >= 40 ? 'Poor Quality' : 'Rework Required'
+  const scoreColor = result.overallScore >= passingScore ? 'text-success' : result.overallScore >= passingScore - 20 ? 'text-warning' : 'text-error'
+  const scoreBg    = result.overallScore >= passingScore ? 'bg-success/10 border-success/30' : result.overallScore >= passingScore - 20 ? 'bg-warning/10 border-warning/30' : 'bg-error/10 border-error/30'
+  const scoreLabel = result.overallScore >= passingScore + 20 ? 'Excellent' : result.overallScore >= passingScore ? 'Passing \u2713' : result.overallScore >= passingScore - 20 ? 'Needs Review' : result.overallScore >= passingScore - 40 ? 'Poor Quality' : 'Rework Required'
 
   const totalIssues = result.issueCount.critical + result.issueCount.warning + result.issueCount.info
 
@@ -252,10 +253,38 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
                 <span className="badge badge-info badge-sm">{result.issueCount.info} Info</span>
               )}
             </div>
-            <div className="text-xs text-base-content/50 text-right">Advisory — you can still submit</div>
+            <div className="text-xs text-right">
+              {result.overallScore >= passingScore
+                ? <span className="text-success font-semibold">✓ Passing — ready to submit</span>
+                : <span className="text-error font-semibold">Score {result.overallScore}/{passingScore} needed to submit</span>
+              }
+            </div>
           </div>
         </div>
         <p className="text-sm text-base-content/70 mt-2">{result.summary}</p>
+        {result.overallScore < passingScore && (() => {
+          const tips: { label: string; count: number }[] = [
+            { label: 'fix leveling prefixes', count: result.levelingIssues.length },
+            { label: 'resolve missing data', count: result.missingDataRows.length },
+            { label: 'remove duplicates', count: result.duplicates.length },
+            { label: 'fix location issues', count: result.locationIssues.length + locationValidationWarnings.length },
+          ].filter(t => t.count > 0).sort((a, b) => b.count - a.count).slice(0, 3)
+          if (tips.length === 0) return null
+          return (
+            <div className="flex items-start gap-2 mt-2 text-xs text-base-content/70 bg-base-100/60 rounded-lg px-3 py-2 border border-base-300">
+              <span className="shrink-0">💡</span>
+              <span>
+                <span className="font-semibold text-base-content">Fix these to reach {passingScore}:</span>{' '}
+                {tips.map((t, i) => (
+                  <span key={i}>
+                    {i > 0 && <span className="text-base-content/30 mx-1">·</span>}
+                    {t.label} <span className="font-semibold text-base-content">({t.count})</span>
+                  </span>
+                ))}
+              </span>
+            </div>
+          )
+        })()}
       </div>
 
       {/* ── Toolbar ── */}

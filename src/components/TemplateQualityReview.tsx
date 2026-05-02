@@ -15,7 +15,7 @@ interface Props {
 
 
 // ─── Export helper ────────────────────────────────────────────────────────────
-function exportIssuesCSV(result: TemplateQualityResult) {
+function exportIssuesCSV(result: TemplateQualityResult, locationValidationWarnings: string[] = []) {
   const rows: string[][] = [['Category', 'Severity', 'Job Title / Detail', 'Issue', 'Suggestion']]
 
   result.duplicates.forEach(d => {
@@ -25,10 +25,13 @@ function exportIssuesCSV(result: TemplateQualityResult) {
     rows.push(['Leveling', l.severity, l.jobTitle, l.issue, l.suggestion])
   })
   result.missingDataRows.forEach(m => {
-    rows.push(['Missing Data', m.severity, m.jobTitle, `Missing: ${m.missing.join(', ')}`, ''])
+    rows.push(['Missing Data', m.severity, m.jobTitle, `Missing: ${m.missing.join(', ')}`, 'Add the missing fields to this row. Country and State/Province are required; City is optional.'])
   })
   result.locationIssues.forEach(l => {
-    rows.push(['Location', l.severity, l.jobTitle, l.issue, ''])
+    rows.push(['Location', l.severity, l.jobTitle, l.issue, 'Ensure Country and State/Province are both filled in for this row.'])
+  })
+  locationValidationWarnings.forEach(w => {
+    rows.push(['Location (Invalid Value)', 'critical', '', w, 'Replace with a valid state/province or country name. Country and State/Province are required; City is optional. \'Remote\' is not a valid location.'])
   })
   ;(result.multiLocationRows || []).forEach(m => {
     rows.push([
@@ -309,7 +312,7 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
           </div>
           <button
             type="button"
-            onClick={() => exportIssuesCSV(result)}
+            onClick={() => exportIssuesCSV(result, locationValidationWarnings)}
             className="btn btn-xs btn-ghost gap-1 text-primary hover:text-primary/80"
           >
             <Download className="w-3 h-3" /> Export issues CSV

@@ -222,14 +222,14 @@ Your expertise:
 - Level modifiers to FLAG (should be removed from titles): Jr., Jr, Junior, Sr., Sr, Senior, Lead (as prefix/suffix modifier), I, II, III, IV, V (roman numerals as suffix), Associate (as prefix meaning entry-level), Staff (as prefix), Principal (as prefix meaning seniority), SME, Mid-Level, Entry-Level
 - EXCEPTION — Do NOT flag these as leveling issues because the level IS the job title: Manager, Senior Manager, Director, Senior Director, VP, SVP, EVP, Head of, Chief, C-level titles, Team Lead (standalone job title). "Delivery Manager" is correct. "Engineering Manager" is correct. "VP of Finance" is correct.
 - CRITICAL LOCATION RULE: Each row MUST contain only ONE location (one state AND one city). A row with "Kentucky & Indiana" in the State field is invalid — it must be split into two rows: one for Kentucky and one for Indiana. Flag any row where a state, city, or country field appears to contain multiple locations combined with &, and, /, comma, or semicolon separators. This is a structural error — the template cannot be processed correctly until each location is on its own row.
+- LOCATION REQUIREMENTS: Country AND State/Province are both required for every row. City is optional but improves local accuracy. "Remote" is NOT a valid State/Province value — it is a work-arrangement term and will be flagged as invalid. Do NOT suggest leaving State/Province blank for any reason.
 - Semantic duplicates are common and harmful: "DevOps Engineer" vs "Development Operations Engineer" vs "DevOps Engineer - Senior" are related and need review.
 - Abbreviations that signal duplicates: Dev/Development, Ops/Operations, Eng/Engineer, Mgr/Manager, Admin/Administrator, Dir/Director, SW/Software, FE/Frontend, BE/Backend
 - Missing job descriptions reduce pricing accuracy — always flag rows without descriptions
-- Country is required for international benchmarking. State/city improves local accuracy. "Remote" is acceptable as city/state ONLY if country is present.
 - Your output will be parsed as JSON — respond with ONLY valid JSON, no markdown fences, no explanation text outside the JSON.`
 
     const userPrompt = `Analyze this Pay Intel template data. Total rows in file: ${rows.length}. Unique combos being analyzed: ${compactRows.length}.
-${multiLocationRows.length > 0 ? `\nNOTE: Client-side scan already detected ${multiLocationRows.length} multi-location rows (e.g., "${multiLocationRows[0]?.value}" in ${multiLocationRows[0]?.field} field). Do NOT re-flag these in locationIssues — they are handled separately. Focus your locationIssues on missing country or other location problems.\n` : ''}
+${multiLocationRows.length > 0 ? `\nNOTE: Client-side scan already detected ${multiLocationRows.length} multi-location rows (e.g., "${multiLocationRows[0]?.value}" in ${multiLocationRows[0]?.field} field). Do NOT re-flag these in locationIssues — they are handled separately. Focus your locationIssues on missing country/state or other location problems.\n` : ''}
 DATA (fields: r=rowNum, t=jobTitle, c=country, s=state/city, d=description preview):
 ${JSON.stringify(compactRows)}
 
@@ -258,7 +258,7 @@ Return a JSON object with EXACTLY this structure:
     {
       "rowIndex": <int>,
       "jobTitle": "<title>",
-      "missing": ["description" | "country" | "state/city"],
+      "missing": ["description" | "country" | "state/province"],
       "severity": "critical" | "warning"
     }
   ],
@@ -275,8 +275,8 @@ Return a JSON object with EXACTLY this structure:
 Rules:
 - duplicates: only flag clear semantic duplicates; don't flag different seniority levels of the same title as duplicates (Sr. Engineer vs Engineer is expected)
 - levelingIssues: flag ANY job title that contains a level modifier (Jr., Sr., Senior, Junior, II, III, IV, Lead as modifier, Staff as modifier, Principal as modifier, SME, Associate as entry-level modifier, Mid-Level, Entry-Level). These should be removed — Pay Intel delivers all 5 levels automatically. EXCEPTION: do NOT flag titles where the level IS the job (Manager, Director, VP, Head of, Senior Manager, Senior Director, C-suite, Team Lead). For each flagged title, provide the clean base title as the suggestion.
-- missingDataRows: ONLY include rows where country is blank/empty OR description is blank/empty (remote as state/city with a country is fine)
-- locationIssues: flag rows missing country entirely; flag rows where country is present but state AND city are both blank and the job isn't remote. Do NOT re-flag multi-location rows — those are handled separately.
+- missingDataRows: ONLY include rows where country is blank/empty OR state/province is blank/empty OR description is blank/empty. Country and State/Province are both required fields.
+- locationIssues: flag rows missing country; flag rows where state/province is blank (state/province is required — city is optional). Do NOT re-flag multi-location rows — those are handled separately. Do NOT suggest "remote" as a valid state/province value.
 - Be concise in messages — max 120 chars per message field
 - overallScore: start at 100, subtract: 15 per critical duplicate group, 10 per warning duplicate, 5 per missing description row (max -30 total for descriptions), 10 per missing country row (max -20), 8 per leveling issue (title contains unnecessary level modifier that Pay Intel handles automatically)
 - issueCount: sum all items across all categories by their severity field`

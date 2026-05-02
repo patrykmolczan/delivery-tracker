@@ -1,59 +1,27 @@
-import React, { useState, useEffect } from 'react'
-import { Sparkles, Loader2, Download, X } from 'lucide-react'
-import {
-  findRowsMissingDescriptions,
-  generateDescriptions,
-  buildExcelWithDescriptions,
-  type JobRowInfo,
-} from '../lib/descriptionGenerator'
-
-// ─── Props ────────────────────────────────────────────────────────────────────
+import { useState, useEffect, useCallback } from 'react'
+import { Sparkles, Download, Loader2, X } from 'lucide-react'
+import { findRowsMissingDescriptions, generateDescriptions, buildExcelWithDescriptions } from '../lib/descriptionGenerator'
 
 interface Props {
-  /** The original Excel file the user uploaded — null until a file is parsed */
-  originalFile: File | null
+  originalFile: File
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+export default function ExportWithDescriptions({ originalFile }: Props) {
+  const [missingRows, setMissingRows] = useState<{ rowIndex: number; jobTitle: string }[]>([])
+  const [step, setStep] = useState<'idle' | 'confirm' | 'loading' | 'done' | 'error'>('idle')
+  const [errorMsg, setErrorMsg] = useState('')
 
-export function ExportWithDescriptions({ originalFile }: Props) {
-  const [missingRows, setMissingRows] = useState<JobRowInfo[]>([])
-  const [phase, setPhase] = useState<
-    'idle' | 'confirming' | 'generating' | 'building' | 'done' | 'error'
-  >('idle')
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
-
-  // Re-scan for missing descriptions whenever the uploaded file changes
   useEffect(() => {
-    if (!originalFile) {
-      setMissingRows([])
-      setPhase('idle')
-      return
-    }
-    findRowsMissingDescriptions(originalFile)
-      .then(rows => setMissingRows(rows))
-      .catch(() => setMissingRows([]))
+    findRowsMissingDescriptions(originalFile).then(setMissingRows)
   }, [originalFile])
 
-  // Nothing to show if there are no rows missing descriptions
-  if (!originalFile || missingRows.length === 0) return null
+  const uniqueTitles = [...new Set(missingRows.map(r => r.jobTitle).filter(Boolean))]
 
-  const uniqueTitleCount = new Set(missingRows.map(r => r.jobTitle)).size
-  const isWorking = phase === 'generating' || phase === 'building'
-
-  // ── Generate + download ────────────────────────────────────────────────────
-
-  const handleGenerate = async () => {
-    setPhase('generating')
-    setErrorMsg(null)
+  const handleGenerate = useCallback(async () => {
+    setStep('loading')
     try {
-      const titles = [...new Set(missingRows.map(r => r.jobTitle))]
-      const titleToDesc = await generateDescriptions(titles)
-
-      setPhase('building')
-      const blob = await buildExcelWithDescriptions(originalFile, titleToDesc)
-
-      // Trigger browser download
+      const descriptions = await generateDescriptions(uniqueTitles)
+      const blob = await buildExcelWithDescriptions(originalFile, missingRows, descriptions)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -61,90 +29,69 @@ export function ExportWithDescriptions({ originalFile }: Props) {
       a.download = `${baseName}_with_descriptions.xlsx`
       a.click()
       URL.revokeObjectURL(url)
-
-      setPhase('done')
-      setTimeout(() => setPhase('idle'), 4000)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Generation failed'
-      setErrorMsg(msg)
-      setPhase('error')
-      setTimeout(() => { setPhase('idle'); setErrorMsg(null) }, 6000)
+      setStep('done')
+      setTimeout(() => setStep('idle'), 3000)
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Unknown error')
+      setStep('error')
     }
-  }
+  }, [originalFile, missingRows, uniqueTitles])
 
-  // ── Render: confirmation inline banner ─────────────────────────────────────
-
-  if (phase === 'confirming') {
-    return (
-      <div className="flex items-center gap-2 flex-wrap bg-secondary/5 border border-secondary/20 rounded-lg px-3 py-1.5">
-        <Sparkles className="w-3.5 h-3.5 text-secondary shrink-0" />
-        <span className="text-xs text-base-content/70">
-          Generate AI descriptions for{' '}
-          <span className="font-semibold text-base-content">{missingRows.length}</span> row
-          {missingRows.length !== 1 ? 's' : ''}{' '}
-          ({uniqueTitleCount} unique title{uniqueTitleCount !== 1 ? 's' : ''}) and download
-          a new Excel file?
-        </span>
-        <button
-          type="button"
-          onClick={handleGenerate}
-          className="btn btn-xs btn-secondary gap-1"
-        >
-          <Download className="w-3 h-3" /> Generate &amp; download
-        </button>
-        <button
-          type="button"
-          onClick={() => setPhase('idle')}
-          className="btn btn-xs btn-ghost text-base-content/50"
-          aria-label="Cancel"
-        >
-          <X className="w-3 h-3" />
-        </button>
-      </div>
-    )
-  }
-
-  // ── Render: working state ──────────────────────────────────────────────────
-
-  if (isWorking) {
-    return (
-      <button type="button" disabled className="btn btn-xs btn-ghost gap-1 text-secondary/70 cursor-wait">
-        <Loader2 className="w-3 h-3 animate-spin" />
-        {phase === 'generating' ? 'Generating descriptions…' : 'Building Excel…'}
-      </button>
-    )
-  }
-
-  // ── Render: done ───────────────────────────────────────────────────────────
-
-  if (phase === 'done') {
-    return (
-      <span className="flex items-center gap-1 text-xs text-success font-medium px-1">
-        <Download className="w-3 h-3" /> Downloaded!
-      </span>
-    )
-  }
-
-  // ── Render: error ──────────────────────────────────────────────────────────
-
-  if (phase === 'error') {
-    return (
-      <span className="flex items-center gap-1 text-xs text-error px-1 max-w-[240px] truncate" title={errorMsg ?? ''}>
-        ⚠ {errorMsg ?? 'Error generating descriptions'}
-      </span>
-    )
-  }
-
-  // ── Render: idle button ────────────────────────────────────────────────────
+  if (missingRows.length === 0) return null
 
   return (
-    <button
-      type="button"
-      onClick={() => setPhase('confirming')}
-      className="btn btn-xs btn-ghost gap-1 text-secondary hover:text-secondary/80"
-    >
-      <Sparkles className="w-3 h-3" />
-      Fill {missingRows.length} missing description{missingRows.length !== 1 ? 's' : ''}
-    </button>
+    <div className="flex flex-col gap-2">
+      {step === 'idle' && (
+        <button
+          onClick={() => setStep('confirm')}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-violet-600 hover:bg-violet-700 text-white transition-colors"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          Fill {missingRows.length} missing description{missingRows.length !== 1 ? 's' : ''}
+        </button>
+      )}
+
+      {step === 'confirm' && (
+        <div className="flex flex-wrap items-center gap-2 p-2 rounded-md bg-violet-950/40 border border-violet-700/40 text-xs">
+          <span className="text-slate-300">
+            Generate AI descriptions for <strong className="text-white">{missingRows.length} row{missingRows.length !== 1 ? 's' : ''}</strong> ({uniqueTitles.length} unique title{uniqueTitles.length !== 1 ? 's' : ''}) and download a filled Excel?
+          </span>
+          <div className="flex gap-1.5">
+            <button
+              onClick={handleGenerate}
+              className="flex items-center gap-1 px-2.5 py-1 rounded bg-violet-600 hover:bg-violet-700 text-white font-medium transition-colors"
+            >
+              <Download className="w-3 h-3" /> Generate &amp; download
+            </button>
+            <button
+              onClick={() => setStep('idle')}
+              className="flex items-center gap-1 px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
+            >
+              <X className="w-3 h-3" /> Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 'loading' && (
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-violet-950/40 border border-violet-700/40 text-xs text-slate-300">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-400" />
+          Generating descriptions with GPT-4.1…
+        </div>
+      )}
+
+      {step === 'done' && (
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-950/40 border border-emerald-700/40 text-xs text-emerald-300">
+          ✓ Downloaded! Ready to resubmit.
+        </div>
+      )}
+
+      {step === 'error' && (
+        <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-md bg-red-950/40 border border-red-700/40 text-xs text-red-300">
+          <span>Error: {errorMsg}</span>
+          <button onClick={() => setStep('idle')} className="text-red-400 hover:text-red-200"><X className="w-3 h-3" /></button>
+        </div>
+      )}
+    </div>
   )
 }

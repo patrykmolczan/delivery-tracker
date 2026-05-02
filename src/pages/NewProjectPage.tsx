@@ -1306,7 +1306,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
               <div className="modal-action mt-4">
                 <button
                   type="button"
-                  className="btn btn-ghost"
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 font-medium text-sm transition-colors"
                   onClick={() => setShowOverrideModal(false)}
                 >
                   Cancel — fix issues first

@@ -117,6 +117,7 @@ export interface KPIData {
   overdue: number
   totalJobs: number
   completionRate: number
+  deliveredThisMonth: number
 }
 
 export interface FilterState {

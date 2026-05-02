@@ -17,19 +17,61 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Detect Supabase JWT / auth errors that mean the session is dead.
+// These are returned as error objects from .from().select() calls.
+function isAuthError(error: any): boolean {
+  if (!error) return false
+  const msg = (error.message || '').toLowerCase()
+  const code = String(error.code || '')
+  const status = error.status ?? error.statusCode
+  return (
+    status === 401 ||
+    code === 'PGRST301' ||         // PostgREST: JWT expired
+    msg.includes('jwt expired') ||
+    msg.includes('jwt invalid') ||
+    msg.includes('invalid jwt') ||
+    msg.includes('jwtsignaturemismatch') ||
+    msg.includes('not authenticated') ||
+    msg.includes('invalid claim')
+  )
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
+  // Wipe all Supabase auth keys and force redirect to login.
+  // Identical clean-up path to signOut() — reusable for auth error recovery.
+  const forceSignOut = () => {
+    setUser(null)
+    setSession(null)
+    setProfile(null)
+    try {
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('sb-') || k === 'delivery-tracker-auth')
+        .forEach(k => localStorage.removeItem(k))
+    } catch { /* Safari private-mode safe */ }
+    supabase.auth.signOut().catch(() => {})
+    window.location.href = '/'
+  }
+
+  // Returns true if profile was fetched successfully (or error was non-auth).
+  // Returns false if the error was an auth/JWT failure — caller must sign out.
+  const fetchProfile = async (userId: string): Promise<boolean> => {
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .single()
+
+    if (error) {
+      if (isAuthError(error)) return false  // session is dead
+      return true                            // non-auth error (profile not found etc.) — stay logged in
+    }
     if (data) setProfile(data as UserProfile)
+    return true
   }
 
   const refreshProfile = async () => {
@@ -47,7 +89,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user ?? null)
 
         if (session?.user) {
-          try { await fetchProfile(session.user.id) } catch {}
+          try {
+            const authOk = await fetchProfile(session.user.id)
+            if (!authOk) {
+              // Profile fetch returned a JWT/auth error — the session stored in
+              // localStorage is corrupt or the token is expired/rotated away.
+              // TOKEN_REFRESH_FAILED may never fire for this class of corruption,
+              // so we handle it here: wipe storage and force re-login immediately.
+              forceSignOut()
+              return
+            }
+          } catch {
+            // Unexpected exception — don't block the UI
+          }
         } else {
           setProfile(null)
         }
@@ -62,7 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // session automatically but leaves the UI in a zombie auth state.
         // Redirect to login immediately so the user gets a clean sign-in screen.
         if ((event as string) === 'TOKEN_REFRESH_FAILED') {
-          window.location.href = '/'
+          forceSignOut()
         }
       }
     )

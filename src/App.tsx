@@ -43,7 +43,7 @@ const Dashboard: React.FC = () => {
   const [statusCounts, setStatusCounts] = useState<StatusCount[]>([])
   const [ownerCounts, setOwnerCounts] = useState<OwnerCount[]>([])
   const [filterOptions, setFilterOptions] = useState({ owners: [] as string[], analysts: [] as string[], clientTypes: [] as string[], industries: [] as string[], countries: [] as string[], statuses: [] as string[] })
-  const [filters, setFilters] = useState<FilterState>({ search: '', status: '', owner: '', analyst: '', clientType: '', industry: '', country: '', dateFrom: '', dateTo: '' })
+  const [filters, setFilters] = useState<FilterState>({ search: '', status: [], owner: [], analyst: [], clientType: [], industry: [], country: [], dateFrom: '', dateTo: '' })
   const [sort, setSort] = useState<SortState>({ field: 'date_received', direction: 'desc' })
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [editProject, setEditProject] = useState<Project | null>(null)

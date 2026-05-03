@@ -60,12 +60,7 @@ export const LoginPage: React.FC = () => {
 
       {/* ── Mobile header (navy, shown only on mobile) ───────────────── */}
       <div className="flex lg:hidden flex-col items-center" style={{ background: '#0C447C', padding: '28px 24px 24px' }}>
-        {/* Logo */}
-        {logoUrl && (
-          <div style={{ background: 'rgba(255,255,255,0.92)', borderRadius: 8, padding: '5px 10px', marginBottom: 20 }}>
-            <img src={logoUrl} alt="Company Logo" style={{ height: 22, width: 'auto', display: 'block', maxWidth: 140 }} />
-          </div>
-        )}
+
         {/* Mini pipeline */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0, marginBottom: 16 }}>
           {/* Node 01 */}
@@ -80,12 +75,14 @@ export const LoginPage: React.FC = () => {
               <span style={{ fontSize: 6, color: 'rgba(255,255,255,0.55)', fontFamily: 'sans-serif', lineHeight: 1 }}>PROC</span>
               <span style={{ fontSize: 8, color: 'white', fontFamily: 'sans-serif', fontWeight: 500 }}>02</span>
             </div>
-            <svg style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', overflow: 'visible', pointerEvents: 'none' }} width="36" height="36">
-              <circle cx="18" cy="18" r="18" fill="none" stroke="#5DCAA5" strokeWidth="1" opacity="0.5">
-                <animate attributeName="r" values="18;26;18" dur="2.5s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.5;0;0.5" dur="2.5s" repeatCount="indefinite" />
-              </circle>
-            </svg>
+            {!loading && (
+              <svg style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', overflow: 'visible', pointerEvents: 'none' }} width="36" height="36">
+                <circle cx="18" cy="18" r="18" fill="none" stroke="#5DCAA5" strokeWidth="1" opacity="0.5">
+                  <animate attributeName="r" values="18;26;18" dur="2.5s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.5;0;0.5" dur="2.5s" repeatCount="indefinite" />
+                </circle>
+              </svg>
+            )}
           </div>
           <div style={{ width: 20, height: 1, background: 'rgba(255,255,255,0.2)' }} />
           {/* Node 03 */}
@@ -167,10 +164,12 @@ export const LoginPage: React.FC = () => {
           <circle cx="130" cy="60" r="18" fill="#185FA5" stroke="#378ADD" strokeWidth="1" />
           <text x="130" y="57" textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.6)" fontFamily="sans-serif">PROCESS</text>
           <text x="130" y="67" textAnchor="middle" fontSize="9" fill="white" fontWeight="500" fontFamily="sans-serif">02</text>
-          <circle cx="130" cy="60" r="24" fill="none" stroke="#5DCAA5" strokeWidth="1" opacity="0.5">
-            <animate attributeName="r" values="18;28;18" dur="2.5s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.5;0;0.5" dur="2.5s" repeatCount="indefinite" />
-          </circle>
+          {!loading && (
+            <circle cx="130" cy="60" r="24" fill="none" stroke="#5DCAA5" strokeWidth="1" opacity="0.5">
+              <animate attributeName="r" values="18;28;18" dur="2.5s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.5;0;0.5" dur="2.5s" repeatCount="indefinite" />
+            </circle>
+          )}
 
           {/* Node 03: Review */}
           <circle cx="230" cy="160" r="18" fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
@@ -223,6 +222,7 @@ export const LoginPage: React.FC = () => {
           padding: '40px 40px 48px',
           minWidth: 0,
           flex: '0 0 380px',
+          position: 'relative',
         }}
       >
         {/* Logo — top right on desktop only (mobile shows it in navy header above) */}
@@ -238,6 +238,13 @@ export const LoginPage: React.FC = () => {
             }}>
               <img src={logoUrl} alt="Company Logo" style={{ height: 31, width: 'auto', display: 'block', maxWidth: 160 }} />
             </div>
+          </div>
+        )}
+
+        {/* Mobile logo — top right of white area, transparent logo sits clean on white */}
+        {logoUrl && (
+          <div className="flex lg:hidden" style={{ position: 'absolute', top: 16, right: 16 }}>
+            <img src={logoUrl} alt="Company Logo" style={{ height: 22, width: 'auto', display: 'block', maxWidth: 110 }} />
           </div>
         )}
 

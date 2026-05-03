@@ -55,12 +55,13 @@ export const LoginPage: React.FC = () => {
   const showPassword = !ssoEnabled || showPasswordFallback
 
   return (
-    <div className="min-h-screen flex" style={{ fontFamily: 'var(--font-sans, system-ui, sans-serif)' }}>
+    <div className="min-h-screen flex items-center justify-center bg-base-200 p-6" style={{ fontFamily: 'var(--font-sans, system-ui, sans-serif)' }}>
+      <div style={{ display: 'flex', width: '100%', maxWidth: 900, minHeight: 560, borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.12)', border: '0.5px solid var(--fallback-bc,oklch(var(--bc)/0.1))' }}>
 
       {/* ── Left panel ───────────────────────────────────────────────── */}
       <div
         className="hidden lg:flex flex-col justify-between flex-1 overflow-hidden relative"
-        style={{ background: '#0C447C', padding: '48px 40px' }}
+        style={{ background: '#0C447C', padding: '48px 40px', minWidth: 0 }}
       >
         {/* Tag pill */}
         <div>
@@ -162,11 +163,10 @@ export const LoginPage: React.FC = () => {
       <div
         className="flex flex-col justify-center w-full lg:w-auto"
         style={{
-          background: 'var(--color-base-100, #fff)',
+          background: 'var(--fallback-b1,oklch(var(--b1)))',
           padding: '40px 40px 48px',
-          minWidth: 360,
-          maxWidth: 480,
-          flex: '0 0 420px',
+          minWidth: 0,
+          flex: '0 0 380px',
         }}
       >
         {/* Logo — top right, pulled from app_settings via useLogo() */}
@@ -330,6 +330,7 @@ export const LoginPage: React.FC = () => {
         <p style={{ fontSize: 12, color: 'var(--fallback-bc,oklch(var(--bc)/0.3))', textAlign: 'center', marginTop: 24 }}>
           Protected by enterprise-grade security
         </p>
+      </div>
       </div>
     </div>
   )

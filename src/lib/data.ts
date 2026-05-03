@@ -2084,7 +2084,7 @@ export async function createNotificationsForAdmins(params: {
     const { data: admins } = await supabase
       .from('profiles')
       .select('id')
-      .eq('role', 'admin')
+      .in('role', ['admin', 'super_admin'])
       .eq('is_active', true)
     if (!admins?.length) return
     const rows = admins

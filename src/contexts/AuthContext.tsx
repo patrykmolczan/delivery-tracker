@@ -8,6 +8,7 @@ interface AuthContextType {
   session: Session | null
   profile: UserProfile | null
   isAdmin: boolean
+  isSuperAdmin: boolean
   passwordChangeRequired: boolean
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
@@ -221,11 +222,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.location.href = '/'
   }
 
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin'
+  const isSuperAdmin = profile?.role === 'super_admin'
   const passwordChangeRequired = !!(profile?.password_change_required)
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, isAdmin, passwordChangeRequired, loading, signIn, signInWithSSO, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, isAdmin, isSuperAdmin, passwordChangeRequired, loading, signIn, signInWithSSO, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )

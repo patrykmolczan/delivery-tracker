@@ -154,7 +154,7 @@ export interface UserProfile {
   email: string
   full_name: string
   username: string | null
-  role: 'user' | 'admin'
+  role: 'user' | 'admin' | 'super_admin'
   is_active: boolean
   password_change_required?: boolean
   created_at: string

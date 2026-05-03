@@ -6,6 +6,7 @@ import {
   Search, ChevronLeft, ChevronRight, UserX, UserCheck, Bell, Mail, Image,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 import {
   fetchAnalysts, createAnalyst, updateAnalyst, deactivateAnalyst,
   fetchClientTypesAdmin, createClientType, updateClientType, deactivateClientType,
@@ -226,6 +227,7 @@ const ManagedList: React.FC<ManagedListProps> = ({
 // ─── Main Admin Page ──────────────────────────────────────────────────────────
 
 export const AdminPage: React.FC = () => {
+  const { isSuperAdmin } = useAuth()
   const [showBulkUsers, setShowBulkUsers] = useState(false)
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -233,8 +235,8 @@ export const AdminPage: React.FC = () => {
   const [editId, setEditId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [newUser, setNewUser] = useState({ email: '', full_name: '', password: '', role: 'user' as 'admin' | 'user' })
-  const [editForm, setEditForm] = useState({ full_name: '', role: 'user' as 'admin' | 'user', is_active: true })
+  const [newUser, setNewUser] = useState({ email: '', full_name: '', password: '', role: 'user' as 'admin' | 'user' | 'super_admin' })
+  const [editForm, setEditForm] = useState({ full_name: '', role: 'user' as 'admin' | 'user' | 'super_admin', is_active: true })
 
   // ── List states ───────────────────────────────────────────────────────────
   const [analysts, setAnalysts] = useState<Analyst[]>([])
@@ -580,7 +582,12 @@ export const AdminPage: React.FC = () => {
     if (!window.confirm(`Deactivate ${selectedUserIds.size} selected user(s)? They will lose access immediately.`)) return
     setBulkDeactivating(true)
     try {
-      const ids = Array.from(selectedUserIds)
+      // Never bulk-deactivate super_admin users
+      const ids = Array.from(selectedUserIds).filter(id => {
+        const u = users.find(u => u.id === id)
+        return u?.role !== 'super_admin' || isSuperAdmin
+      })
+      if (ids.length === 0) { showSuccess('No eligible users to deactivate.'); return }
       const { error } = await supabase.from('profiles').update({ is_active: false, updated_at: new Date().toISOString() }).in('id', ids)
       if (error) throw error
       setUsers(prev => prev.map(u => selectedUserIds.has(u.id) ? { ...u, is_active: false } : u))
@@ -909,6 +916,7 @@ export const AdminPage: React.FC = () => {
                 <select className="select select-bordered select-sm flex-1" value={newUser.role} onChange={e => setNewUser(u => ({ ...u, role: e.target.value as any }))}>
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
+                  {isSuperAdmin && <option value="super_admin">Super Admin</option>}
                 </select>
                 <button type="submit" className={`btn btn-primary btn-sm gap-1.5 ${creating ? 'loading' : ''}`} disabled={creating}>
                   {!creating && <UserPlus size={14} />}{creating ? '…' : 'Create'}
@@ -1318,13 +1326,14 @@ export const AdminPage: React.FC = () => {
                         <td className="text-sm text-base-content/70">{user.email}</td>
                         <td>
                           {editId === user.id ? (
-                            <select className="select select-bordered select-xs" value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value as any }))}>
+                            <select className="select select-bordered select-xs" value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value as any }))} disabled={user.role === 'super_admin' && !isSuperAdmin}>
                               <option value="user">User</option>
                               <option value="admin">Admin</option>
+                              {isSuperAdmin && <option value="super_admin">Super Admin</option>}
                             </select>
                           ) : (
-                            <span className={`badge badge-sm ${user.role === 'admin' ? 'badge-primary' : 'badge-ghost'}`}>
-                              {user.role === 'admin' ? <><Shield size={10} className="mr-1" />Admin</> : <><User size={10} className="mr-1" />User</>}
+                            <span className={`badge badge-sm ${user.role === 'super_admin' ? 'badge-warning' : user.role === 'admin' ? 'badge-primary' : 'badge-ghost'}`}>
+                              {user.role === 'super_admin' ? <><Shield size={10} className="mr-1" />Super Admin</> : user.role === 'admin' ? <><Shield size={10} className="mr-1" />Admin</> : <><User size={10} className="mr-1" />User</>}
                             </span>
                           )}
                         </td>
@@ -1353,7 +1362,8 @@ export const AdminPage: React.FC = () => {
                                 <button
                                   className={`btn btn-xs gap-1 ${user.is_active !== false ? 'btn-ghost text-error/70 hover:text-error hover:bg-error/10' : 'btn-ghost text-success/70 hover:text-success hover:bg-success/10'}`}
                                   onClick={() => quickToggleActive(user)}
-                                  title={user.is_active !== false ? 'Deactivate user' : 'Reactivate user'}
+                                  disabled={user.role === 'super_admin' && !isSuperAdmin}
+                                  title={user.role === 'super_admin' && !isSuperAdmin ? 'Cannot modify Super Admin' : user.is_active !== false ? 'Deactivate user' : 'Reactivate user'}
                                 >
                                   {user.is_active !== false ? <><UserX size={12} /> Deactivate</> : <><UserCheck size={12} /> Activate</>}
                                 </button>

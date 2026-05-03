@@ -25,20 +25,20 @@ import { useTheme } from './contexts/ThemeContext'
 import { NotificationBell } from './components/NotificationBell'
 import { NotificationInbox } from './pages/NotificationInbox'
 
-const NAV_ITEMS: Array<{ id: ViewMode; label: string; icon: React.ReactNode; adminOnly?: boolean }> = [
+const NAV_ITEMS: Array<{ id: ViewMode; label: string; icon: React.ReactNode; adminOnly?: boolean; superAdminOnly?: boolean }> = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
   { id: 'table', label: 'All Projects', icon: <Table2 size={16} /> },
   { id: 'new-project', label: 'New Project', icon: <Plus size={16} /> },
   { id: 'import', label: 'Import Data', icon: <Upload size={16} /> },
   { id: 'ai', label: 'AI Insights', icon: <Sparkles size={16} /> },
-  { id: 'admin', label: 'Admin', icon: <Shield size={16} />, adminOnly: true },
+  { id: 'admin', label: 'Admin', icon: <Shield size={16} />, superAdminOnly: true },
 ]
 
 // Number of rows shown in the dashboard preview table — change this one value to adjust
 const DASHBOARD_TABLE_ROWS = 25
 
 const Dashboard: React.FC = () => {
-  const { user, profile, isAdmin, signOut } = useAuth()
+  const { user, profile, isAdmin, isSuperAdmin, signOut } = useAuth()
   const { logoUrl } = useLogo()
   const { isDark, toggleTheme } = useTheme()
   const [projects, setProjects] = useState<Project[]>([])
@@ -138,7 +138,7 @@ const Dashboard: React.FC = () => {
     )
   }
 
-  const navItems = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin)
+  const navItems = NAV_ITEMS.filter(item => (!item.adminOnly || isAdmin) && (!item.superAdminOnly || isSuperAdmin))
 
   return (
     <div className="min-h-screen bg-base-100 flex">
@@ -398,10 +398,10 @@ const Dashboard: React.FC = () => {
           )}
 
           {/* Admin */}
-          {view === 'admin' && isAdmin && (
+          {view === 'admin' && isSuperAdmin && (
             <AdminPage />
           )}
-          {view === 'admin' && !isAdmin && (
+          {view === 'admin' && !isSuperAdmin && (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <Shield size={40} className="mx-auto text-base-content/20 mb-3" />

@@ -16,6 +16,7 @@ export interface FeedbackItemDraft {
 interface Props {
   projectName: string
   currentStatus: string
+  initialAction?: FeedbackActionType
   onSubmit: (params: {
     actionType: FeedbackActionType
     message: string
@@ -90,9 +91,9 @@ const PRIORITY_CONFIG: Record<FeedbackItemDraft['priority'], { label: string; cl
 function uid() { return Math.random().toString(36).slice(2) }
 
 export const ProjectFeedbackModal: React.FC<Props> = ({
-  projectName, currentStatus, onSubmit, onClose,
+  projectName, currentStatus, initialAction = 'hold', onSubmit, onClose,
 }) => {
-  const [actionType, setActionType] = useState<FeedbackActionType>('hold')
+  const [actionType, setActionType] = useState<FeedbackActionType>(initialAction)
   const [message, setMessage] = useState('')
   const [items, setItems] = useState<FeedbackItemDraft[]>([])
   const [newItemText, setNewItemText] = useState('')

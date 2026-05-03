@@ -4,9 +4,9 @@ import {
   FileText, Edit2, History, CheckCircle2, Loader2,
   Paperclip, Upload, Download, Trash2, AlertCircle, File,
   Globe, ListTodo, Tag, PackageOpen, Eye, Bell, BellOff,
-  MessageSquare, Plus, Send, Zap,
+  MessageSquare, Plus, Send, Zap, XCircle, ShieldAlert, RefreshCw,
 } from 'lucide-react'
-import type { Project, ProjectCountry, ProjectTask, ProjectETAHistory } from '../types'
+import type { Project, ProjectCountry, ProjectTask, ProjectETAHistory, ProjectFeedback, ProjectFeedbackItem } from '../types'
 import {
   formatDate, getStatusColor,
   updateProjectStatus, fetchProjectHistory,
@@ -23,6 +23,9 @@ import {
 import type { AuditEntry, ProjectFile, DeliveryFile, DeliveryFileDownload, DeliveryNote } from '../lib/data'
 import {
   fetchDeliveryNotes, createDeliveryNote, updateDeliveryNote, deleteDeliveryNote,
+  deleteProject, fetchProjectFeedback, fetchProjectFeedbackUnresolvedCount,
+  createProjectFeedback, resolveProjectFeedbackItem, unresolveProjectFeedbackItem,
+  submitProjectResponse, submitForReReview,
 } from '../lib/data'
 import type { LookupItem } from '../types'
 import { useAuth } from '../contexts/AuthContext'
@@ -32,6 +35,10 @@ import {
   fetchProjectOwnerEmail,
 } from '../lib/data'
 import { sendNotification } from '../lib/notifications'
+import { DeleteProjectModal } from './DeleteProjectModal'
+import { ProjectFeedbackModal } from './ProjectFeedbackModal'
+import type { FeedbackActionType } from './ProjectFeedbackModal'
+import { FeedbackThread } from './FeedbackThread'
 
 interface FieldProps {
   icon: React.ReactNode
@@ -107,9 +114,10 @@ export const ProjectDetail: React.FC<{
   onClose: () => void
   onEdit?: () => void
   onStatusUpdated?: (updatedProject: Project) => void
-}> = ({ project, onClose, onEdit, onStatusUpdated }) => {
+  onDelete?: () => void
+}> = ({ project, onClose, onEdit, onStatusUpdated, onDelete }) => {
   const { user, isAdmin } = useAuth()
-  const [tab, setTab] = useState<'details' | 'history' | 'files' | 'delivery'>('details')
+  const [tab, setTab] = useState<'details' | 'history' | 'files' | 'delivery' | 'review'>('details')
   const [statuses, setStatuses] = useState<LookupItem[]>([])
   const [selectedStatusId, setSelectedStatusId] = useState<number | null>(project.status_id ?? null)
   const [selectedStatusName, setSelectedStatusName] = useState<string>(project.status)
@@ -147,11 +155,23 @@ export const ProjectDetail: React.FC<{
   const [etaSaving, setEtaSaving] = useState(false)
   const [etaSaveError, setEtaSaveError] = useState<string | null>(null)
 
+  // ── Review / Feedback state ──────────────────────────────────────────────
+  const [feedbackEntries, setFeedbackEntries] = useState<ProjectFeedback[]>([])
+  const [feedbackItems, setFeedbackItems] = useState<ProjectFeedbackItem[]>([])
+  const [feedbackLoading, setFeedbackLoading] = useState(false)
+  const [unresolvedCount, setUnresolvedCount] = useState(0)
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false)
+  const [feedbackModalAction, setFeedbackModalAction] = useState<FeedbackActionType>('hold')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
+
   useEffect(() => {
     fetchProjectCountries(project.id).then(setProjectCountries).catch(() => {})
     fetchProjectTasks(project.id).then(setProjectTasks).catch(() => {})
     fetchProjectETAData(project.id).then(d => setEtaData(d)).catch(() => {})
     fetchProjectETAHistory(project.id).then(setEtaHistory).catch(() => {})
+    // Load unresolved feedback count for badge
+    fetchProjectFeedbackUnresolvedCount(project.id).then(setUnresolvedCount).catch(() => {})
   }, [project.id])
 
   // ── Files state ─────────────────────────────────────────────────────────────
@@ -251,6 +271,14 @@ export const ProjectDetail: React.FC<{
     if (tab === 'history') loadHistory()
     if (tab === 'files') loadFiles()
     if (tab === 'delivery') { loadDeliveryFiles(); loadDeliveryNotes() }
+    if (tab === 'review') {
+      setFeedbackLoading(true)
+      fetchProjectFeedback(localProject.id).then(({ entries, items }) => {
+        setFeedbackEntries(entries)
+        setFeedbackItems(items)
+        setUnresolvedCount(items.filter(i => !i.is_resolved).length)
+      }).catch(() => {}).finally(() => setFeedbackLoading(false))
+    }
   }, [tab, localProject.id])
 
   const handleStatusChange = (statusId: number, statusName: string) => {
@@ -624,6 +652,15 @@ export const ProjectDetail: React.FC<{
               <Edit2 size={14} /> Edit
             </button>
           )}
+          {isAdmin && (
+            <button
+              className="btn btn-ghost btn-sm btn-circle text-error/60 hover:text-error hover:bg-error/10"
+              title="Delete project"
+              onClick={() => setShowDeleteModal(true)}
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
           <button className="btn btn-ghost btn-sm btn-circle" onClick={onClose}><X size={16} /></button>
         </div>
       </div>
@@ -660,6 +697,16 @@ export const ProjectDetail: React.FC<{
           Delivery
           {deliveryFiles.length > 0 && (
             <span className="badge badge-xs badge-secondary ml-0.5">{deliveryFiles.length}</span>
+          )}
+        </button>
+        <button
+          className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-colors relative ${tab === 'review' ? 'border-b-2 border-primary text-primary' : 'text-base-content/50 hover:text-base-content'}`}
+          onClick={() => setTab('review')}
+        >
+          <ShieldAlert size={13} />
+          Review
+          {unresolvedCount > 0 && (
+            <span className="badge badge-xs badge-error ml-0.5">{unresolvedCount}</span>
           )}
         </button>
       </div>
@@ -745,6 +792,23 @@ export const ProjectDetail: React.FC<{
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Action required banner for non-admin users */}
+          {!isAdmin && unresolvedCount > 0 && (
+            <div
+              className="mx-4 mt-3 flex items-center gap-3 p-3 bg-warning/10 rounded-xl border border-warning/30 cursor-pointer hover:bg-warning/15 transition-colors"
+              onClick={() => setTab('review')}
+            >
+              <AlertCircle size={15} className="text-warning shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-base-content">Action Required</p>
+                <p className="text-xs text-base-content/60 mt-0.5">
+                  {unresolvedCount} item{unresolvedCount !== 1 ? 's' : ''} need{unresolvedCount === 1 ? 's' : ''} your attention — click to view feedback
+                </p>
+              </div>
+              <span className="text-xs text-warning/70 font-medium shrink-0">View →</span>
             </div>
           )}
 
@@ -1653,6 +1717,210 @@ export const ProjectDetail: React.FC<{
             )}
           </div>
         </div>
+      )}
+
+      {/* Review Tab */}
+      {tab === 'review' && (
+        <div className="flex-1 overflow-y-auto flex flex-col">
+          {/* Admin action buttons */}
+          {isAdmin && (
+            <div className="p-4 border-b border-base-300 bg-base-50">
+              <div className="text-xs font-semibold uppercase tracking-wider text-base-content/40 mb-3">Admin Actions</div>
+              <div className="flex flex-col gap-2">
+                <button
+                  className="btn btn-warning btn-sm gap-2 w-full justify-start"
+                  onClick={() => { setFeedbackModalAction('hold'); setShowFeedbackModal(true) }}
+                >
+                  <Clock size={14} /> Put On Hold
+                </button>
+                <button
+                  className="btn btn-info btn-sm gap-2 w-full justify-start"
+                  onClick={() => { setFeedbackModalAction('request_changes'); setShowFeedbackModal(true) }}
+                >
+                  <MessageSquare size={14} /> Request Changes
+                </button>
+                <button
+                  className="btn btn-error btn-sm btn-outline gap-2 w-full justify-start"
+                  onClick={() => { setFeedbackModalAction('reject'); setShowFeedbackModal(true) }}
+                >
+                  <XCircle size={14} /> Reject Project
+                </button>
+                {localProject.status === 'On Hold' && (
+                  <button
+                    className="btn btn-success btn-sm btn-outline gap-2 w-full justify-start"
+                    onClick={async () => {
+                      if (!user) return
+                      setFeedbackSubmitting(true)
+                      try {
+                        const { data: adminEntry, error: e1 } = await (await import('../lib/supabase')).supabase
+                          .from('project_feedback')
+                          .insert({
+                            project_id: localProject.id,
+                            author_id: user.id,
+                            author_name: (user as any)?.user_metadata?.full_name || user.email || 'Admin',
+                            author_role: 'admin',
+                            action_type: 'approve',
+                            message: 'Project approved and moved forward.',
+                            status_change_to_id: 1,
+                            status_change_to_name: 'In Process',
+                            notify_requester: false,
+                          })
+                          .select().single()
+                        if (e1) throw e1
+                        const { error: e2 } = await (await import('../lib/supabase')).supabase
+                          .from('projects').update({ status_id: 1 }).eq('id', localProject.id)
+                        if (e2) throw e2
+                        const updated = { ...localProject, status: 'In Process', status_id: 1 }
+                        setLocalProject(updated)
+                        setSelectedStatusId(1)
+                        setSelectedStatusName('In Process')
+                        onStatusUpdated?.(updated)
+                        setFeedbackEntries(prev => [...prev, adminEntry as ProjectFeedback])
+                      } catch (err: any) {
+                        alert('Failed to approve: ' + (err.message || 'Unknown error'))
+                      } finally {
+                        setFeedbackSubmitting(false)
+                      }
+                    }}
+                    disabled={feedbackSubmitting}
+                  >
+                    <CheckCircle2 size={14} /> Approve & Resume
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Thread */}
+          <div className="flex-1 overflow-y-auto">
+            <FeedbackThread
+              entries={feedbackEntries}
+              items={feedbackItems}
+              isAdmin={isAdmin}
+              currentUserId={user?.id || ''}
+              currentUserName={(user as any)?.user_metadata?.full_name || user?.email || ''}
+              projectOwnerId={localProject.created_by || null}
+              loading={feedbackLoading}
+              onItemResolve={async (item, note) => {
+                if (!user) return
+                const name = (user as any)?.user_metadata?.full_name || user.email || 'User'
+                await resolveProjectFeedbackItem(item.id, note, user.id, name)
+                setFeedbackItems(prev => prev.map(i => i.id === item.id
+                  ? { ...i, is_resolved: true, resolved_by: user.id, resolved_by_name: name, resolved_at: new Date().toISOString(), resolution_note: note }
+                  : i
+                ))
+                setUnresolvedCount(prev => Math.max(0, prev - 1))
+              }}
+              onItemUnresolve={async (item) => {
+                await unresolveProjectFeedbackItem(item.id)
+                setFeedbackItems(prev => prev.map(i => i.id === item.id
+                  ? { ...i, is_resolved: false, resolved_by: null, resolved_by_name: null, resolved_at: null, resolution_note: null }
+                  : i
+                ))
+                setUnresolvedCount(prev => prev + 1)
+              }}
+              onAddResponse={async (message) => {
+                if (!user) return
+                const name = (user as any)?.user_metadata?.full_name || user.email || 'User'
+                const entry = await submitProjectResponse(localProject.id, message, user.id, name)
+                setFeedbackEntries(prev => [...prev, entry])
+              }}
+              onResubmit={async () => {
+                if (!user) return
+                const name = (user as any)?.user_metadata?.full_name || user.email || 'User'
+                await submitForReReview(localProject.id, user.id, name)
+                const resubmitEntry: ProjectFeedback = {
+                  id: `local-${Date.now()}`,
+                  project_id: localProject.id,
+                  author_id: user.id,
+                  author_name: name,
+                  author_role: 'user',
+                  action_type: 'resubmit',
+                  message: 'Project submitted for re-review.',
+                  status_change_to_id: 3,
+                  status_change_to_name: 'Under Review',
+                  notify_requester: false,
+                  created_at: new Date().toISOString(),
+                }
+                setFeedbackEntries(prev => [...prev, resubmitEntry])
+                const updated = { ...localProject, status: 'Under Review', status_id: 3 }
+                setLocalProject(updated)
+                setSelectedStatusId(3)
+                setSelectedStatusName('Under Review')
+                onStatusUpdated?.(updated)
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Modals ────────────────────────────────────────────────────────── */}
+      {showDeleteModal && (
+        <DeleteProjectModal
+          projectName={localProject.client_name || 'this project'}
+          onConfirm={async () => {
+            await deleteProject(localProject.id)
+            setShowDeleteModal(false)
+            onDelete?.()
+            onClose()
+          }}
+          onClose={() => setShowDeleteModal(false)}
+        />
+      )}
+
+      {showFeedbackModal && (
+        <ProjectFeedbackModal
+          projectName={localProject.client_name || 'this project'}
+          currentStatus={localProject.status}
+          onClose={() => setShowFeedbackModal(false)}
+          onSubmit={async (params) => {
+            if (!user) return
+            const authorName = (user as any)?.user_metadata?.full_name || user.email || 'Admin'
+            const entry = await createProjectFeedback({
+              projectId: localProject.id,
+              authorId: user.id,
+              authorName,
+              authorRole: 'admin',
+              actionType: params.actionType,
+              message: params.message,
+              statusChangeToId: params.statusChangeToId,
+              statusChangeToName: params.statusChangeToName,
+              notifyRequester: params.notifyRequester,
+              items: params.items,
+            })
+            // Update local project status if changed
+            if (params.statusChangeToId && params.statusChangeToName) {
+              const updated = { ...localProject, status: params.statusChangeToName, status_id: params.statusChangeToId }
+              setLocalProject(updated)
+              setSelectedStatusId(params.statusChangeToId)
+              setSelectedStatusName(params.statusChangeToName)
+              onStatusUpdated?.(updated)
+            }
+            // Reload feedback thread
+            const { entries, items: newItems } = await fetchProjectFeedback(localProject.id)
+            setFeedbackEntries(entries)
+            setFeedbackItems(newItems)
+            const unresolved = newItems.filter(i => !i.is_resolved).length
+            setUnresolvedCount(unresolved)
+            setShowFeedbackModal(false)
+            setTab('review')
+            // Notify requester via email if checked
+            if (params.notifyRequester && localProject.created_by) {
+              fetchProjectOwnerEmail(localProject.created_by).then(email => {
+                if (!email) return
+                sendNotification({
+                  type: 'project_feedback',
+                  to: email,
+                  project: localProject,
+                  actionType: params.actionType,
+                  message: params.message,
+                  items: params.items,
+                  adminName: authorName,
+                } as any).catch(() => {})
+              }).catch(() => {})
+            }
+          }}
+        />
       )}
     </div>
   )

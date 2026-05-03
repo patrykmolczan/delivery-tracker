@@ -1,5 +1,5 @@
 import { getEmailProvider } from './lib/emailProviders'
-import { buildCompletionEmail, buildDeliveryFileEmail, buildStatusChangeEmail, buildETAChangeEmail } from './lib/emailTemplates'
+import { buildCompletionEmail, buildDeliveryFileEmail, buildStatusChangeEmail, buildETAChangeEmail, buildProjectFeedbackEmail } from './lib/emailTemplates'
 
 export default async function handler(req: any, res: any) {
   // CORS headers
@@ -15,7 +15,7 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { type, to, project, files, newStatus, oldDays, newDays, reason } = req.body || {}
+  const { type, to, project, files, newStatus, oldDays, newDays, reason, actionType, message, items, adminName } = req.body || {}
 
   if (!type || !to || !project) {
     return res.status(400).json({ error: 'Missing required fields: type, to, project' })
@@ -37,6 +37,9 @@ export default async function handler(req: any, res: any) {
         break
       case 'eta_changed':
         payload = await buildETAChangeEmail(to, project, oldDays ?? null, newDays ?? 0, reason ?? null)
+        break
+      case 'project_feedback':
+        payload = await buildProjectFeedbackEmail(to, project, actionType || 'hold', message || '', items || [], adminName || 'Admin')
         break
       default:
         return res.status(400).json({ error: `Unknown notification type: ${type}` })

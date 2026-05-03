@@ -4,7 +4,7 @@ import {
   FileText, Edit2, History, CheckCircle2, Loader2,
   Paperclip, Upload, Download, Trash2, AlertCircle, File,
   Globe, ListTodo, Tag, PackageOpen, Eye, Bell, BellOff,
-  MessageSquare, Plus, Send, Zap, XCircle, ShieldAlert, RefreshCw,
+  MessageSquare, Plus, Send, Zap, XCircle, ShieldAlert,
 } from 'lucide-react'
 import type { Project, ProjectCountry, ProjectTask, ProjectETAHistory, ProjectFeedback, ProjectFeedbackItem } from '../types'
 import {
@@ -161,7 +161,6 @@ export const ProjectDetail: React.FC<{
   const [feedbackLoading, setFeedbackLoading] = useState(false)
   const [unresolvedCount, setUnresolvedCount] = useState(0)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
-  const [feedbackModalAction, setFeedbackModalAction] = useState<FeedbackActionType>('hold')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
 
@@ -1876,7 +1875,7 @@ export const ProjectDetail: React.FC<{
           onSubmit={async (params) => {
             if (!user) return
             const authorName = (user as any)?.user_metadata?.full_name || user.email || 'Admin'
-            const entry = await createProjectFeedback({
+            await createProjectFeedback({
               projectId: localProject.id,
               authorId: user.id,
               authorName,

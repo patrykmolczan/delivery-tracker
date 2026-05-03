@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import {
   Clock, MessageSquare, XCircle, CheckCircle2, RefreshCw,
   AlertTriangle, Loader2, Send, ChevronDown, ChevronUp,
-  Check, CornerDownRight, Flag,
+  Check, CornerDownRight,
 } from 'lucide-react'
 import type { ProjectFeedback, ProjectFeedbackItem } from '../types'
 
@@ -136,7 +136,7 @@ export const FeedbackThread: React.FC<Props> = ({
   items,
   isAdmin,
   currentUserId,
-  currentUserName,
+  currentUserName: _currentUserName,
   projectOwnerId,
   onItemResolve,
   onItemUnresolve,
@@ -169,7 +169,6 @@ export const FeedbackThread: React.FC<Props> = ({
   const isRequester = !isAdmin && (projectOwnerId === currentUserId || true)
 
   const unresolvedItems = items.filter(i => !i.is_resolved)
-  const resolvedItems = items.filter(i => i.is_resolved)
 
   const itemsByFeedback = (feedbackId: string) =>
     items.filter(i => i.feedback_id === feedbackId)
@@ -275,7 +274,7 @@ export const FeedbackThread: React.FC<Props> = ({
 
       {/* ── Timeline entries ─────────────────────────────────────────────── */}
       <div className="p-4 space-y-3">
-        {entries.map((entry, idx) => {
+        {entries.map((entry) => {
           const meta = ACTION_META[entry.action_type] || ACTION_META.comment
           const EntryIcon = meta.icon
           const entryItems = itemsByFeedback(entry.id)

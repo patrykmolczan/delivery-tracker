@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import {
   X, Clock, MessageSquare, XCircle, Plus, Trash2,
-  Bell, ChevronDown, Flag, AlertTriangle, Loader2, CheckCircle2,
+  Bell, AlertTriangle, CheckCircle2,
 } from 'lucide-react'
 
 export type FeedbackActionType = 'hold' | 'request_changes' | 'reject'

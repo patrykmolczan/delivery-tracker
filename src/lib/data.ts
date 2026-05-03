@@ -893,7 +893,7 @@ export function buildPredictionStats(projects: Project[]): PredictionStats {
     })
     const result: Record<string, { avg: number; count: number }> = {}
     Object.entries(map).forEach(([k, v]) => {
-      result[k] = { avg: avg(v), count: v.length }
+      result[k] = { avg: median(v), count: v.length }  // median: outlier-resistant
     })
     return result
   }
@@ -909,7 +909,7 @@ export function buildPredictionStats(projects: Project[]): PredictionStats {
   ranges.forEach(r => {
     const group = completed.filter(p => p.job_count != null && p.job_count >= r.min && p.job_count <= r.max)
     const vals = group.map(p => p.days_to_complete as number)
-    byJobRange[r.label] = { avg: avg(vals), count: vals.length }
+    byJobRange[r.label] = { avg: median(vals), count: vals.length }  // median: outlier-resistant
   })
 
   return {
@@ -952,7 +952,7 @@ export function predictDeliveryTime(
 
   if (weights.length === 0) {
     return {
-      estimate: stats.overall.avg,
+      estimate: stats.overall.median,
       confidence: 'Low',
       breakdown: `Based on overall average of ${stats.overall.count} completed projects`
     }

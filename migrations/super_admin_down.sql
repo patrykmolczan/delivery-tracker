@@ -74,19 +74,31 @@ BEGIN
 
   v_encrypted_pw := crypt(p_password, gen_salt('bf'));
 
+  -- instance_id must be all-zeros UUID
   INSERT INTO auth.users (
-    id, email, encrypted_password, email_confirmed_at,
+    instance_id, id, email, encrypted_password, email_confirmed_at,
     role, aud, created_at, updated_at,
     raw_app_meta_data, raw_user_meta_data, is_super_admin,
     confirmation_token, recovery_token,
     email_change_token_new, email_change, phone_change_token
   ) VALUES (
+    '00000000-0000-0000-0000-000000000000',
     gen_random_uuid(), p_email, v_encrypted_pw, now(),
     'authenticated', 'authenticated', now(), now(),
     '{"provider":"email","providers":["email"]}'::jsonb,
     jsonb_build_object('full_name', p_full_name),
     false, '', '', '', '', ''
   ) RETURNING id INTO v_user_id;
+
+  -- GoTrue requires auth.identities row
+  INSERT INTO auth.identities (
+    provider_id, user_id, identity_data, provider,
+    last_sign_in_at, created_at, updated_at, id
+  ) VALUES (
+    p_email, v_user_id,
+    jsonb_build_object('sub', v_user_id::text, 'email', p_email),
+    'email', now(), now(), now(), v_user_id
+  );
 
   INSERT INTO public.profiles (
     id, email, full_name, role, is_active,

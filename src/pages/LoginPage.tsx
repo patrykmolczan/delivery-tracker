@@ -56,9 +56,65 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-base-200 p-6" style={{ fontFamily: 'var(--font-sans, system-ui, sans-serif)' }}>
-      <div style={{ display: 'flex', width: '100%', maxWidth: 900, minHeight: 560, borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.12)', border: '0.5px solid var(--fallback-bc,oklch(var(--bc)/0.1))' }}>
+      <div className="flex flex-col lg:flex-row" style={{ width: '100%', maxWidth: 900, minHeight: 560, borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.12)', border: '0.5px solid var(--fallback-bc,oklch(var(--bc)/0.1))' }}>
 
-      {/* ── Left panel ───────────────────────────────────────────────── */}
+      {/* ── Mobile header (navy, shown only on mobile) ───────────────── */}
+      <div className="flex lg:hidden flex-col items-center" style={{ background: '#0C447C', padding: '28px 24px 24px' }}>
+        {/* Logo */}
+        {logoUrl && (
+          <div style={{ background: 'rgba(255,255,255,0.92)', borderRadius: 8, padding: '5px 10px', marginBottom: 20 }}>
+            <img src={logoUrl} alt="Company Logo" style={{ height: 22, width: 'auto', display: 'block', maxWidth: 140 }} />
+          </div>
+        )}
+        {/* Mini pipeline */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0, marginBottom: 16 }}>
+          {/* Node 01 */}
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#185FA5', border: '1px solid #378ADD', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 6, color: 'rgba(255,255,255,0.55)', fontFamily: 'sans-serif', lineHeight: 1 }}>INTAKE</span>
+            <span style={{ fontSize: 8, color: 'white', fontFamily: 'sans-serif', fontWeight: 500 }}>01</span>
+          </div>
+          <div style={{ width: 20, height: 1, background: '#5DCAA5' }} />
+          {/* Node 02 — active + pulse */}
+          <div style={{ position: 'relative', width: 36, height: 36 }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#185FA5', border: '1px solid #378ADD', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: 6, color: 'rgba(255,255,255,0.55)', fontFamily: 'sans-serif', lineHeight: 1 }}>PROC</span>
+              <span style={{ fontSize: 8, color: 'white', fontFamily: 'sans-serif', fontWeight: 500 }}>02</span>
+            </div>
+            <svg style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', overflow: 'visible', pointerEvents: 'none' }} width="36" height="36">
+              <circle cx="18" cy="18" r="18" fill="none" stroke="#5DCAA5" strokeWidth="1" opacity="0.5">
+                <animate attributeName="r" values="18;26;18" dur="2.5s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.5;0;0.5" dur="2.5s" repeatCount="indefinite" />
+              </circle>
+            </svg>
+          </div>
+          <div style={{ width: 20, height: 1, background: 'rgba(255,255,255,0.2)' }} />
+          {/* Node 03 */}
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 6, color: 'rgba(255,255,255,0.4)', fontFamily: 'sans-serif', lineHeight: 1 }}>REVIEW</span>
+            <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.5)', fontFamily: 'sans-serif', fontWeight: 500 }}>03</span>
+          </div>
+          <div style={{ width: 20, height: 1, background: 'rgba(255,255,255,0.2)' }} />
+          {/* Node 04 — done green */}
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#085041', border: '1px solid #1D9E75', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 6, color: 'rgba(157,225,203,0.7)', fontFamily: 'sans-serif', lineHeight: 1 }}>DONE</span>
+            <span style={{ fontSize: 8, color: '#9FE1CB', fontFamily: 'sans-serif', fontWeight: 500 }}>04</span>
+          </div>
+        </div>
+        {/* Analyst avatars */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+          {[['PH','#185FA5'],['PM','#0F6E56'],['AA','#185FA5'],['KT','#0F6E56'],['MC','#185FA5']].map(([init, bg]) => (
+            <div key={init} style={{ width: 24, height: 24, borderRadius: '50%', background: bg, border: '1.5px solid #0C447C', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 7, color: 'white', fontFamily: 'sans-serif' }}>{init}</div>
+          ))}
+          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginLeft: 4 }}>5 analysts · live</span>
+        </div>
+        {/* Tag */}
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.1)', border: '0.5px solid rgba(255,255,255,0.2)', borderRadius: 100, padding: '3px 10px' }}>
+          <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#5DCAA5' }} />
+          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.75)' }}>Magnit Global · Internal Platform</span>
+        </div>
+      </div>
+
+      {/* ── Left panel (desktop only) ─────────────────────────────────── */}
       <div
         className="hidden lg:flex flex-col justify-between flex-1 overflow-hidden relative"
         style={{ background: '#0C447C', padding: '48px 40px', minWidth: 0 }}
@@ -169,9 +225,9 @@ export const LoginPage: React.FC = () => {
           flex: '0 0 380px',
         }}
       >
-        {/* Logo — top right, pulled from app_settings via useLogo() */}
+        {/* Logo — top right on desktop only (mobile shows it in navy header above) */}
         {logoUrl && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 28 }}>
+          <div className="hidden lg:flex" style={{ justifyContent: 'flex-end', marginBottom: 28 }}>
             <div style={{
               background: isDark ? 'rgba(255,255,255,0.92)' : 'var(--fallback-b2,oklch(var(--b2)))',
               border: '0.5px solid var(--fallback-bc,oklch(var(--bc)/0.1))',

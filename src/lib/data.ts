@@ -318,10 +318,7 @@ export async function updateProject(id: string, form: ProjectFormData): Promise<
   await syncProjectTasks(id, form.project_tasks)
 }
 
-export async function deleteProject(id: string): Promise<void> {
-  const { error } = await supabase.from('projects').delete().eq('id', id)
-  if (error) throw error
-}
+
 
 export async function updateProjectStatus(
   id: string,

@@ -1752,30 +1752,42 @@ export const ProjectDetail: React.FC<{
                       if (!user) return
                       setFeedbackSubmitting(true)
                       try {
-                        const { data: adminEntry, error: e1 } = await (await import('../lib/supabase')).supabase
-                          .from('project_feedback')
-                          .insert({
-                            project_id: localProject.id,
-                            author_id: user.id,
-                            author_name: (user as any)?.user_metadata?.full_name || user.email || 'Admin',
-                            author_role: 'admin',
-                            action_type: 'approve',
-                            message: 'Project approved and moved forward.',
-                            status_change_to_id: 1,
-                            status_change_to_name: 'In Process',
-                            notify_requester: false,
-                          })
-                          .select().single()
-                        if (e1) throw e1
-                        const { error: e2 } = await (await import('../lib/supabase')).supabase
-                          .from('projects').update({ status_id: 1 }).eq('id', localProject.id)
-                        if (e2) throw e2
+                        const authorName = (user as any)?.user_metadata?.full_name || user.email || 'Admin'
+                        const approvalMessage = 'Your project has been approved and will move forward.'
+                        // createProjectFeedback auto-fires in-app notification to requester
+                        const entry = await createProjectFeedback({
+                          projectId: localProject.id,
+                          authorId: user.id,
+                          authorName,
+                          authorRole: 'admin',
+                          actionType: 'approve',
+                          message: approvalMessage,
+                          statusChangeToId: 1,
+                          statusChangeToName: 'In Process',
+                          notifyRequester: true,
+                          items: [],
+                        })
                         const updated = { ...localProject, status: 'In Process', status_id: 1 }
                         setLocalProject(updated)
                         setSelectedStatusId(1)
                         setSelectedStatusName('In Process')
                         onStatusUpdated?.(updated)
-                        setFeedbackEntries(prev => [...prev, adminEntry as ProjectFeedback])
+                        setFeedbackEntries(prev => [...prev, entry])
+                        // Send email to requester (approval always notifies)
+                        if (localProject.created_by) {
+                          fetchProjectOwnerEmail(localProject.created_by).then(email => {
+                            if (!email) return
+                            sendNotification({
+                              type: 'project_feedback',
+                              to: email,
+                              project: localProject,
+                              actionType: 'approve',
+                              message: approvalMessage,
+                              items: [],
+                              adminName: authorName,
+                            } as any).catch(() => {})
+                          }).catch(() => {})
+                        }
                       } catch (err: any) {
                         alert('Failed to approve: ' + (err.message || 'Unknown error'))
                       } finally {

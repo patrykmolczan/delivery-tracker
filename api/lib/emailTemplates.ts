@@ -721,7 +721,7 @@ export async function buildProjectFeedbackEmail(
                     <div style="width:16px;height:16px;border:2px solid #CBD5E1;border-radius:4px;display:inline-block;"></div>
                   </td>
                   <td style="padding-left:10px;">
-                    <p style="margin:0;font-size:13px;color:${DARK};line-height:1.5;">${escapeHtml(item.item_text)}</p>
+                    <p style="margin:0;font-size:13px;color:${BRAND};line-height:1.5;">${escapeHtml(item.item_text)}</p>
                     <div style="margin-top:4px;">
                       <span style="font-size:10px;font-weight:700;color:${PRIORITY_COLOR[item.priority] || PRIORITY_COLOR.medium};text-transform:uppercase;">${item.priority}</span>
                       <span style="font-size:10px;color:#94A3B8;"> · ${escapeHtml(item.category)}</span>
@@ -752,7 +752,7 @@ export async function buildProjectFeedbackEmail(
     <!-- Headline -->
     <tr>
       <td style="padding:20px 40px 0;">
-        <h1 style="margin:0;font-size:22px;font-weight:700;color:${DARK};line-height:1.3;">
+        <h1 style="margin:0;font-size:22px;font-weight:700;color:${BRAND};line-height:1.3;">
           ${actionType === 'reject' ? 'Project Rejected' : actionType === 'hold' ? 'Project On Hold' : 'Changes Required'}
         </h1>
         <p style="margin:8px 0 0;font-size:14px;color:${GREY};line-height:1.7;">
@@ -773,7 +773,7 @@ export async function buildProjectFeedbackEmail(
               <p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#94A3B8;">
                 Message from ${escapeHtml(adminName)}
               </p>
-              <p style="margin:0;font-size:14px;color:${DARK};line-height:1.7;white-space:pre-wrap;">${escapeHtml(message)}</p>
+              <p style="margin:0;font-size:14px;color:${BRAND};line-height:1.7;white-space:pre-wrap;">${escapeHtml(message)}</p>
             </td>
           </tr>
         </table>

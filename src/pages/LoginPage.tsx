@@ -180,7 +180,7 @@ export const LoginPage: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
             }}>
-              <img src={logoUrl} alt="Company Logo" style={{ height: 24, width: 'auto', display: 'block' }} />
+              <img src={logoUrl} alt="Company Logo" style={{ height: 31, width: 'auto', display: 'block', maxWidth: 160 }} />
             </div>
           </div>
         )}

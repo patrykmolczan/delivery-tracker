@@ -10,7 +10,7 @@ function sanitizeText(val: string | null | undefined): string | null {
 import type {
   Project, KPIData, StatusCount, OwnerCount, FilterState, SortState,
   LookupItem, ProjectFeedback, ProjectFeedbackItem, ProjectFormData, ProjectCountry, ProjectCountryInput, ProjectTask,
-  ProjectETAHistory,,
+  ProjectETAHistory,
   NotificationType, AppNotification} from '../types'
 
 // ─── Projects ─────────────────────────────────────────────────────────────────

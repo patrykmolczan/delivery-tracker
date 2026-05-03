@@ -22,6 +22,8 @@ import {
   Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon
 } from 'lucide-react'
 import { useTheme } from './contexts/ThemeContext'
+import { NotificationBell } from './components/NotificationBell'
+import { NotificationInbox } from './pages/NotificationInbox'
 
 const NAV_ITEMS: Array<{ id: ViewMode; label: string; icon: React.ReactNode; adminOnly?: boolean }> = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
@@ -277,6 +279,13 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <NotificationBell
+              onViewAll={() => navigate('notifications')}
+              onProjectOpen={(projectId) => {
+                const proj = projects.find(p => p.id === projectId)
+                if (proj) setSelectedProject(proj)
+              }}
+            />
             {view !== 'table' && (
               <button
                 className="btn btn-primary btn-sm gap-1.5 hidden sm:flex"
@@ -373,6 +382,19 @@ const Dashboard: React.FC = () => {
           {/* AI Insights */}
           {view === 'ai' && (
             <AIPage projects={projects} />
+          )}
+
+          {/* Notifications */}
+          {view === 'notifications' && (
+            <NotificationInbox
+              onProjectOpen={(projectId) => {
+                const proj = projects.find(p => p.id === projectId)
+                if (proj) {
+                  setSelectedProject(proj)
+                  navigate('dashboard')
+                }
+              }}
+            />
           )}
 
           {/* Admin */}

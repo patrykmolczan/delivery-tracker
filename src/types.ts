@@ -147,6 +147,7 @@ export type ViewMode =
   | 'import'
   | 'admin'
   | 'ai'
+  | 'notifications'
 
 export interface UserProfile {
   id: string
@@ -207,5 +208,29 @@ export interface ProjectFeedbackItem {
   resolved_by_name: string | null
   resolved_at: string | null
   resolution_note: string | null
+  created_at: string
+}
+
+// ── In-App Notifications ──────────────────────────────────────────────────────
+export type NotificationType =
+  | 'feedback_hold'
+  | 'feedback_changes'
+  | 'feedback_reject'
+  | 'feedback_approve'
+  | 'user_response'
+  | 'resubmit'
+  | 'eta_update'
+  | 'project_created'
+  | 'status_change'
+
+export interface AppNotification {
+  id: string
+  user_id: string
+  type: NotificationType
+  title: string
+  body: string
+  project_id: string | null
+  project_name: string | null
+  is_read: boolean
   created_at: string
 }

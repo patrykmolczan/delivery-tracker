@@ -10,8 +10,8 @@ function sanitizeText(val: string | null | undefined): string | null {
 import type {
   Project, KPIData, StatusCount, OwnerCount, FilterState, SortState,
   LookupItem, ProjectFeedback, ProjectFeedbackItem, ProjectFormData, ProjectCountry, ProjectCountryInput, ProjectTask,
-  ProjectETAHistory,
-} from '../types'
+  ProjectETAHistory,,
+  NotificationType, AppNotification} from '../types'
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
@@ -1572,6 +1572,25 @@ export async function updateProjectETA(
       notified_requester: notifyRequester,
     })
   if (histError) throw new Error(`Failed to record ETA history: ${histError.message}`)
+
+  // In-app notification for project requester (always, non-blocking)
+  try {
+    const { data: proj } = await supabase
+      .from('projects')
+      .select('created_by, project_owner')
+      .eq('id', projectId)
+      .single()
+    if (proj?.created_by && proj.created_by !== adminUserId) {
+      await createNotification({
+        userId: proj.created_by,
+        type: 'eta_update',
+        title: 'Delivery estimate updated',
+        body: `Your project's ETA has been updated to ${newDays} day${newDays !== 1 ? 's' : ''}${reason ? `: ${reason}` : ''}.`,
+        projectId,
+        projectName: proj.project_owner,
+      })
+    }
+  } catch { /* best effort */ }
 }
 
 export async function fetchProjectETAHistory(projectId: string): Promise<ProjectETAHistory[]> {
@@ -1869,6 +1888,40 @@ export async function createProjectFeedback(params: {
     if (e3) throw e3
   }
 
+  // In-app notification for project requester (always, non-blocking)
+  try {
+    const { data: proj } = await supabase
+      .from('projects')
+      .select('created_by, project_owner')
+      .eq('id', params.projectId)
+      .single()
+    if (proj?.created_by && proj.created_by !== params.authorId) {
+      const typeMap: Record<string, NotificationType> = {
+        hold: 'feedback_hold',
+        request_changes: 'feedback_changes',
+        reject: 'feedback_reject',
+        approve: 'feedback_approve',
+      }
+      const titleMap: Record<string, string> = {
+        hold: 'Your project has been put on hold',
+        request_changes: 'Changes requested on your project',
+        reject: 'Your project has been rejected',
+        approve: 'Your project has been approved',
+      }
+      const notifType = typeMap[params.actionType]
+      if (notifType) {
+        await createNotification({
+          userId: proj.created_by,
+          type: notifType,
+          title: titleMap[params.actionType] ?? 'Project update',
+          body: params.message || `${params.authorName} took action on your project.`,
+          projectId: params.projectId,
+          projectName: proj.project_owner,
+        })
+      }
+    }
+  } catch { /* best effort */ }
+
   return entry as ProjectFeedback
 }
 
@@ -1929,6 +1982,24 @@ export async function submitProjectResponse(
     .select()
     .single()
   if (error) throw error
+
+  // Notify admins about user response (non-blocking)
+  try {
+    const { data: proj } = await supabase
+      .from('projects')
+      .select('project_owner')
+      .eq('id', projectId)
+      .single()
+    await createNotificationsForAdmins({
+      type: 'user_response',
+      title: 'User replied to feedback',
+      body: `${authorName} responded on "${proj?.project_owner ?? projectId}".`,
+      projectId,
+      projectName: proj?.project_owner ?? null,
+      excludeUserId: authorId,
+    })
+  } catch { /* best effort */ }
+
   return data as ProjectFeedback
 }
 
@@ -1960,4 +2031,108 @@ export async function submitForReReview(
     .update({ status_id: 3 })
     .eq('id', projectId)
   if (e2) throw e2
+
+  // Notify admins (non-blocking)
+  try {
+    const { data: proj } = await supabase
+      .from('projects')
+      .select('project_owner')
+      .eq('id', projectId)
+      .single()
+    await createNotificationsForAdmins({
+      type: 'resubmit',
+      title: 'Project submitted for re-review',
+      body: `${authorName} submitted "${proj?.project_owner ?? projectId}" for re-review.`,
+      projectId,
+      projectName: proj?.project_owner ?? null,
+      excludeUserId: authorId,
+    })
+  } catch { /* best effort */ }
+}
+
+// ── In-App Notifications ──────────────────────────────────────────────────────
+
+export async function createNotification(params: {
+  userId: string
+  type: NotificationType
+  title: string
+  body: string
+  projectId?: string | null
+  projectName?: string | null
+}): Promise<void> {
+  try {
+    await supabase.from('notifications').insert({
+      user_id: params.userId,
+      type: params.type,
+      title: params.title,
+      body: params.body,
+      project_id: params.projectId ?? null,
+      project_name: params.projectName ?? null,
+    })
+  } catch { /* best effort — never block the main operation */ }
+}
+
+export async function createNotificationsForAdmins(params: {
+  type: NotificationType
+  title: string
+  body: string
+  projectId?: string | null
+  projectName?: string | null
+  excludeUserId?: string
+}): Promise<void> {
+  try {
+    const { data: admins } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', 'admin')
+      .eq('is_active', true)
+    if (!admins?.length) return
+    const rows = admins
+      .filter((a: any) => a.id !== params.excludeUserId)
+      .map((a: any) => ({
+        user_id: a.id,
+        type: params.type,
+        title: params.title,
+        body: params.body,
+        project_id: params.projectId ?? null,
+        project_name: params.projectName ?? null,
+      }))
+    if (rows.length > 0) {
+      await supabase.from('notifications').insert(rows)
+    }
+  } catch { /* best effort */ }
+}
+
+export async function fetchNotifications(limit = 50): Promise<AppNotification[]> {
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return (data || []) as AppNotification[]
+}
+
+export async function fetchUnreadNotificationCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_read', false)
+  if (error) return 0
+  return count ?? 0
+}
+
+export async function markNotificationRead(id: string): Promise<void> {
+  await supabase.from('notifications').update({ is_read: true }).eq('id', id)
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('is_read', false)
+}
+
+export async function deleteNotification(id: string): Promise<void> {
+  await supabase.from('notifications').delete().eq('id', id)
 }

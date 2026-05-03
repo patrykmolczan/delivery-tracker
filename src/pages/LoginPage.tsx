@@ -244,7 +244,7 @@ export const LoginPage: React.FC = () => {
         {/* Mobile logo — top right of white area, transparent logo sits clean on white */}
         {logoUrl && (
           <div className="flex lg:hidden" style={{ position: 'absolute', top: 16, right: 16 }}>
-            <img src={logoUrl} alt="Company Logo" style={{ height: 22, width: 'auto', display: 'block', maxWidth: 110 }} />
+            <img src={logoUrl} alt="Company Logo" style={{ height: 26, width: 'auto', display: 'block', maxWidth: 130 }} />
           </div>
         )}
 

@@ -9,7 +9,7 @@ function sanitizeText(val: string | null | undefined): string | null {
 }
 import type {
   Project, KPIData, StatusCount, OwnerCount, FilterState, SortState,
-  LookupItem, ProjectFormData, ProjectCountry, ProjectCountryInput, ProjectTask,
+  LookupItem, ProjectFeedback, ProjectFeedbackItem, ProjectFormData, ProjectCountry, ProjectCountryInput, ProjectTask,
   ProjectETAHistory,
 } from '../types'
 
@@ -1746,4 +1746,221 @@ export async function rejectClientRequest(requestId: number, notes?: string): Pr
     .update({ status: 'rejected', notes: notes || null })
     .eq('id', requestId)
   if (error) throw new Error(`Failed to reject request: ${error.message}`)
+}
+
+// ── Admin: Delete Project ─────────────────────────────────────────────────────
+export async function deleteProject(projectId: string): Promise<void> {
+  // Best-effort: fetch file paths before deletion for storage cleanup
+  const { data: pFiles } = await supabase
+    .from('project_files')
+    .select('storage_path')
+    .eq('project_id', projectId)
+
+  const { data: dFiles } = await supabase
+    .from('project_delivery_files')
+    .select('storage_path')
+    .eq('project_id', projectId)
+
+  // Delete the project row (CASCADE handles all related DB rows)
+  const { error } = await supabase
+    .from('projects')
+    .delete()
+    .eq('id', projectId)
+  if (error) throw error
+
+  // Best-effort storage cleanup (silent failures ok — orphaned files are acceptable)
+  if (pFiles?.length) {
+    await supabase.storage.from('project-files')
+      .remove(pFiles.map(f => f.storage_path))
+      .catch(() => {})
+  }
+  if (dFiles?.length) {
+    await supabase.storage.from('project-delivery-files')
+      .remove(dFiles.map(f => f.storage_path))
+      .catch(() => {})
+  }
+}
+
+// ── Project Feedback: fetch ──────────────────────────────────────────────────
+export async function fetchProjectFeedback(
+  projectId: string
+): Promise<{ entries: ProjectFeedback[]; items: ProjectFeedbackItem[] }> {
+  const { data: entries, error: e1 } = await supabase
+    .from('project_feedback')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true })
+  if (e1) throw e1
+
+  const { data: items, error: e2 } = await supabase
+    .from('project_feedback_items')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true })
+  if (e2) throw e2
+
+  return {
+    entries: (entries || []) as ProjectFeedback[],
+    items: (items || []) as ProjectFeedbackItem[],
+  }
+}
+
+// ── Project Feedback: count unresolved items (lightweight, for badge) ─────────
+export async function fetchProjectFeedbackUnresolvedCount(projectId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('project_feedback_items')
+    .select('*', { count: 'exact', head: true })
+    .eq('project_id', projectId)
+    .eq('is_resolved', false)
+  if (error) return 0
+  return count ?? 0
+}
+
+// ── Project Feedback: create admin action ────────────────────────────────────
+export async function createProjectFeedback(params: {
+  projectId: string
+  authorId: string
+  authorName: string
+  authorRole: 'admin' | 'user'
+  actionType: string
+  message: string | null
+  statusChangeToId: number | null
+  statusChangeToName: string | null
+  notifyRequester: boolean
+  items?: Array<{ item_text: string; category: string; priority: string }>
+}): Promise<ProjectFeedback> {
+  // Insert feedback entry
+  const { data: entry, error: e1 } = await supabase
+    .from('project_feedback')
+    .insert({
+      project_id: params.projectId,
+      author_id: params.authorId,
+      author_name: params.authorName,
+      author_role: params.authorRole,
+      action_type: params.actionType,
+      message: params.message,
+      status_change_to_id: params.statusChangeToId,
+      status_change_to_name: params.statusChangeToName,
+      notify_requester: params.notifyRequester,
+    })
+    .select()
+    .single()
+  if (e1) throw e1
+
+  // Insert checklist items if any
+  if (params.items && params.items.length > 0) {
+    const { error: e2 } = await supabase
+      .from('project_feedback_items')
+      .insert(
+        params.items.map(item => ({
+          feedback_id: (entry as any).id,
+          project_id: params.projectId,
+          item_text: item.item_text,
+          category: item.category,
+          priority: item.priority,
+        }))
+      )
+    if (e2) throw e2
+  }
+
+  // Update project status if action specifies a transition
+  if (params.statusChangeToId) {
+    const { error: e3 } = await supabase
+      .from('projects')
+      .update({ status_id: params.statusChangeToId })
+      .eq('id', params.projectId)
+    if (e3) throw e3
+  }
+
+  return entry as ProjectFeedback
+}
+
+// ── Project Feedback: resolve / unresolve item ───────────────────────────────
+export async function resolveProjectFeedbackItem(
+  itemId: string,
+  note: string | null,
+  resolvedById: string,
+  resolvedByName: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('project_feedback_items')
+    .update({
+      is_resolved: true,
+      resolved_by: resolvedById,
+      resolved_by_name: resolvedByName,
+      resolved_at: new Date().toISOString(),
+      resolution_note: note || null,
+    })
+    .eq('id', itemId)
+  if (error) throw error
+}
+
+export async function unresolveProjectFeedbackItem(itemId: string): Promise<void> {
+  const { error } = await supabase
+    .from('project_feedback_items')
+    .update({
+      is_resolved: false,
+      resolved_by: null,
+      resolved_by_name: null,
+      resolved_at: null,
+      resolution_note: null,
+    })
+    .eq('id', itemId)
+  if (error) throw error
+}
+
+// ── Project Feedback: submit user response ────────────────────────────────────
+export async function submitProjectResponse(
+  projectId: string,
+  message: string,
+  authorId: string,
+  authorName: string,
+): Promise<ProjectFeedback> {
+  const { data, error } = await supabase
+    .from('project_feedback')
+    .insert({
+      project_id: projectId,
+      author_id: authorId,
+      author_name: authorName,
+      author_role: 'user',
+      action_type: 'user_response',
+      message,
+      status_change_to_id: null,
+      status_change_to_name: null,
+      notify_requester: false,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data as ProjectFeedback
+}
+
+// ── Project Feedback: submit for re-review (changes status → Under Review) ───
+export async function submitForReReview(
+  projectId: string,
+  authorId: string,
+  authorName: string,
+): Promise<void> {
+  // Create resubmit feedback entry
+  const { error: e1 } = await supabase
+    .from('project_feedback')
+    .insert({
+      project_id: projectId,
+      author_id: authorId,
+      author_name: authorName,
+      author_role: 'user',
+      action_type: 'resubmit',
+      message: 'Project submitted for re-review.',
+      status_change_to_id: 3,   // Under Review
+      status_change_to_name: 'Under Review',
+      notify_requester: false,
+    })
+  if (e1) throw e1
+
+  // Change status to Under Review
+  const { error: e2 } = await supabase
+    .from('projects')
+    .update({ status_id: 3 })
+    .eq('id', projectId)
+  if (e2) throw e2
 }

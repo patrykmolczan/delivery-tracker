@@ -677,3 +677,140 @@ export async function buildETAChangeEmail(
     html: shell(logoUrl, BLUE, content),
   }
 }
+
+// ── Project Feedback Email ────────────────────────────────────────────────────
+export async function buildProjectFeedbackEmail(
+  to: string,
+  project: any,
+  actionType: string,
+  message: string,
+  items: Array<{ item_text: string; category: string; priority: string }>,
+  adminName: string,
+): Promise<EmailPayload> {
+  const logoUrl = await getLogoUrl()
+
+  const ACTION_META: Record<string, { label: string; color: string; emoji: string }> = {
+    hold:            { label: 'Put On Hold',        color: '#F59E0B', emoji: '⏸' },
+    request_changes: { label: 'Changes Requested',  color: '#3B82F6', emoji: '📝' },
+    reject:          { label: 'Rejected',            color: '#EF4444', emoji: '✗' },
+    approve:         { label: 'Approved',            color: '#10B981', emoji: '✓' },
+  }
+  const meta = ACTION_META[actionType] || ACTION_META['hold']
+  const PRIORITY_COLOR: Record<string, string> = {
+    high: '#EF4444', medium: '#F59E0B', low: '#94A3B8',
+  }
+
+  const itemsHtml = items.length > 0 ? `
+    <tr>
+      <td style="padding:20px 40px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+          style="background-color:#F8FAFC;border:1px solid ${BORDER};border-radius:10px;overflow:hidden;">
+          <tr>
+            <td style="padding:14px 20px;border-bottom:1px solid ${BORDER};">
+              <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#94A3B8;">
+                Action Checklist (${items.length} item${items.length !== 1 ? 's' : ''})
+              </span>
+            </td>
+          </tr>
+          ${items.map((item, idx) => `
+          <tr>
+            <td style="padding:${idx === 0 ? '14px' : '0'} 20px ${idx === items.length - 1 ? '14px' : '10px'};">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td width="20" valign="top" style="padding-top:2px;">
+                    <div style="width:16px;height:16px;border:2px solid #CBD5E1;border-radius:4px;display:inline-block;"></div>
+                  </td>
+                  <td style="padding-left:10px;">
+                    <p style="margin:0;font-size:13px;color:${DARK};line-height:1.5;">${escapeHtml(item.item_text)}</p>
+                    <div style="margin-top:4px;">
+                      <span style="font-size:10px;font-weight:700;color:${PRIORITY_COLOR[item.priority] || PRIORITY_COLOR.medium};text-transform:uppercase;">${item.priority}</span>
+                      <span style="font-size:10px;color:#94A3B8;"> · ${escapeHtml(item.category)}</span>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>`).join('')}
+        </table>
+      </td>
+    </tr>
+  ` : ''
+
+  const content = `
+    <!-- Action badge -->
+    <tr>
+      <td style="padding:32px 40px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td style="background-color:${meta.color}1A;border:1px solid ${meta.color}33;border-radius:6px;padding:6px 14px;">
+              <span style="font-size:11px;font-weight:700;color:${meta.color};letter-spacing:0.5px;">${meta.emoji} ${meta.label.toUpperCase()}</span>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <!-- Headline -->
+    <tr>
+      <td style="padding:20px 40px 0;">
+        <h1 style="margin:0;font-size:22px;font-weight:700;color:${DARK};line-height:1.3;">
+          ${actionType === 'reject' ? 'Project Rejected' : actionType === 'hold' ? 'Project On Hold' : 'Changes Required'}
+        </h1>
+        <p style="margin:8px 0 0;font-size:14px;color:${GREY};line-height:1.7;">
+          <strong style="color:${BRAND};">${escapeHtml(project.client_name) || 'Your project'}</strong>
+          requires your attention. ${escapeHtml(adminName)} has reviewed your submission.
+        </p>
+      </td>
+    </tr>
+    <!-- Divider -->
+    <tr><td style="padding:20px 40px 0;"><div style="height:1px;background-color:${BORDER};"></div></td></tr>
+    <!-- Admin message -->
+    <tr>
+      <td style="padding:20px 40px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+          style="background-color:#F8FAFC;border-left:3px solid ${meta.color};border-radius:0 8px 8px 0;padding:0;">
+          <tr>
+            <td style="padding:14px 20px;">
+              <p style="margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#94A3B8;">
+                Message from ${escapeHtml(adminName)}
+              </p>
+              <p style="margin:0;font-size:14px;color:${DARK};line-height:1.7;white-space:pre-wrap;">${escapeHtml(message)}</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    ${itemsHtml}
+    <!-- Project details -->
+    <tr>
+      <td style="padding:20px 40px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+          style="background-color:#F8FAFC;border:1px solid ${BORDER};border-radius:10px;overflow:hidden;">
+          <tr>
+            <td style="padding:14px 20px;border-bottom:1px solid ${BORDER};">
+              <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#94A3B8;">Project Details</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 20px 12px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                ${detailRow('Client', project.client_name)}
+                ${detailRow('Country', project.country)}
+                ${detailRow('Project Type', project.project_type)}
+                ${detailRow('Status', meta.label, true)}
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+    ${ctaButton(APP_URL, 'View Project & Respond', meta.color)}
+  `
+
+  const actionLabel = meta.label.toLowerCase()
+  return {
+    to,
+    subject: `Your project ${actionLabel} — ${escapeHtml(project.client_name) || 'action required'}`,
+    html: shell(logoUrl, meta.color, content),
+  }
+}
+

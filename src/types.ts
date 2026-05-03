@@ -179,3 +179,33 @@ export interface ProjectETAHistory {
   notified_requester: boolean
   changed_by_name?: string | null
 }
+
+// ── Project Feedback ──────────────────────────────────────────────────────────
+export interface ProjectFeedback {
+  id: string
+  project_id: string
+  author_id: string | null
+  author_name: string
+  author_role: 'admin' | 'user'
+  action_type: 'hold' | 'request_changes' | 'reject' | 'approve' | 'user_response' | 'resubmit' | 'comment'
+  message: string | null
+  status_change_to_id: number | null
+  status_change_to_name: string | null
+  notify_requester: boolean
+  created_at: string
+}
+
+export interface ProjectFeedbackItem {
+  id: string
+  feedback_id: string
+  project_id: string
+  item_text: string
+  category: 'template' | 'information' | 'documentation' | 'data_quality' | 'other' | 'general'
+  priority: 'high' | 'medium' | 'low'
+  is_resolved: boolean
+  resolved_by: string | null
+  resolved_by_name: string | null
+  resolved_at: string | null
+  resolution_note: string | null
+  created_at: string
+}

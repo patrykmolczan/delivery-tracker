@@ -59,7 +59,12 @@ export const LoginPage: React.FC = () => {
       <div className="flex flex-col lg:flex-row" style={{ width: '100%', maxWidth: 900, minHeight: 560, borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 40px rgba(0,0,0,0.12)', border: '0.5px solid var(--fallback-bc,oklch(var(--bc)/0.1))' }}>
 
       {/* ── Mobile header (navy, shown only on mobile) ───────────────── */}
-      <div className="flex lg:hidden flex-col items-center" style={{ background: '#0C447C', padding: '28px 24px 24px' }}>
+      <div className="flex lg:hidden flex-col items-center" style={{ background: '#0C447C', padding: '28px 24px 24px', position: 'relative' }}>
+        {loginIconUrl && (
+          <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 1 }}>
+            <img src={loginIconUrl} alt="Login Icon" style={{ maxHeight: 32, maxWidth: 32, objectFit: 'contain', display: 'block' }} />
+          </div>
+        )}
 
         {/* Mini pipeline */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0, marginBottom: 16 }}>
@@ -116,6 +121,12 @@ export const LoginPage: React.FC = () => {
         className="hidden lg:flex flex-col justify-between flex-1 overflow-hidden relative"
         style={{ background: '#0C447C', padding: '48px 40px', minWidth: 0 }}
       >
+        {loginIconUrl && (
+          <div style={{ position: 'absolute', top: 24, right: 28, zIndex: 1 }}>
+            <img src={loginIconUrl} alt="Login Icon" style={{ maxHeight: 40, maxWidth: 40, objectFit: 'contain', display: 'block' }} />
+          </div>
+        )}
+
         {/* Tag pill */}
         <div>
           <div style={{
@@ -248,12 +259,7 @@ export const LoginPage: React.FC = () => {
           </div>
         )}
 
-        {/* Login icon if set */}
-        {loginIconUrl && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-            <img src={loginIconUrl} alt="Login Icon" style={{ maxHeight: 48, maxWidth: 120, objectFit: 'contain' }} />
-          </div>
-        )}
+
 
         {/* Heading */}
         <div style={{ marginBottom: logoUrl ? 0 : 28 }}>

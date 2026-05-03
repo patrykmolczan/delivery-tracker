@@ -227,16 +227,16 @@ export const LoginPage: React.FC = () => {
       >
         {/* Logo — top right on desktop only (mobile shows it in navy header above) */}
         {logoUrl && (
-          <div className="hidden lg:flex" style={{ justifyContent: 'flex-end', marginBottom: 28 }}>
+          <div className="hidden lg:flex" style={{ justifyContent: 'flex-end', marginBottom: 24 }}>
             <div style={{
               background: isDark ? 'rgba(255,255,255,0.92)' : 'var(--fallback-b2,oklch(var(--b2)))',
               border: '0.5px solid var(--fallback-bc,oklch(var(--bc)/0.1))',
-              borderRadius: 8,
-              padding: '6px 10px',
+              borderRadius: 10,
+              padding: '8px 14px',
               display: 'flex',
               alignItems: 'center',
             }}>
-              <img src={logoUrl} alt="Company Logo" style={{ height: 37, width: 'auto', display: 'block', maxWidth: 190 }} />
+              <img src={logoUrl} alt="Company Logo" style={{ height: 42, width: 'auto', display: 'block', maxWidth: 220 }} />
             </div>
           </div>
         )}

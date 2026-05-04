@@ -116,9 +116,10 @@ export const ProjectDetail: React.FC<{
   onEdit?: () => void
   onStatusUpdated?: (updatedProject: Project) => void
   onDelete?: () => void
-}> = ({ project, onClose, onEdit, onStatusUpdated, onDelete }) => {
+  defaultTab?: 'details' | 'history' | 'files' | 'delivery' | 'review'
+}> = ({ project, onClose, onEdit, onStatusUpdated, onDelete, defaultTab }) => {
   const { user, isAdmin } = useAuth()
-  const [tab, setTab] = useState<'details' | 'history' | 'files' | 'delivery' | 'review'>('details')
+  const [tab, setTab] = useState<'details' | 'history' | 'files' | 'delivery' | 'review'>(defaultTab ?? 'details')
   const [statuses, setStatuses] = useState<LookupItem[]>([])
   const [selectedStatusId, setSelectedStatusId] = useState<number | null>(project.status_id ?? null)
   const [selectedStatusName, setSelectedStatusName] = useState<string>(project.status)

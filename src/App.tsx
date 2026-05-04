@@ -49,6 +49,7 @@ const Dashboard: React.FC = () => {
   const [filters, setFilters] = useState<FilterState>({ search: '', status: [], owner: [], analyst: [], clientType: [], industry: [], country: [], dateFrom: '', dateTo: '' })
   const [sort, setSort] = useState<SortState>({ field: 'date_received', direction: 'desc' })
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  const [selectedProjectTab, setSelectedProjectTab] = useState<'details' | 'history' | 'files' | 'delivery' | 'review' | undefined>(undefined)
   const [editProject, setEditProject] = useState<Project | null>(null)
   const [view, setView] = useState<ViewMode>('dashboard')
   const [loading, setLoading] = useState(true)
@@ -282,9 +283,12 @@ const Dashboard: React.FC = () => {
           <div className="flex items-center gap-2">
             <NotificationBell
               onViewAll={() => navigate('notifications')}
-              onProjectOpen={(projectId) => {
+              onProjectOpen={(projectId, tab) => {
                 const proj = projects.find(p => p.id === projectId)
-                if (proj) setSelectedProject(proj)
+                if (proj) {
+                  setSelectedProjectTab(tab as any)
+                  setSelectedProject(proj)
+                }
               }}
             />
             {view !== 'table' && (
@@ -391,6 +395,7 @@ const Dashboard: React.FC = () => {
               onProjectOpen={(projectId) => {
                 const proj = projects.find(p => p.id === projectId)
                 if (proj) {
+                  setSelectedProjectTab(undefined)
                   setSelectedProject(proj)
                   navigate('dashboard')
                 }
@@ -417,7 +422,8 @@ const Dashboard: React.FC = () => {
       {selectedProject && (
         <ProjectDetail
           project={selectedProject}
-          onClose={() => setSelectedProject(null)}
+          defaultTab={selectedProjectTab}
+          onClose={() => { setSelectedProject(null); setSelectedProjectTab(undefined) }}
           onEdit={(isAdmin || selectedProject?.created_by === user?.id) ? () => handleEditProject(selectedProject!) : undefined}
           onStatusUpdated={(updated) => {
             setSelectedProject(updated)

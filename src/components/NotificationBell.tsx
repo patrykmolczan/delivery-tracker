@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Bell, CheckCheck, ExternalLink, X } from 'lucide-react'
+import { Bell, CheckCheck, ExternalLink, X, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { AppNotification } from '../types'
 import {
@@ -64,7 +64,7 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
     setLoading(true)
     try {
       const [notifs, count] = await Promise.all([
-        fetchNotifications(8),
+        fetchNotifications(8, true),
         fetchUnreadNotificationCount(),
       ])
       setNotifications(notifs)
@@ -117,6 +117,13 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
       onProjectOpen(n.project_id, getNotifTab(n.type))
       setOpen(false)
     }
+  }
+
+  const handleDismiss = async (e: React.MouseEvent, notifId: string) => {
+    e.stopPropagation()
+    await markNotificationRead(notifId).catch(() => {})
+    setNotifications(prev => prev.filter(x => x.id !== notifId))
+    setUnreadCount(prev => Math.max(0, prev - 1))
   }
 
   const handleMarkAllRead = async () => {
@@ -179,39 +186,53 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
               </div>
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 gap-2 text-base-content/40">
-                <Bell size={24} className="opacity-30" />
-                <p className="text-sm">No notifications yet</p>
+                <Check size={24} className="opacity-40" />
+                <p className="text-sm font-medium">No new notifications</p>
+                <button
+                  className="text-xs text-primary underline-offset-2 hover:underline"
+                  onClick={() => { setOpen(false); onViewAll() }}
+                >
+                  View history
+                </button>
               </div>
             ) : (
               notifications.map(n => {
                 const meta = getNotifMeta(n.type)
                 return (
-                  <button
+                  <div
                     key={n.id}
-                    onClick={() => handleItemClick(n)}
-                    className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-base-200 transition-colors border-b border-base-200 last:border-0 ${!n.is_read ? 'bg-primary/5' : ''}`}
+                    className="flex items-start border-b border-base-200 last:border-0 bg-primary/5 hover:bg-base-200 transition-colors"
                   >
-                    {/* Unread dot */}
-                    <div className="flex-shrink-0 mt-0.5 relative">
-                      <span className="text-lg leading-none">{meta.icon}</span>
-                      {!n.is_read && (
+                    {/* Clickable area — navigate */}
+                    <button
+                      onClick={() => handleItemClick(n)}
+                      className="flex-1 text-left px-4 py-3 flex items-start gap-3 min-w-0"
+                    >
+                      <div className="flex-shrink-0 mt-0.5 relative">
+                        <span className="text-lg leading-none">{meta.icon}</span>
                         <span className="absolute -top-0.5 -right-1 w-2 h-2 bg-primary rounded-full" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold truncate text-base-content">{n.title}</p>
+                        {n.project_name && (
+                          <p className="text-[11px] text-primary/80 font-medium truncate">{n.project_name}</p>
+                        )}
+                        <p className="text-[11px] text-base-content/50 mt-0.5 line-clamp-2">{n.body}</p>
+                        <p className="text-[10px] text-base-content/30 mt-1">{relativeTime(n.created_at)}</p>
+                      </div>
+                      {n.project_id && (
+                        <ExternalLink size={11} className="flex-shrink-0 mt-1 text-base-content/20" />
                       )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-semibold truncate ${!n.is_read ? 'text-base-content' : 'text-base-content/70'}`}>
-                        {n.title}
-                      </p>
-                      {n.project_name && (
-                        <p className="text-[11px] text-primary/80 font-medium truncate">{n.project_name}</p>
-                      )}
-                      <p className="text-[11px] text-base-content/50 mt-0.5 line-clamp-2">{n.body}</p>
-                      <p className="text-[10px] text-base-content/30 mt-1">{relativeTime(n.created_at)}</p>
-                    </div>
-                    {n.project_id && (
-                      <ExternalLink size={11} className="flex-shrink-0 mt-1 text-base-content/20" />
-                    )}
-                  </button>
+                    </button>
+                    {/* Dismiss button — mark read without navigating */}
+                    <button
+                      onClick={(e) => handleDismiss(e, n.id)}
+                      className="flex-shrink-0 p-2 mr-1 mt-2 btn btn-ghost btn-xs btn-square text-base-content/30 hover:text-base-content"
+                      title="Mark as read"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
                 )
               })
             )}

@@ -251,6 +251,18 @@ export async function createProject(
     await syncProjectTasks(projectId, form.project_tasks, userId)
   }
 
+  // Notify admins about new project submission (non-blocking)
+  try {
+    await createNotificationsForAdmins({
+      type: 'project_created',
+      title: 'New project submitted',
+      body: `${form.project_owner} submitted a new project${form.client_name ? ` for ${form.client_name}` : ''}.`,
+      projectId,
+      projectName: form.project_owner,
+      excludeUserId: userId,
+    })
+  } catch { /* best effort */ }
+
   return {
     id: data.id,
     project_owner: data.project_owner,
@@ -1753,6 +1765,18 @@ export async function approveClientRequest(requestId: number, existingClientId?:
       .eq('id', requestId)
     if (updErr) throw new Error(`Failed to approve request: ${updErr.message}`)
   }
+  // Notify requester about client name approval (non-blocking)
+  try {
+    await createNotification({
+      userId: req.requested_by,
+      type: 'client_name_approved',
+      title: 'Client name request approved',
+      body: `Your request to add "${req.requested_name}" has been ${existingClientId ? 'reassigned to an existing client' : 'approved'}.`,
+      projectId: (req as any).project_id ?? null,
+      projectName: null,
+    })
+  } catch { /* best effort */ }
+
   return client
 }
 

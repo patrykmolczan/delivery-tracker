@@ -26,6 +26,7 @@ import {
   deleteProject, fetchProjectFeedback, fetchProjectFeedbackUnresolvedCount,
   createProjectFeedback, resolveProjectFeedbackItem, unresolveProjectFeedbackItem,
   submitProjectResponse, submitForReReview,
+  createNotification, createNotificationsForAdmins,
 } from '../lib/data'
 import type { LookupItem } from '../types'
 import { useAuth } from '../contexts/AuthContext'
@@ -343,6 +344,17 @@ export const ProjectDetail: React.FC<{
               setNotifSent(true)
               setTimeout(() => setNotifSent(false), 4000)
             })
+          }).catch(() => {})
+        }
+        // In-app notification for status change (non-blocking)
+        if (ownerId !== user?.id) {
+          createNotification({
+            userId: ownerId,
+            type: 'status_change',
+            title: `Project status updated to ${selectedStatusName}`,
+            body: `Your project "${updated.project_owner}" has been updated to ${selectedStatusName}.`,
+            projectId: updated.id,
+            projectName: updated.project_owner,
           }).catch(() => {})
         }
       }
@@ -1822,6 +1834,26 @@ export const ProjectDetail: React.FC<{
                   : i
                 ))
                 setUnresolvedCount(prev => Math.max(0, prev - 1))
+                // Notify: user resolves → admins; admin resolves → requester
+                if (!isAdmin) {
+                  createNotificationsForAdmins({
+                    type: 'checklist_resolved',
+                    title: 'Checklist item resolved',
+                    body: `${name} resolved a checklist item on "${localProject.project_owner || localProject.client_name || 'a project'}".`,
+                    projectId: localProject.id,
+                    projectName: localProject.project_owner,
+                    excludeUserId: user.id,
+                  }).catch(() => {})
+                } else if (localProject.created_by && localProject.created_by !== user.id) {
+                  createNotification({
+                    userId: localProject.created_by,
+                    type: 'checklist_resolved',
+                    title: 'Checklist item resolved',
+                    body: `${name} resolved a checklist item on your project "${localProject.project_owner || localProject.client_name || ''}".`,
+                    projectId: localProject.id,
+                    projectName: localProject.project_owner,
+                  }).catch(() => {})
+                }
               }}
               onItemUnresolve={async (item) => {
                 await unresolveProjectFeedbackItem(item.id)

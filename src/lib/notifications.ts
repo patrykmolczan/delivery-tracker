@@ -44,7 +44,7 @@ export async function fetchProjectOwnerEmail(userId: string): Promise<string | n
 }
 
 export async function sendNotification(payload: {
-  type: 'completed' | 'delivery_file' | 'status_changed' | 'eta_changed'
+  type: 'completed' | 'delivery_file' | 'status_changed' | 'eta_changed' | 'project_feedback'
   to: string
   project: Record<string, any>
   files?: Array<{ file_name: string; file_size: number; description?: string }>
@@ -52,6 +52,11 @@ export async function sendNotification(payload: {
   oldDays?: number | null
   newDays?: number
   reason?: string | null
+  // project_feedback fields
+  actionType?: string
+  message?: string | null
+  items?: Array<{ item_text: string; category: string; priority: string }>
+  adminName?: string
 }): Promise<void> {
   // Fire-and-forget: don't block UI on email errors
   try {

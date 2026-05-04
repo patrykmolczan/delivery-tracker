@@ -222,6 +222,8 @@ export type NotificationType =
   | 'eta_update'
   | 'project_created'
   | 'status_change'
+  | 'checklist_resolved'
+  | 'client_name_approved'
 
 export interface AppNotification {
   id: string

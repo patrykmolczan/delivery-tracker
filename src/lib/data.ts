@@ -2105,12 +2105,16 @@ export async function createNotificationsForAdmins(params: {
   } catch { /* best effort */ }
 }
 
-export async function fetchNotifications(limit = 50): Promise<AppNotification[]> {
-  const { data, error } = await supabase
+export async function fetchNotifications(limit = 50, unreadOnly = false): Promise<AppNotification[]> {
+  let query = supabase
     .from('notifications')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(limit)
+  if (unreadOnly) {
+    query = query.eq('is_read', false)
+  }
+  const { data, error } = await query
   if (error) throw error
   return (data || []) as AppNotification[]
 }

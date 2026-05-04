@@ -38,10 +38,19 @@ function getNotifMeta(type: string): NotifMeta {
   return map[type] ?? { icon: '🔔', colorClass: 'text-base-content', label: 'Notification' }
 }
 
+// ── tab routing by notification type ─────────────────────────────────────────
+function getNotifTab(type: string): string | undefined {
+  const reviewTypes = ['resubmit', 'checklist_resolved', 'feedback_hold', 'feedback_changes', 'feedback_reject', 'feedback_approve', 'user_response']
+  if (reviewTypes.includes(type)) return 'review'
+  if (type === 'eta_update') return 'details'
+  if (type === 'status_change') return 'details'
+  return undefined
+}
+
 // ── component ─────────────────────────────────────────────────────────────────
 interface Props {
   onViewAll: () => void
-  onProjectOpen?: (projectId: string) => void
+  onProjectOpen?: (projectId: string, tab?: string) => void
 }
 
 export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) => {
@@ -105,7 +114,7 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
       setUnreadCount(prev => Math.max(0, prev - 1))
     }
     if (n.project_id && onProjectOpen) {
-      onProjectOpen(n.project_id)
+      onProjectOpen(n.project_id, getNotifTab(n.type))
       setOpen(false)
     }
   }
@@ -149,15 +158,13 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
               )}
             </div>
             <div className="flex items-center gap-1">
-              {unreadCount > 0 && (
-                <button
+              <button
                   className="btn btn-ghost btn-xs gap-1 text-xs"
                   onClick={handleMarkAllRead}
                   title="Mark all as read"
                 >
                   <CheckCheck size={12} /> All read
                 </button>
-              )}
               <button className="btn btn-ghost btn-xs btn-square" onClick={() => setOpen(false)}>
                 <X size={13} />
               </button>

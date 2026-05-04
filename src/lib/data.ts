@@ -251,18 +251,6 @@ export async function createProject(
     await syncProjectTasks(projectId, form.project_tasks, userId)
   }
 
-  // Notify admins about new project submission (non-blocking)
-  try {
-    await createNotificationsForAdmins({
-      type: 'project_created',
-      title: 'New project submitted',
-      body: `${form.project_owner} submitted a new project${form.client_name ? ` for ${form.client_name}` : ''}.`,
-      projectId,
-      projectName: form.project_owner,
-      excludeUserId: userId,
-    })
-  } catch { /* best effort */ }
-
   return {
     id: data.id,
     project_owner: data.project_owner,
@@ -1765,18 +1753,6 @@ export async function approveClientRequest(requestId: number, existingClientId?:
       .eq('id', requestId)
     if (updErr) throw new Error(`Failed to approve request: ${updErr.message}`)
   }
-  // Notify requester about client name approval (non-blocking)
-  try {
-    await createNotification({
-      userId: req.requested_by,
-      type: 'client_name_approved',
-      title: 'Client name request approved',
-      body: `Your request to add "${req.requested_name}" has been ${existingClientId ? 'reassigned to an existing client' : 'approved'}.`,
-      projectId: (req as any).project_id ?? null,
-      projectName: null,
-    })
-  } catch { /* best effort */ }
-
   return client
 }
 
@@ -2011,15 +1987,16 @@ export async function submitProjectResponse(
   try {
     const { data: proj } = await supabase
       .from('projects')
-      .select('project_owner')
+      .select('project_owner, client_name, id_number')
       .eq('id', projectId)
       .single()
+    const responseLabel = proj?.client_name || proj?.project_owner || (proj?.id_number ? `#${proj.id_number}` : projectId)
     await createNotificationsForAdmins({
       type: 'user_response',
       title: 'User replied to feedback',
-      body: `${authorName} responded on "${proj?.project_owner ?? projectId}".`,
+      body: `${authorName} responded on "${responseLabel}".`,
       projectId,
-      projectName: proj?.project_owner ?? null,
+      projectName: responseLabel,
       excludeUserId: authorId,
     })
   } catch { /* best effort */ }
@@ -2060,15 +2037,16 @@ export async function submitForReReview(
   try {
     const { data: proj } = await supabase
       .from('projects')
-      .select('project_owner')
+      .select('project_owner, client_name, id_number')
       .eq('id', projectId)
       .single()
+    const resubmitLabel = proj?.client_name || proj?.project_owner || (proj?.id_number ? `#${proj.id_number}` : projectId)
     await createNotificationsForAdmins({
       type: 'resubmit',
       title: 'Project submitted for re-review',
-      body: `${authorName} submitted "${proj?.project_owner ?? projectId}" for re-review.`,
+      body: `${authorName} submitted "${resubmitLabel}" for re-review.`,
       projectId,
-      projectName: proj?.project_owner ?? null,
+      projectName: resubmitLabel,
       excludeUserId: authorId,
     })
   } catch { /* best effort */ }

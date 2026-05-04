@@ -370,22 +370,19 @@ export const FeedbackThread: React.FC<Props> = ({
                           }`}
                         >
                           <div className="flex items-start gap-3 p-2.5">
-                            {/* Checkbox / status */}
+                            {/* Checkbox / status — interactive for both users and admins */}
                             <button
                               className={`shrink-0 mt-0.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
                                 item.is_resolved
-                                  ? 'bg-success border-success text-white'
-                                  : isAdmin
-                                    ? 'border-base-300 bg-base-100 cursor-default'
-                                    : 'border-base-300 bg-base-100 hover:border-primary cursor-pointer'
+                                  ? 'bg-success border-success text-white hover:opacity-80 cursor-pointer'
+                                  : 'border-base-300 bg-base-100 hover:border-primary cursor-pointer'
                               }`}
                               onClick={() => {
-                                if (isAdmin) return
                                 if (item.is_resolved) handleItemUnresolve(item)
                                 else handleItemResolve(item)
                               }}
                               disabled={isResolvingInProgress || unresolving === item.id}
-                              title={isAdmin ? '' : item.is_resolved ? 'Mark as unresolved' : 'Mark as resolved'}
+                              title={item.is_resolved ? 'Mark as unresolved' : 'Mark as resolved'}
                             >
                               {(isResolvingInProgress || unresolving === item.id)
                                 ? <Loader2 size={10} className="animate-spin" />
@@ -420,8 +417,8 @@ export const FeedbackThread: React.FC<Props> = ({
                             </div>
                           </div>
 
-                          {/* Resolution note input (user only, when marking resolved) */}
-                          {!isAdmin && isResolving && !item.is_resolved && (
+                          {/* Resolution note input (shown for anyone marking resolved) */}
+                          {isResolving && !item.is_resolved && (
                             <div className="px-3 pb-3 pt-1 border-t border-base-300/60 bg-base-100">
                               <input
                                 type="text"

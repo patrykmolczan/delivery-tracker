@@ -649,8 +649,62 @@ export const ProjectDetail: React.FC<{
   }
 
 
+
+  // ── Resizable panel ────────────────────────────────────────────────────────
+  const MIN_WIDTH = 420
+  const getMaxWidth = () => Math.floor(window.innerWidth * 0.45)
+  const [panelWidth, setPanelWidth] = React.useState<number>(() => {
+    const stored = localStorage.getItem('detailPanelWidth')
+    if (stored) {
+      const n = parseInt(stored, 10)
+      if (!isNaN(n) && n >= MIN_WIDTH) return n
+    }
+    return MIN_WIDTH
+  })
+  const isResizing = React.useRef(false)
+  const startX = React.useRef(0)
+  const startWidth = React.useRef(0)
+
+  const onResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
+    isResizing.current = true
+    startX.current = e.clientX
+    startWidth.current = panelWidth
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isResizing.current) return
+      const delta = startX.current - ev.clientX
+      const newWidth = Math.min(Math.max(startWidth.current + delta, MIN_WIDTH), getMaxWidth())
+      setPanelWidth(newWidth)
+    }
+    const onMouseUp = () => {
+      isResizing.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      setPanelWidth(prev => {
+        localStorage.setItem('detailPanelWidth', String(prev))
+        return prev
+      })
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }
+  // ────────────────────────────────────────────────────────────────────────────
+
   return (
-    <div className="fixed inset-y-0 right-0 w-[420px] bg-base-100 border-l border-base-300 shadow-2xl z-50 flex flex-col">
+    <div className="fixed inset-y-0 right-0 bg-base-100 border-l border-base-300 shadow-2xl z-50 flex flex-col" style={{ width: panelWidth }}>
+      {/* Resize handle */}
+      <div
+        onMouseDown={onResizeStart}
+        className="absolute left-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors z-10 group"
+        title="Drag to resize"
+      >
+        <div className="absolute left-0.5 top-1/2 -translate-y-1/2 h-8 w-0.5 rounded-full bg-base-content/20 group-hover:bg-primary/60 transition-colors" />
+      </div>
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-base-300 bg-base-200">
         <div className="flex-1 min-w-0">

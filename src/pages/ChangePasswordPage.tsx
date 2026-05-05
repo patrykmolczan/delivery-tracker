@@ -51,7 +51,7 @@ function strengthLabel(score: number): { label: string; color: string } {
 }
 
 export const ChangePasswordPage: React.FC = () => {
-  const { user, profile, signOut, refreshProfile, clearPasswordRecovery } = useAuth()
+  const { user, profile, signOut, refreshProfile, clearPasswordRecovery, isPasswordRecovery } = useAuth()
   const { logoUrl } = useLogo()
   const { isDark } = useTheme()
 
@@ -83,21 +83,26 @@ export const ChangePasswordPage: React.FC = () => {
 
     setSaving(true)
     try {
-      // 1. Update password in Supabase Auth (with 15s timeout guard)
-      const updateWithTimeout = Promise.race([
-        supabase.auth.updateUser({ password: newPw }),
-        new Promise<{ error: Error }>(resolve =>
-          setTimeout(() => resolve({ error: new Error('Request timed out — please try again.') }), 15000)
-        )
-      ]) as Promise<{ error: any }>
-      const { error: authError } = await updateWithTimeout
-      if (authError) throw authError
+      if (isPasswordRecovery) {
+        // Supabase recovery-link flow — updateUser() works (proper recovery session)
+        const updateWithTimeout = Promise.race([
+          supabase.auth.updateUser({ password: newPw }),
+          new Promise<{ error: Error }>(resolve =>
+            setTimeout(() => resolve({ error: new Error('Request timed out — please try again.') }), 15000)
+          )
+        ]) as Promise<{ error: any }>
+        const { error: authError } = await updateWithTimeout
+        if (authError) throw authError
+        // Safety-net clear flag
+        await supabase.rpc('clear_password_change_required').catch(() => {})
+      } else {
+        // Admin-forced change — use direct DB RPC to avoid hung updateUser()
+        // (supabase.auth.updateUser hangs when password was set via direct DB patch)
+        const { error: rpcError } = await supabase.rpc('user_set_forced_password', { new_password: newPw })
+        if (rpcError) throw rpcError
+      }
 
-      // 2. Clear the password_change_required flag
-      const { error: rpcError } = await supabase.rpc('clear_password_change_required')
-      if (rpcError) console.warn('Could not clear flag:', rpcError.message)
-
-      // 3. Log to audit_log
+      // Log to audit_log
       try {
         await supabase.from('audit_log').insert({
           project_id: null,
@@ -110,10 +115,10 @@ export const ChangePasswordPage: React.FC = () => {
         })
       } catch { /* non-blocking */ }
 
-      // 4. Refresh profile in context (clears passwordChangeRequired)
+      // Refresh profile in context (clears passwordChangeRequired)
       await refreshProfile()
 
-      // 5. Clear recovery mode (if user arrived via password-reset email)
+      // Clear recovery mode if applicable
       clearPasswordRecovery()
 
       setDone(true)

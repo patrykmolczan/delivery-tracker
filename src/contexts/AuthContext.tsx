@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { UserProfile } from '../types'
@@ -46,6 +46,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
+  // Detect recovery URL on mount BEFORE any auth events fire — used to suppress
+  // the SIGNED_OUT redirect that Supabase fires when exchanging a recovery token
+  // (Supabase fires SIGNED_OUT to clear old session BEFORE firing PASSWORD_RECOVERY)
+  const isRecoveryUrl = useRef(
+    typeof window !== 'undefined' &&
+    (window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery'))
+  )
 
   // Wipe all Supabase auth keys and force redirect to login.
   // Identical clean-up path to signOut() — reusable for auth error recovery.
@@ -115,6 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // PASSWORD_RECOVERY: user clicked a password-reset link — show the change-password form
         if (event === 'PASSWORD_RECOVERY') {
+          isRecoveryUrl.current = true
           setIsPasswordRecovery(true)
         }
 
@@ -129,7 +137,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // deletes the session and fires SIGNED_OUT even though the user never signed out.
         // Without this redirect the app shows an infinite "Loading delivery data…" spinner.
         if (event === 'SIGNED_OUT') {
-          window.location.href = '/'
+          // Don't redirect if we're in a password recovery flow.
+          // Supabase fires SIGNED_OUT to clear the old session BEFORE firing PASSWORD_RECOVERY.
+          // Redirecting here wipes the recovery token from the URL — user lands on login page.
+          if (!isRecoveryUrl.current) {
+            window.location.href = '/'
+          }
           return
         }
 

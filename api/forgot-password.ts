@@ -38,11 +38,17 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ success: true })
     }
 
-    const resetLink = linkData?.properties?.action_link
-    if (!resetLink) {
-      console.error('[forgot-password] No action_link in response')
+    // Use hashed_token to build a link that points to OUR app, not Supabase's verify endpoint.
+    // Email security scanners (Mimecast, Proofpoint) pre-fetch every URL in emails to scan
+    // for malware — this consumes the one-time Supabase verify token before the user clicks.
+    // Our app URL is safe to pre-fetch (just a React shell). The token is only exchanged
+    // when the user's browser runs AuthContext.verifyOtp() on mount.
+    const hashedToken = linkData?.properties?.hashed_token
+    if (!hashedToken) {
+      console.error('[forgot-password] No hashed_token in response')
       return res.status(200).json({ success: true })
     }
+    const resetLink = `${APP_URL}?token_hash=${hashedToken}&type=recovery`
 
     const provider = getEmailProvider()
     const payload = await buildPasswordResetEmail(email, resetLink)

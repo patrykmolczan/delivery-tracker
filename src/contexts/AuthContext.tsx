@@ -176,6 +176,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
+    // Auto-exchange recovery token from URL — token_hash flow.
+    // Email security scanners (Mimecast/Proofpoint) pre-fetch the Supabase
+    // /auth/v1/verify URL which consumes the one-time token before the user clicks.
+    // We now send a link to our own app with token_hash as a query param instead.
+    // Mimecast fetches our React app (harmless). JS exchanges the token only here.
+    const urlParams = new URLSearchParams(window.location.search)
+    const tokenHash = urlParams.get('token_hash')
+    const tokenType = urlParams.get('type')
+    if (tokenHash && tokenType === 'recovery') {
+      // Clear the token from URL immediately (security + clean UX)
+      window.history.replaceState({}, '', window.location.pathname)
+      // Exchange token — fires PASSWORD_RECOVERY event on success, which sets
+      // isPasswordRecovery=true and AppInner renders ChangePasswordPage.
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' })
+        .catch(err => {
+          console.error('[auth] verifyOtp failed:', err)
+          setLoading(false)
+        })
+    }
+
     // Safety net: if INITIAL_SESSION never fires (e.g. no stored session at all
     // and Supabase doesn't emit the event), unblock after 3 seconds.
     const timeout = setTimeout(() => setLoading(false), 3000)

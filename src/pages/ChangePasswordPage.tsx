@@ -111,9 +111,14 @@ export const ChangePasswordPage: React.FC = () => {
         } catch { /* non-blocking */ }
 
         // Skip refreshProfile() — after updateUser the session is being rebuilt.
-        // The success screen redirects to / which does a full page reload that
-        // reinitializes auth state cleanly.
-        clearPasswordRecovery()
+        // Do NOT call clearPasswordRecovery() here.
+        // updateUser triggers session rotation: Supabase fires SIGNED_OUT (user→null)
+        // then SIGNED_IN. If clearPasswordRecovery() is called before SIGNED_IN fires,
+        // AppInner evaluates: user=null && isPasswordRecovery=false → renders LoginPage.
+        // Keeping isPasswordRecovery=true ensures ChangePasswordPage stays mounted so
+        // the success screen (done=true) is visible.
+        // The “Continue to Dashboard” button does window.location.href=’/’ (full reload)
+        // which reinitializes auth state cleanly with no recovery params in the URL.
         setDone(true)
         return
       } else {

@@ -21,6 +21,7 @@ import {
   MAX_DELIVERY_FILES,
 } from '../lib/data'
 import type { AuditEntry, ProjectFile, DeliveryFile, DeliveryFileDownload, DeliveryNote } from '../lib/data'
+import RichTextEditor, { isRichTextEmpty } from './RichTextEditor'
 import {
   fetchDeliveryNotes, createDeliveryNote, updateDeliveryNote, deleteDeliveryNote,
   deleteProject, fetchProjectFeedback, fetchProjectFeedbackUnresolvedCount,
@@ -417,7 +418,7 @@ export const ProjectDetail: React.FC<{
 
   // ── Delivery Note handlers ────────────────────────────────────────────────────
   const handleNoteCreate = async () => {
-    if (!noteText.trim() || !user) return
+    if (isRichTextEmpty(noteText) || !user) return
     setNoteSaving(true)
     setNoteError(null)
     try {
@@ -433,7 +434,7 @@ export const ProjectDetail: React.FC<{
   }
 
   const handleNoteEditSave = async (noteId: string) => {
-    if (!noteEditText.trim() || !user) return
+    if (isRichTextEmpty(noteEditText) || !user) return
     setNoteSaving(true)
     setNoteError(null)
     try {
@@ -1418,12 +1419,11 @@ export const ProjectDetail: React.FC<{
             {/* Compose form */}
             {isAdmin && noteComposing && (
               <div className="px-4 pb-4 pt-2 bg-base-50 space-y-2">
-                <textarea
-                  className="textarea textarea-bordered w-full text-sm resize-none leading-relaxed"
-                  rows={4}
+                <RichTextEditor
+                  content={noteText}
+                  onChange={setNoteText}
                   placeholder="Enter delivery notes for the requestor — describe the data delivered, methodology, coverage, caveats, etc."
-                  value={noteText}
-                  onChange={e => setNoteText(e.target.value)}
+                  minHeight={140}
                   autoFocus
                 />
                 {noteError && (
@@ -1442,7 +1442,7 @@ export const ProjectDetail: React.FC<{
                   <button
                     className={`btn btn-xs btn-primary gap-1 ${noteSaving ? 'loading' : ''}`}
                     onClick={handleNoteCreate}
-                    disabled={!noteText.trim() || noteSaving}
+                    disabled={isRichTextEmpty(noteText) || noteSaving}
                   >
                     {!noteSaving && <Send size={11} />}
                     Post Note
@@ -1471,11 +1471,10 @@ export const ProjectDetail: React.FC<{
                       {/* Edit mode */}
                       {isAdmin && noteEditingId === n.id ? (
                         <div className="p-4 space-y-2 bg-base-100">
-                          <textarea
-                            className="textarea textarea-bordered w-full text-sm resize-none leading-relaxed"
-                            rows={4}
-                            value={noteEditText}
-                            onChange={e => setNoteEditText(e.target.value)}
+                          <RichTextEditor
+                            content={noteEditText}
+                            onChange={setNoteEditText}
+                            minHeight={120}
                             autoFocus
                           />
                           {noteError && (
@@ -1494,7 +1493,7 @@ export const ProjectDetail: React.FC<{
                             <button
                               className={`btn btn-xs btn-primary gap-1 ${noteSaving ? 'loading' : ''}`}
                               onClick={() => handleNoteEditSave(n.id)}
-                              disabled={!noteEditText.trim() || noteSaving}
+                              disabled={isRichTextEmpty(noteEditText) || noteSaving}
                             >
                               {!noteSaving && <CheckCircle2 size={11} />}
                               Save
@@ -1535,9 +1534,13 @@ export const ProjectDetail: React.FC<{
                             </div>
 
                             {/* Note body */}
-                            <p className="text-sm text-base-content/80 leading-relaxed whitespace-pre-wrap break-words">
-                              {n.note}
-                            </p>
+                            <div
+                              className="prose prose-sm max-w-none text-sm text-base-content/80 leading-relaxed
+                                [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5
+                                [&_li]:my-0.5 [&_hr]:border-base-300 [&_hr]:my-2
+                                [&_strong]:font-semibold [&_em]:italic [&_s]:line-through [&_u]:underline"
+                              dangerouslySetInnerHTML={{ __html: n.note }}
+                            />
 
                             {/* Updater line */}
                             {n.updated_at && n.updater_name && (

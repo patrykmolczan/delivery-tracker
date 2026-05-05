@@ -32,9 +32,9 @@ interface PasswordRequirement {
 
 const REQUIREMENTS: PasswordRequirement[] = [
   { label: 'At least 8 characters',         test: pw => pw.length >= 8 },
-  { label: 'One uppercase letter (A–Z)',     test: pw => /[A-Z]/.test(pw) },
-  { label: 'One lowercase letter (a–z)',     test: pw => /[a-z]/.test(pw) },
-  { label: 'One number (0–9)',               test: pw => /[0-9]/.test(pw) },
+  { label: 'One uppercase letter (A\u2013Z)',     test: pw => /[A-Z]/.test(pw) },
+  { label: 'One lowercase letter (a\u2013z)',     test: pw => /[a-z]/.test(pw) },
+  { label: 'One number (0\u20139)',               test: pw => /[0-9]/.test(pw) },
   { label: 'One special character (!@#$%^&*)', test: pw => /[!@#$%^&*]/.test(pw) },
 ]
 
@@ -97,29 +97,27 @@ export const ChangePasswordPage: React.FC = () => {
         )
         if (updateError) throw updateError
 
-        // Log to audit_log (non-blocking)
-        try {
-          await supabase.from('audit_log').insert({
-            project_id: null,
-            user_id: user?.id ?? null,
-            action: 'USER_PASSWORD_CHANGED',
-            field_changed: null,
-            old_value: null,
-            new_value: null,
-            metadata: { email: user?.email, reason: 'password_recovery' },
-          })
-        } catch { /* non-blocking */ }
-
-        // Skip refreshProfile() — after updateUser the session is being rebuilt.
-        // Do NOT call clearPasswordRecovery() here.
-        // updateUser triggers session rotation: Supabase fires SIGNED_OUT (user→null)
-        // then SIGNED_IN. If clearPasswordRecovery() is called before SIGNED_IN fires,
-        // AppInner evaluates: user=null && isPasswordRecovery=false → renders LoginPage.
-        // Keeping isPasswordRecovery=true ensures ChangePasswordPage stays mounted so
-        // the success screen (done=true) is visible.
-        // The “Continue to Dashboard” button does window.location.href=’/’ (full reload)
-        // which reinitializes auth state cleanly with no recovery params in the URL.
+        // ---- SUCCESS — show the success screen IMMEDIATELY ----
+        // After updateUser, Supabase rotates the session token.
+        // During rotation the JS client cannot make ANY DB calls
+        // (no valid token = hangs forever, no error, no timeout).
+        // So we set done + clear spinner BEFORE anything else.
+        setSaving(false)
         setDone(true)
+
+        // Audit log: fire-and-forget — absolutely NO await.
+        // This may or may not succeed depending on session state;
+        // that's acceptable for a non-critical log entry.
+        supabase.from('audit_log').insert({
+          project_id: null,
+          user_id: user?.id ?? null,
+          action: 'USER_PASSWORD_CHANGED',
+          field_changed: null,
+          old_value: null,
+          new_value: null,
+          metadata: { email: user?.email, reason: 'password_recovery' },
+        }).then(() => {}).catch(() => {})
+
         return
       } else {
         // Admin-forced flow: RPC updates bcrypt hash + clears flag atomically
@@ -129,7 +127,7 @@ export const ChangePasswordPage: React.FC = () => {
         if (rpcError) throw rpcError
       }
 
-      // Log to audit_log (non-blocking) — admin-forced path only
+      // Log to audit_log (non-blocking) \u2014 admin-forced path only
       try {
         await supabase.from('audit_log').insert({
           project_id: null,
@@ -319,7 +317,7 @@ export const ChangePasswordPage: React.FC = () => {
                 disabled={saving || !allMet || !matches}
               >
                 {saving
-                  ? <><span className="loading loading-spinner loading-xs" /> Setting Password…</>
+                  ? <><span className="loading loading-spinner loading-xs" /> Setting Password\u2026</>
                   : <><ShieldCheck size={15} /> Set New Password</>
                 }
               </button>

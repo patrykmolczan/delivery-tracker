@@ -10,6 +10,8 @@ interface AuthContextType {
   isAdmin: boolean
   isSuperAdmin: boolean
   passwordChangeRequired: boolean
+  isPasswordRecovery: boolean
+  clearPasswordRecovery: () => void
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signInWithSSO: (domain: string) => Promise<{ error: Error | null }>
@@ -43,6 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
 
   // Wipe all Supabase auth keys and force redirect to login.
   // Identical clean-up path to signOut() — reusable for auth error recovery.
@@ -80,6 +83,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user) await fetchProfile(user.id)
   }
 
+  const clearPasswordRecovery = () => setIsPasswordRecovery(false)
+
   useEffect(() => {
     // CRITICAL: Register onAuthStateChange FIRST.
     // Supabase v2 fires INITIAL_SESSION synchronously from localStorage —
@@ -106,6 +111,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         } else {
           setProfile(null)
+        }
+
+        // PASSWORD_RECOVERY: user clicked a password-reset link — show the change-password form
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsPasswordRecovery(true)
         }
 
         // INITIAL_SESSION fires on mount — this is our signal that auth is ready.
@@ -227,7 +237,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const passwordChangeRequired = !!(profile?.password_change_required)
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, isAdmin, isSuperAdmin, passwordChangeRequired, loading, signIn, signInWithSSO, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, isAdmin, isSuperAdmin, passwordChangeRequired, isPasswordRecovery, clearPasswordRecovery, loading, signIn, signInWithSSO, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )

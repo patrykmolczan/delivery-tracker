@@ -51,7 +51,7 @@ function strengthLabel(score: number): { label: string; color: string } {
 }
 
 export const ChangePasswordPage: React.FC = () => {
-  const { user, profile, signOut, refreshProfile } = useAuth()
+  const { user, profile, signOut, refreshProfile, clearPasswordRecovery } = useAuth()
   const { logoUrl } = useLogo()
   const { isDark } = useTheme()
 
@@ -83,8 +83,14 @@ export const ChangePasswordPage: React.FC = () => {
 
     setSaving(true)
     try {
-      // 1. Update password in Supabase Auth
-      const { error: authError } = await supabase.auth.updateUser({ password: newPw })
+      // 1. Update password in Supabase Auth (with 15s timeout guard)
+      const updateWithTimeout = Promise.race([
+        supabase.auth.updateUser({ password: newPw }),
+        new Promise<{ error: Error }>(resolve =>
+          setTimeout(() => resolve({ error: new Error('Request timed out — please try again.') }), 15000)
+        )
+      ]) as Promise<{ error: any }>
+      const { error: authError } = await updateWithTimeout
       if (authError) throw authError
 
       // 2. Clear the password_change_required flag
@@ -106,6 +112,9 @@ export const ChangePasswordPage: React.FC = () => {
 
       // 4. Refresh profile in context (clears passwordChangeRequired)
       await refreshProfile()
+
+      // 5. Clear recovery mode (if user arrived via password-reset email)
+      clearPasswordRecovery()
 
       setDone(true)
     } catch (err: any) {

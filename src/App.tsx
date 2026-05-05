@@ -436,13 +436,13 @@ const Dashboard: React.FC = () => {
 }
 
 const AppInner: React.FC = () => {
-  const { user, loading, passwordChangeRequired } = useAuth()
+  const { user, loading, passwordChangeRequired, isPasswordRecovery } = useAuth()
   if (loading) return (
     <div className="min-h-screen bg-base-100 flex items-center justify-center">
       <Loader2 size={32} className="animate-spin text-primary" />
     </div>
   )
-  if (user && passwordChangeRequired) return <ChangePasswordPage />
+  if (user && (passwordChangeRequired || isPasswordRecovery)) return <ChangePasswordPage />
   return user ? <Dashboard /> : <LoginPage />
 }
 

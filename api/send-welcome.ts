@@ -1,13 +1,18 @@
 import { getEmailProvider } from './lib/emailProviders'
 import { buildWelcomeEmail } from './lib/emailTemplates'
+import { requireAuth } from './lib/requireAuth'
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  // Require authenticated Supabase session (C-1)
+  const auth = await requireAuth(req, res)
+  if (!auth) return
 
   const { to, full_name, temp_password } = req.body || {}
 

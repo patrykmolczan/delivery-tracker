@@ -814,3 +814,77 @@ export async function buildProjectFeedbackEmail(
   }
 }
 
+// ─── Welcome / Password Reset email ──────────────────────────────────────────
+export async function buildWelcomeEmail(
+  to: string,
+  fullName: string,
+  tempPassword: string,
+): Promise<EmailPayload> {
+  const logoUrl = await getLogoUrl()
+  const name = escapeHtml(fullName) || escapeHtml(to)
+  const pw   = escapeHtml(tempPassword)
+
+  const content = `
+    <!-- Header banner -->
+    <tr>
+      <td align="center" style="padding:32px 40px 8px;">
+        <div style="display:inline-block;background-color:${BLUE};border-radius:50%;width:52px;height:52px;line-height:52px;text-align:center;font-size:24px;">
+          🔑
+        </div>
+      </td>
+    </tr>
+
+    <!-- Title -->
+    <tr>
+      <td align="center" style="padding:8px 40px 4px;">
+        <p style="margin:0;font-size:22px;font-weight:700;color:#0F172A;">Welcome to Delivery Tracker</p>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" style="padding:4px 40px 24px;">
+        <p style="margin:0;font-size:15px;color:${GREY};">Hi ${name}, your account is ready.</p>
+      </td>
+    </tr>
+
+    <!-- Temp password box -->
+    <tr>
+      <td style="padding:0 40px 24px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+          style="background-color:#F8FAFC;border:1px solid ${BORDER};border-radius:10px;overflow:hidden;">
+          <tr>
+            <td style="padding:14px 20px;border-bottom:1px solid ${BORDER};">
+              <span style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#94A3B8;">Your Temporary Password</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 20px;">
+              <p style="margin:0;font-size:20px;font-weight:700;font-family:monospace;letter-spacing:2px;color:#0F172A;background:#EFF6FF;border:1px dashed #BFDBFE;border-radius:6px;padding:10px 16px;display:inline-block;">${pw}</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 20px 16px;">
+              <p style="margin:0;font-size:13px;color:${GREY};">You will be asked to set a new password immediately after signing in. This temporary password cannot be reused.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    ${ctaButton(APP_URL, 'Sign In & Set New Password', BLUE)}
+
+    <!-- Security note -->
+    <tr>
+      <td style="padding:16px 40px 32px;">
+        <p style="margin:0;font-size:12px;color:${GREY};text-align:center;">
+          If you did not expect this email, please contact your administrator immediately.
+        </p>
+      </td>
+    </tr>
+  `
+
+  return {
+    to,
+    subject: `Welcome to Delivery Tracker — your temporary password`,
+    html: shell(logoUrl, BLUE, content),
+  }
+}

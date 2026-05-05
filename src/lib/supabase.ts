@@ -8,3 +8,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+/**
+ * Returns fetch headers including the current Supabase Bearer token.
+ * Use for all calls to /api/* serverless functions.
+ *
+ * Usage:
+ *   const headers = await getAuthHeaders()
+ *   const res = await fetch('/api/some-endpoint', { method: 'POST', headers, body: ... })
+ */
+export async function getAuthHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession()
+  return {
+    'Content-Type': 'application/json',
+    ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+  }
+}

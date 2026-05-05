@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Bot, User, Sparkles, TrendingUp, Clock, BarChart2, RefreshCw } from 'lucide-react'
 import type { Project, AIChatMessage } from '../types'
+import { getAuthHeaders } from '../lib/supabase'
 
 interface Props {
   projects: Project[]
@@ -441,9 +442,10 @@ export const AIPage: React.FC<Props> = ({ projects }) => {
     if (historyRef.current.length > 20) historyRef.current = historyRef.current.slice(-20)
 
     try {
+      const chatHeaders = await getAuthHeaders()
       const resp = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: chatHeaders,
         body: JSON.stringify({
           systemPrompt: buildSystemPrompt(dataCtx),
           // Send last 10 messages for multi-turn context

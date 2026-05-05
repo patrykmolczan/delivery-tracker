@@ -8,6 +8,7 @@
  *   3. buildExcelWithDescriptions(file, …)  — write descriptions into a new Excel Blob
  */
 import * as XLSX from 'xlsx'
+import { getAuthHeaders } from './supabase'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -98,9 +99,10 @@ export async function findRowsMissingDescriptions(file: File): Promise<JobRowInf
 export async function generateDescriptions(titles: string[]): Promise<Record<string, string>> {
   const unique = [...new Set(titles)]
 
+  const headers = await getAuthHeaders()
   const resp = await fetch('/api/generate-descriptions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ titles: unique }),
   })
 

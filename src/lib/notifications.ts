@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase, getAuthHeaders } from './supabase'
 
 export interface NotificationSetting {
   id: string
@@ -60,9 +60,10 @@ export async function sendNotification(payload: {
 }): Promise<void> {
   // Fire-and-forget: don't block UI on email errors
   try {
+    const headers = await getAuthHeaders()
     const res = await fetch('/api/send-notification', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     })
     if (!res.ok) {

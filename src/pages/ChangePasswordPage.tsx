@@ -100,11 +100,12 @@ export const ChangePasswordPage: React.FC = () => {
         if (updateError) throw updateError
 
         // Clear forced-change flag (safe no-op if not set)
-        await supabase.rpc('clear_password_change_required').catch(() => {})
+        try { await supabase.rpc('clear_password_change_required') } catch { /* non-blocking */ }
       } else {
         // Admin-forced flow: RPC updates bcrypt hash + clears flag atomically
+        // Wrap in Promise.resolve() so withTimeout (which expects Promise<T>) accepts it
         const { error: rpcError } = await withTimeout(
-          supabase.rpc('user_set_forced_password', { new_password: newPw })
+          Promise.resolve(supabase.rpc('user_set_forced_password', { new_password: newPw }))
         )
         if (rpcError) throw rpcError
       }
@@ -129,8 +130,9 @@ export const ChangePasswordPage: React.FC = () => {
       clearPasswordRecovery()
 
       setDone(true)
-    } catch (err: any) {
-      setError(err.message || 'Failed to update password. Please try again.')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update password. Please try again.'
+      setError(msg)
     } finally {
       setSaving(false)
     }

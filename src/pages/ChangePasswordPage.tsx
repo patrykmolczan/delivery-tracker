@@ -91,32 +91,64 @@ export const ChangePasswordPage: React.FC = () => {
 
     try {
       if (isPasswordRecovery) {
-        // Recovery flow: use GoTrue's native updateUser endpoint.
-        const { error: updateError } = await withTimeout(
-          supabase.auth.updateUser({ password: newPw })
-        )
-        if (updateError) throw updateError
+        // Recovery flow: call GoTrue REST API directly via fetch.
+        //
+        // WHY NOT supabase.auth.updateUser()?
+        // updateUser() successfully updates the password on the server but then
+        // the Supabase JS client hangs internally trying to process the session
+        // rotation (new tokens). During recovery, the client can't refresh tokens
+        // cleanly, so it never resolves — causing a timeout even though the
+        // password was changed. Using fetch() bypasses all internal session
+        // management and gives us a clean HTTP response.
+        //
+        const { data: sessionData } = await supabase.auth.getSession()
+        const accessToken = sessionData?.session?.access_token
 
-        // ---- SUCCESS — show the success screen IMMEDIATELY ----
-        // After updateUser, Supabase rotates the session token.
-        // During rotation the JS client cannot make ANY DB calls
-        // (no valid token = hangs forever, no error, no timeout).
-        // So we set done + clear spinner BEFORE anything else.
+        if (!accessToken) {
+          throw new Error('No active session. Please request a new password reset link.')
+        }
+
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+
+        const response = await withTimeout(
+          fetch(`${supabaseUrl}/auth/v1/user`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+              'apikey': supabaseAnonKey,
+            },
+            body: JSON.stringify({ password: newPw }),
+          })
+        )
+
+        if (!response.ok) {
+          let errMsg = 'Failed to update password.'
+          try {
+            const errBody = await response.json()
+            if (errBody?.message) errMsg = errBody.message
+          } catch { /* ignore json parse errors */ }
+          throw new Error(errMsg)
+        }
+
+        // SUCCESS — show success screen immediately.
+        // No more awaited Supabase calls after this point.
         setSaving(false)
         setDone(true)
 
-        // Audit log: fire-and-forget — absolutely NO await.
-        // This may or may not succeed depending on session state;
-        // that's acceptable for a non-critical log entry.
-        Promise.resolve(supabase.from('audit_log').insert({
-          project_id: null,
-          user_id: user?.id ?? null,
-          action: 'USER_PASSWORD_CHANGED',
-          field_changed: null,
-          old_value: null,
-          new_value: null,
-          metadata: { email: user?.email, reason: 'password_recovery' },
-        })).then(() => {}).catch(() => {})
+        // Fire-and-forget audit log — no await, no blocking
+        Promise.resolve(
+          supabase.from('audit_log').insert({
+            project_id: null,
+            user_id: user?.id ?? null,
+            action: 'USER_PASSWORD_CHANGED',
+            field_changed: null,
+            old_value: null,
+            new_value: null,
+            metadata: { email: user?.email, reason: 'password_recovery' },
+          })
+        ).then(() => {}).catch(() => {})
 
         return
       } else {

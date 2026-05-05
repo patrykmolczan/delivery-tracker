@@ -4,7 +4,6 @@ import { Loader2, AlertCircle, KeyRound, ArrowRight } from 'lucide-react'
 import { useLogo } from '../hooks/useLogo'
 import { useTheme } from '../contexts/ThemeContext'
 import { fetchAppSettings } from '../lib/data'
-import { supabase } from '../lib/supabase'
 
 export const LoginPage: React.FC = () => {
   const { signIn, signInWithSSO } = useAuth()
@@ -60,12 +59,23 @@ export const LoginPage: React.FC = () => {
     if (!email) { setForgotError('Enter your email address above first.'); return }
     setForgotLoading(true)
     setForgotError(null)
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin,
-    })
-    setForgotLoading(false)
-    if (error) setForgotError(error.message)
-    else setForgotSent(true)
+    try {
+      const res = await fetch('/api/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setForgotError(data.error || 'Failed to send reset email. Please try again.')
+      } else {
+        setForgotSent(true)
+      }
+    } catch {
+      setForgotError('Network error. Please try again.')
+    } finally {
+      setForgotLoading(false)
+    }
   }
 
   const showSSO = ssoEnabled && settingsLoaded && !showPasswordFallback

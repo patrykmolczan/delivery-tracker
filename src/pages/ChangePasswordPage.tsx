@@ -92,25 +92,39 @@ export const ChangePasswordPage: React.FC = () => {
     try {
       if (isPasswordRecovery) {
         // Recovery flow: use GoTrue's native updateUser endpoint.
-        // The custom RPC hangs in recovery sessions because the Supabase JS client
-        // attempts to silently refresh recovery tokens (which are non-renewable).
         const { error: updateError } = await withTimeout(
           supabase.auth.updateUser({ password: newPw })
         )
         if (updateError) throw updateError
 
-        // Clear forced-change flag (safe no-op if not set)
-        try { await supabase.rpc('clear_password_change_required') } catch { /* non-blocking */ }
+        // Log to audit_log (non-blocking)
+        try {
+          await supabase.from('audit_log').insert({
+            project_id: null,
+            user_id: user?.id ?? null,
+            action: 'USER_PASSWORD_CHANGED',
+            field_changed: null,
+            old_value: null,
+            new_value: null,
+            metadata: { email: user?.email, reason: 'password_recovery' },
+          })
+        } catch { /* non-blocking */ }
+
+        // Skip refreshProfile() — after updateUser the session is being rebuilt.
+        // The success screen redirects to / which does a full page reload that
+        // reinitializes auth state cleanly.
+        clearPasswordRecovery()
+        setDone(true)
+        return
       } else {
         // Admin-forced flow: RPC updates bcrypt hash + clears flag atomically
-        // Wrap in Promise.resolve() so withTimeout (which expects Promise<T>) accepts it
         const { error: rpcError } = await withTimeout(
           Promise.resolve(supabase.rpc('user_set_forced_password', { new_password: newPw }))
         )
         if (rpcError) throw rpcError
       }
 
-      // Log to audit_log (non-blocking)
+      // Log to audit_log (non-blocking) — admin-forced path only
       try {
         await supabase.from('audit_log').insert({
           project_id: null,
@@ -119,16 +133,13 @@ export const ChangePasswordPage: React.FC = () => {
           field_changed: null,
           old_value: null,
           new_value: null,
-          metadata: { email: user?.email, reason: isPasswordRecovery ? 'password_recovery' : 'forced_change_on_login' },
+          metadata: { email: user?.email, reason: 'forced_change_on_login' },
         })
       } catch { /* non-blocking */ }
 
-      // Refresh profile in context (clears passwordChangeRequired)
+      // Refresh profile in context (clears passwordChangeRequired flag in UI)
       await refreshProfile()
-
-      // Clear recovery mode if applicable
       clearPasswordRecovery()
-
       setDone(true)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to update password. Please try again.'

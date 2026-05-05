@@ -51,7 +51,7 @@ function strengthLabel(score: number): { label: string; color: string } {
 }
 
 export const ChangePasswordPage: React.FC = () => {
-  const { user, profile, signOut, refreshProfile, clearPasswordRecovery } = useAuth()
+  const { user, profile, signOut, refreshProfile, clearPasswordRecovery, isPasswordRecovery } = useAuth()
   const { logoUrl } = useLogo()
   const { isDark } = useTheme()
 
@@ -82,14 +82,34 @@ export const ChangePasswordPage: React.FC = () => {
     }
 
     setSaving(true)
-    try {
-      // Use direct DB RPC for both recovery and admin-forced flows.
-      // supabase.auth.updateUser() hangs indefinitely in both cases because
-      // passwords are managed via direct bcrypt updates in auth.users.
-      const { error: rpcError } = await supabase.rpc('user_set_forced_password', { new_password: newPw })
-      if (rpcError) throw rpcError
 
-      // Log to audit_log
+    // 15-second timeout guard
+    const withTimeout = <T,>(p: Promise<T>): Promise<T> =>
+      Promise.race([p, new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error('Request timed out. Please try again.')), 15000)
+      )])
+
+    try {
+      if (isPasswordRecovery) {
+        // Recovery flow: use GoTrue's native updateUser endpoint.
+        // The custom RPC hangs in recovery sessions because the Supabase JS client
+        // attempts to silently refresh recovery tokens (which are non-renewable).
+        const { error: updateError } = await withTimeout(
+          supabase.auth.updateUser({ password: newPw })
+        )
+        if (updateError) throw updateError
+
+        // Clear forced-change flag (safe no-op if not set)
+        await supabase.rpc('clear_password_change_required').catch(() => {})
+      } else {
+        // Admin-forced flow: RPC updates bcrypt hash + clears flag atomically
+        const { error: rpcError } = await withTimeout(
+          supabase.rpc('user_set_forced_password', { new_password: newPw })
+        )
+        if (rpcError) throw rpcError
+      }
+
+      // Log to audit_log (non-blocking)
       try {
         await supabase.from('audit_log').insert({
           project_id: null,
@@ -98,7 +118,7 @@ export const ChangePasswordPage: React.FC = () => {
           field_changed: null,
           old_value: null,
           new_value: null,
-          metadata: { email: user?.email, reason: 'forced_change_on_login' },
+          metadata: { email: user?.email, reason: isPasswordRecovery ? 'password_recovery' : 'forced_change_on_login' },
         })
       } catch { /* non-blocking */ }
 

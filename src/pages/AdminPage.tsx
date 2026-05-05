@@ -404,13 +404,18 @@ export const AdminPage: React.FC = () => {
   }
 
   useEffect(() => {
-    loadAll()
-    fetchAppSettings().then(s => {
-      setCurrentLogoUrl(s.logo_url || null)
-      setCurrentLoginIconUrl(s.login_icon_url || null)
-      setSsoEnabledState(s.sso_enabled === 'true')
-      setSsoDomainState(s.sso_domain || '')
-    }).catch(() => {})
+    // Force session refresh before firing parallel fetches.
+    // After inactivity, the Supabase token may be stale; fetches that race
+    // against the silent refresh hang forever and spinners never clear.
+    supabase.auth.getSession().then(() => {
+      loadAll()
+      fetchAppSettings().then(s => {
+        setCurrentLogoUrl(s.logo_url || null)
+        setCurrentLoginIconUrl(s.login_icon_url || null)
+        setSsoEnabledState(s.sso_enabled === 'true')
+        setSsoDomainState(s.sso_domain || '')
+      }).catch(() => {})
+    })
   }, [])
 
   useEffect(() => {

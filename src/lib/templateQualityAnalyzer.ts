@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import { getAuthHeaders } from './supabase'
 
 export interface RawTemplateRow {
   rowIndex: number
@@ -219,18 +220,6 @@ export async function analyzeTemplateQuality(file: File, projectType: string): P
       if (compactRows.length >= 120) break
     }
 
-    const systemPrompt = `You are a Senior Compensation Data Quality Analyst at a global HR consulting firm. You specialize in reviewing Pay Intelligence (pay equity/benchmarking) data templates before submission to the Pay Intel platform.
-
-Your expertise:
-- CRITICAL RULE: Pay Intel automatically delivers 5 pricing levels (Junior, Intermediate, Senior, Lead, Guru) for EVERY job title submitted. Therefore, users should NEVER include level modifiers in job titles. "Software Engineer" is perfect — Pay Intel will return all 5 levels. "Senior Software Engineer" is WRONG — the Sr. modifier is redundant and degrades data quality.
-- Level modifiers to FLAG (should be removed from titles): Jr., Jr, Junior, Sr., Sr, Senior, Lead (as prefix/suffix modifier), I, II, III, IV, V (roman numerals as suffix), Associate (as prefix meaning entry-level), Staff (as prefix), Principal (as prefix meaning seniority), SME, Mid-Level, Entry-Level
-- EXCEPTION — Do NOT flag these as leveling issues because the level IS the job title: Manager, Senior Manager, Director, Senior Director, VP, SVP, EVP, Head of, Chief, C-level titles, Team Lead (standalone job title). "Delivery Manager" is correct. "Engineering Manager" is correct. "VP of Finance" is correct.
-- CRITICAL LOCATION RULE: Each row MUST contain only ONE location (one state AND one city). A row with "Kentucky & Indiana" in the State field is invalid — it must be split into two rows: one for Kentucky and one for Indiana. Flag any row where a state, city, or country field appears to contain multiple locations combined with &, and, /, comma, or semicolon separators. This is a structural error — the template cannot be processed correctly until each location is on its own row.
-- LOCATION REQUIREMENTS: Country AND State/Province are both required for every row. City is optional but improves local accuracy. "Remote" is NOT a valid State/Province value — it is a work-arrangement term and will be flagged as invalid. Region or metro area names (e.g. "Bay Area", "Greater London") are NOT valid State/Province values — always flag these and suggest the correct state/province (e.g. "Bay Area" → use "California"). Do NOT suggest leaving State/Province blank for any reason.
-- Semantic duplicates are common and harmful: "DevOps Engineer" vs "Development Operations Engineer" vs "DevOps Engineer - Senior" are related and need review.
-- Abbreviations that signal duplicates: Dev/Development, Ops/Operations, Eng/Engineer, Mgr/Manager, Admin/Administrator, Dir/Director, SW/Software, FE/Frontend, BE/Backend
-- Missing job descriptions reduce pricing accuracy — always flag rows without descriptions
-- Your output will be parsed as JSON — respond with ONLY valid JSON, no markdown fences, no explanation text outside the JSON.`
 
     const userPrompt = `Analyze this Pay Intel template data. Total rows in file: ${rows.length}. Unique combos being analyzed: ${compactRows.length}.
 ${multiLocationRows.length > 0 ? `\nNOTE: Client-side scan already detected ${multiLocationRows.length} multi-location rows (e.g., "${multiLocationRows[0]?.value}" in ${multiLocationRows[0]?.field} field). Do NOT re-flag these in locationIssues — they are handled separately. Focus your locationIssues on missing country/state or other location problems.\n` : ''}
@@ -286,10 +275,12 @@ Rules:
 - issueCount: sum all items across all categories by their severity field`
 
     // Call via serverless proxy — avoids browser CORS + keeps API key server-side only
+    // systemPrompt is now built server-side; client sends only the template data (userPrompt)
+    const authHeaders = await getAuthHeaders()
     const response = await fetch('/api/analyze-template', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ systemPrompt, userPrompt }),
+      headers: authHeaders,
+      body: JSON.stringify({ userPrompt }),
     })
 
     if (!response.ok) {

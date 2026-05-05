@@ -564,9 +564,10 @@ export const AdminPage: React.FC = () => {
       if (resetErr) throw new Error(resetErr.message)
 
       // Send welcome email
+      const token = await getAccessToken()
       const res = await fetch('/api/send-welcome', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ to: userEmail, full_name: userFullName, temp_password: tempPassword }),
       })
       if (!res.ok) {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Bot, User, Sparkles, TrendingUp, Clock, BarChart2, RefreshCw } from 'lucide-react'
 import type { Project, AIChatMessage } from '../types'
+import { getAuthHeaders } from '../lib/supabase'
 
 interface Props {
   projects: Project[]
@@ -317,38 +318,6 @@ function buildDataContext(projects: Project[]): DataContext {
   return ctx
 }
 
-function buildSystemPrompt(ctx: DataContext): string {
-  return `You are an expert Delivery Project Management Assistant for a procurement and HR delivery tracker.
-You have full access to the live project database. Answer any question a PM, manager, or analyst might ask — naturally, accurately, and concisely.
-
-Today's date: ${ctx.todayDate}
-
-=== LIVE DATABASE SNAPSHOT ===
-${JSON.stringify(ctx, null, 2)}
-=== END OF DATA ===
-
-SCHEMA LEGEND — understand these fields before answering:
-- "Client" or "client_name": the actual company/organization name (e.g. "NYCHH", "Johnson & Johnson", "Amazon"). Use the "topClients" array in the data. NEVER use byClientType for client name questions.
-- "Client Type" or "client_type": a category/segment bucket (e.g. "Existing Client", "New Client", "MSP", "Direct"). Use the "byClientType" object. These are NOT company names — they are categories.
-- "Analyst": the internal team member assigned to deliver the project (Joanna, Kim, Allie, Megan, Patryk, Tricia). Use the "byAnalyst" object.
-- "Project Owner" or "owner": the client-side owner/sponsor of the project.
-- "Requestor": the person who submitted the request.
-- "Status": Completed | In Process | On Hold | Overdue | Cancelled.
-- "Days to complete" (days_to_complete): calendar days from Date Received to Date Delivered. Negative = delivered early. Positive = delivered late.
-- "Project Type": type of delivery work (e.g. "Pay Intel (Rate Card)", "Pay Intel (Right Sourcing)", "Magnit VMS").
-
-INSTRUCTIONS:
-- Answer based strictly on the data above. Do not guess or make up numbers.
-- Be conversational but precise. Give exact counts, names, and dates when asked.
-- Format responses with markdown: **bold** for key numbers/names, bullet lists for multiple items, tables when comparing data.
-- For analyst questions: include their project count, active workload, avg delivery time, and overdue items.
-- For "client" or "which client" questions: ALWAYS use topClients (real company names) unless the user explicitly says "client type" or "client category".
-- For "show me" or "list" questions: show all items if ≤10, otherwise show top 10 with a note.
-- For trend questions: use the volumeByMonth data.
-- For delivery time questions: use avgDeliveryDays from the relevant breakdown.
-- Keep responses focused — don't dump all data unless asked.
-- If a question is ambiguous, answer the most likely interpretation and offer to clarify.`
-}
 
 // ─── Suggested questions ───────────────────────────────────────────────────────
 
@@ -441,11 +410,12 @@ export const AIPage: React.FC<Props> = ({ projects }) => {
     if (historyRef.current.length > 20) historyRef.current = historyRef.current.slice(-20)
 
     try {
+      const headers = await getAuthHeaders()
       const resp = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
-          systemPrompt: buildSystemPrompt(dataCtx),
+          dataContext: dataCtx,        // server builds systemPrompt from this (H-4)
           // Send last 10 messages for multi-turn context
           messages: historyRef.current.slice(-10),
         }),

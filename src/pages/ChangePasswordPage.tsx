@@ -51,7 +51,7 @@ function strengthLabel(score: number): { label: string; color: string } {
 }
 
 export const ChangePasswordPage: React.FC = () => {
-  const { user, profile, signOut, refreshProfile, clearPasswordRecovery, isPasswordRecovery } = useAuth()
+  const { user, profile, signOut, refreshProfile, clearPasswordRecovery } = useAuth()
   const { logoUrl } = useLogo()
   const { isDark } = useTheme()
 
@@ -83,24 +83,11 @@ export const ChangePasswordPage: React.FC = () => {
 
     setSaving(true)
     try {
-      if (isPasswordRecovery) {
-        // Supabase recovery-link flow — updateUser() works (proper recovery session)
-        const updateWithTimeout = Promise.race([
-          supabase.auth.updateUser({ password: newPw }),
-          new Promise<{ error: Error }>(resolve =>
-            setTimeout(() => resolve({ error: new Error('Request timed out — please try again.') }), 15000)
-          )
-        ]) as Promise<{ error: any }>
-        const { error: authError } = await updateWithTimeout
-        if (authError) throw authError
-        // Safety-net clear flag
-        await supabase.rpc('clear_password_change_required').catch(() => {})
-      } else {
-        // Admin-forced change — use direct DB RPC to avoid hung updateUser()
-        // (supabase.auth.updateUser hangs when password was set via direct DB patch)
-        const { error: rpcError } = await supabase.rpc('user_set_forced_password', { new_password: newPw })
-        if (rpcError) throw rpcError
-      }
+      // Use direct DB RPC for both recovery and admin-forced flows.
+      // supabase.auth.updateUser() hangs indefinitely in both cases because
+      // passwords are managed via direct bcrypt updates in auth.users.
+      const { error: rpcError } = await supabase.rpc('user_set_forced_password', { new_password: newPw })
+      if (rpcError) throw rpcError
 
       // Log to audit_log
       try {

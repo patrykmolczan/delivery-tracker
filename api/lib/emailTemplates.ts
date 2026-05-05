@@ -888,3 +888,54 @@ export async function buildWelcomeEmail(
     html: shell(logoUrl, BLUE, content),
   }
 }
+
+// ─── Password Reset email ──────────────────────────────────────────────────────
+export async function buildPasswordResetEmail(
+  to: string,
+  resetLink: string,
+): Promise<EmailPayload> {
+  const logoUrl = await getLogoUrl()
+
+  const content = `
+    <!-- Header banner -->
+    <tr>
+      <td align="center" style="padding:32px 40px 8px;">
+        <div style="display:inline-block;background-color:${BLUE};border-radius:50%;width:52px;height:52px;line-height:52px;text-align:center;font-size:24px;">
+          🔒
+        </div>
+      </td>
+    </tr>
+    <!-- Title -->
+    <tr>
+      <td align="center" style="padding:8px 40px 4px;">
+        <p style="margin:0;font-size:22px;font-weight:700;color:#0F172A;">Reset Your Password</p>
+      </td>
+    </tr>
+    <tr>
+      <td align="center" style="padding:4px 40px 24px;">
+        <p style="margin:0;font-size:15px;color:${GREY};">
+          We received a request to reset the password for your Delivery Tracker account.
+          Click the button below to choose a new password.
+        </p>
+      </td>
+    </tr>
+
+    ${ctaButton(resetLink, 'Reset Password', BLUE)}
+
+    <!-- Expiry + security note -->
+    <tr>
+      <td style="padding:4px 40px 32px;">
+        <p style="margin:0;font-size:12px;color:${GREY};text-align:center;line-height:1.7;">
+          This link expires in <strong>1 hour</strong>.<br/>
+          If you didn't request a password reset, you can safely ignore this email.
+        </p>
+      </td>
+    </tr>
+  `
+
+  return {
+    to,
+    subject: 'Reset your Delivery Tracker password',
+    html: shell(logoUrl, BLUE, content),
+  }
+}

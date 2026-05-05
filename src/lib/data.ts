@@ -1712,14 +1712,30 @@ export async function submitClientRequest(requestedName: string, requestedBy: st
 }
 
 export async function fetchClientRequests(): Promise<ClientRequest[]> {
+  // Note: requested_by FK points to auth.users (different schema), so PostgREST
+  // cannot do an embedded join for profiles. We fetch profile names separately.
   const { data, error } = await supabase
     .from('client_requests')
-    .select('*, profiles!requested_by(full_name), clients!assigned_client_id(name)')
+    .select('*, clients!assigned_client_id(name)')
     .order('created_at', { ascending: false })
   if (error) throw new Error(`Failed to fetch client requests: ${error.message}`)
+
+  // Collect unique requester UUIDs and resolve their display names from profiles
+  const userIds = [...new Set((data || []).map((r: any) => r.requested_by).filter(Boolean))]
+  let nameMap: Record<string, string> = {}
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', userIds)
+    if (profiles) {
+      profiles.forEach((p: any) => { nameMap[p.id] = p.full_name })
+    }
+  }
+
   return (data || []).map((row: any) => ({
     ...row,
-    requester_name: row.profiles?.full_name || null,
+    requester_name: nameMap[row.requested_by] || null,
     assigned_client_name: row.clients?.name || null,
   })) as ClientRequest[]
 }

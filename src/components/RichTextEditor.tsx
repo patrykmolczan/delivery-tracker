@@ -30,13 +30,15 @@ const FontSize = Extension.create({
       },
     }]
   },
-  addCommands(): Record<string, (...args: unknown[]) => unknown> {
+  addCommands() {
     return {
-      setFontSize: (size: string) => ({ chain }: { chain: () => { setMark: (name: string, attrs: Record<string, string>) => { run: () => boolean } } }) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setFontSize: (size: string) => ({ chain }: any) =>
         chain().setMark('textStyle', { fontSize: size }).run(),
-      unsetFontSize: () => ({ chain }: { chain: () => { setMark: (name: string, attrs: Record<string, null>) => { removeEmptyTextStyle?: () => { run: () => boolean }, run: () => boolean } } }) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      unsetFontSize: () => ({ chain }: any) =>
         chain().setMark('textStyle', { fontSize: null }).run(),
-    }
+    } as Record<string, unknown>
   },
 })
 

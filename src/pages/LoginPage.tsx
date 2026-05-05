@@ -4,6 +4,7 @@ import { Loader2, AlertCircle, KeyRound, ArrowRight } from 'lucide-react'
 import { useLogo } from '../hooks/useLogo'
 import { useTheme } from '../contexts/ThemeContext'
 import { fetchAppSettings } from '../lib/data'
+import { supabase } from '../lib/supabase'
 
 export const LoginPage: React.FC = () => {
   const { signIn, signInWithSSO } = useAuth()
@@ -19,6 +20,10 @@ export const LoginPage: React.FC = () => {
   const [ssoDomain, setSsoDomain] = useState('')
   const [settingsLoaded, setSettingsLoaded] = useState(false)
   const [showPasswordFallback, setShowPasswordFallback] = useState(false)
+  const [forgotMode, setForgotMode] = useState(false)
+  const [forgotSent, setForgotSent] = useState(false)
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotError, setForgotError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchAppSettings()
@@ -49,6 +54,19 @@ export const LoginPage: React.FC = () => {
     const { error } = await signInWithSSO(ssoDomain)
     if (error) setError(error.message)
     setLoading(false)
+  }
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email) { setForgotError('Enter your email address above first.'); return }
+    setForgotLoading(true)
+    setForgotError(null)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin,
+    })
+    setForgotLoading(false)
+    if (error) setForgotError(error.message)
+    else setForgotSent(true)
   }
 
   const showSSO = ssoEnabled && settingsLoaded && !showPasswordFallback
@@ -359,6 +377,28 @@ export const LoginPage: React.FC = () => {
               {loading ? 'Signing in...' : 'Sign in'}
               {!loading && <ArrowRight size={14} />}
             </button>
+
+            {/* Forgot password */}
+            {!forgotSent ? (
+              <div className="text-center mt-3">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={forgotLoading}
+                  className="text-xs underline underline-offset-2 transition-colors"
+                  style={{ color: 'var(--fallback-bc,oklch(var(--bc)/0.4))' }}
+                >
+                  {forgotLoading ? 'Sending…' : 'Forgot password?'}
+                </button>
+                {forgotError && (
+                  <p className="text-xs text-error mt-1">{forgotError}</p>
+                )}
+              </div>
+            ) : (
+              <div className="alert alert-success py-2 mt-3">
+                <span className="text-sm">✓ Password reset email sent — check your inbox.</span>
+              </div>
+            )}
 
             {/* SSO option below password form */}
             {!ssoEnabled && (

@@ -161,6 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // moment the tab becomes visible so we catch dead sessions before data fetching.
     const handleVisibilityChange = async () => {
       if (document.visibilityState !== 'visible') return
+      if (isRecoveryUrl.current) return  // don't redirect during password recovery flow
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession()
         if (!currentSession) {

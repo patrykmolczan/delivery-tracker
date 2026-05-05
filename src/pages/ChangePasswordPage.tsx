@@ -51,7 +51,7 @@ function strengthLabel(score: number): { label: string; color: string } {
 }
 
 export const ChangePasswordPage: React.FC = () => {
-  const { user, profile, signOut, refreshProfile, clearPasswordRecovery, isPasswordRecovery } = useAuth()
+  const { user, profile, signOut, refreshProfile, clearPasswordRecovery } = useAuth()
   const { logoUrl } = useLogo()
   const { isDark } = useTheme()
 

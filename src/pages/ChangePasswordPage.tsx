@@ -108,7 +108,7 @@ export const ChangePasswordPage: React.FC = () => {
         // Audit log: fire-and-forget — absolutely NO await.
         // This may or may not succeed depending on session state;
         // that's acceptable for a non-critical log entry.
-        supabase.from('audit_log').insert({
+        Promise.resolve(supabase.from('audit_log').insert({
           project_id: null,
           user_id: user?.id ?? null,
           action: 'USER_PASSWORD_CHANGED',
@@ -116,7 +116,7 @@ export const ChangePasswordPage: React.FC = () => {
           old_value: null,
           new_value: null,
           metadata: { email: user?.email, reason: 'password_recovery' },
-        }).then(() => {}).catch(() => {})
+        })).then(() => {}).catch(() => {})
 
         return
       } else {
@@ -127,7 +127,7 @@ export const ChangePasswordPage: React.FC = () => {
         if (rpcError) throw rpcError
       }
 
-      // Log to audit_log (non-blocking) \u2014 admin-forced path only
+      // Log to audit_log (non-blocking) — admin-forced path only
       try {
         await supabase.from('audit_log').insert({
           project_id: null,
@@ -317,7 +317,7 @@ export const ChangePasswordPage: React.FC = () => {
                 disabled={saving || !allMet || !matches}
               >
                 {saving
-                  ? <><span className="loading loading-spinner loading-xs" /> Setting Password\u2026</>
+                  ? <><span className="loading loading-spinner loading-xs" /> Setting Password…</>
                   : <><ShieldCheck size={15} /> Set New Password</>
                 }
               </button>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Settings, Plus, Trash2, Loader2, Zap, AlertCircle, X } from 'lucide-react'
+import { Settings, Plus, Trash2, Zap, AlertCircle, X } from 'lucide-react'
 import {
   fetchTextPresets,
   createTextPreset,

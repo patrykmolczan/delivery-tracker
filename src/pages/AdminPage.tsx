@@ -307,6 +307,9 @@ export const AdminPage: React.FC = () => {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
   const [bulkDeactivating, setBulkDeactivating] = useState(false)
   const [sendingWelcomeFor, setSendingWelcomeFor] = useState<string | null>(null)
+  const [deleteUserTarget, setDeleteUserTarget] = useState<UserProfile | null>(null)
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const USERS_PER_PAGE = 25
 
   const uploadLogo = async (file: File) => {
@@ -602,6 +605,24 @@ export const AdminPage: React.FC = () => {
       setError(err.message || 'Bulk deactivate failed')
     } finally {
       setBulkDeactivating(false)
+    }
+  }
+
+  const handleDeleteUser = async () => {
+    if (!deleteUserTarget || deleteConfirmEmail.trim().toLowerCase() !== deleteUserTarget.email.toLowerCase()) return
+    setDeleting(true)
+    setError(null)
+    try {
+      const { error } = await supabase.rpc('admin_delete_user', { p_user_id: deleteUserTarget.id })
+      if (error) throw error
+      setUsers(prev => prev.filter(u => u.id !== deleteUserTarget.id))
+      setDeleteUserTarget(null)
+      setDeleteConfirmEmail('')
+      showSuccess(`User ${deleteUserTarget.email} permanently deleted.`)
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete user')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -1385,6 +1406,15 @@ export const AdminPage: React.FC = () => {
                                     }
                                   </button>
                                 )}
+                                {isSuperAdmin && (
+                                  <button
+                                    className="btn btn-ghost btn-xs text-error/50 hover:text-error hover:bg-error/10"
+                                    onClick={() => { setDeleteUserTarget(user); setDeleteConfirmEmail('') }}
+                                    title="Permanently delete user"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                )}
                               </>
                             )}
                           </div>
@@ -1588,5 +1618,45 @@ export const AdminPage: React.FC = () => {
         </div>
       </div>
     </div>
+
+      {/* ── Delete User Modal ─────────────────────────────────────────────── */}
+      {deleteUserTarget && (
+        <div className="modal modal-open">
+          <div className="modal-box max-w-md">
+            <h3 className="font-bold text-lg flex items-center gap-2 text-error">
+              <Trash2 size={18} /> Permanently Delete User
+            </h3>
+            <p className="py-3 text-sm text-base-content/70">
+              This will permanently remove <strong>{deleteUserTarget.full_name || deleteUserTarget.email}</strong> and all their associated data from the system. <span className="text-error font-semibold">This cannot be undone.</span>
+            </p>
+            <p className="text-sm mb-2 font-medium">Type their email address to confirm:</p>
+            <input
+              className="input input-bordered input-sm w-full"
+              placeholder={deleteUserTarget.email}
+              value={deleteConfirmEmail}
+              onChange={e => setDeleteConfirmEmail(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && deleteConfirmEmail.toLowerCase() === deleteUserTarget.email.toLowerCase()) handleDeleteUser() }}
+              autoFocus
+            />
+            <div className="modal-action">
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => { setDeleteUserTarget(null); setDeleteConfirmEmail('') }}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                className={`btn btn-error btn-sm gap-1.5 ${deleting ? 'loading' : ''}`}
+                disabled={deleteConfirmEmail.trim().toLowerCase() !== deleteUserTarget.email.toLowerCase() || deleting}
+                onClick={handleDeleteUser}
+              >
+                {!deleting && <Trash2 size={13} />} Delete Permanently
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => { if (!deleting) { setDeleteUserTarget(null); setDeleteConfirmEmail('') } }} />
+        </div>
+      )}
   )
 }

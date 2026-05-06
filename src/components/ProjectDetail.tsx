@@ -48,13 +48,20 @@ import { TextPresets } from './TextPresets'
 function sanitizeNoteHtml(html: string): string {
   try {
     const doc = new DOMParser().parseFromString(html, 'text/html')
-    doc.querySelectorAll('script, iframe, object, embed, form, input, link').forEach(el => el.remove())
+    // Remove elements that can execute code or load external resources.
+    // svg added: can carry onload/animate handlers and data: URI payloads.
+    // TipTap (StarterKit + Color + TextStyle + Underline) never produces any
+    // of these tags, so removal has no effect on legitimate note content.
+    doc.querySelectorAll('script, iframe, object, embed, form, input, link, svg').forEach(el => el.remove())
     doc.querySelectorAll('*').forEach(el => {
       Array.from(el.attributes).forEach(attr => {
         if (
+          // Strip all on* event handlers (onclick, onload, onerror, etc.)
           attr.name.startsWith('on') ||
-          (attr.name === 'href' && /^\s*javascript:/i.test(attr.value)) ||
-          (attr.name === 'src'  && /^\s*javascript:/i.test(attr.value))
+          // Strip javascript: and data: URI schemes from href and src.
+          // data: added: browsers can execute HTML/JS payloads via data: URIs.
+          (attr.name === 'href' && /^\s*(javascript:|data:)/i.test(attr.value)) ||
+          (attr.name === 'src'  && /^\s*(javascript:|data:)/i.test(attr.value))
         ) {
           el.removeAttribute(attr.name)
         }

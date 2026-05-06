@@ -24,23 +24,59 @@ interface EditablePreset {
 /** Strip Outlook/Word clipboard junk down to clean plain text */
 function sanitizeClipboardText(raw: string): string {
   return raw
-    // Replace non-breaking spaces with regular spaces
     .replace(/\u00a0/g, ' ')
-    // Replace zero-width spaces / joiners / soft hyphens
     .replace(/[\u200b\u200c\u200d\u00ad\ufeff]/g, '')
-    // Normalize smart quotes → straight quotes
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201c\u201d]/g, '"')
-    // Normalize em/en dashes → hyphen
     .replace(/[\u2013\u2014]/g, '-')
-    // Normalize Windows-style CRLF and bare CR to LF
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
-    // Strip any stray HTML tags (Outlook sometimes leaks them into plain text)
     .replace(/<[^>]*>/g, '')
-    // Collapse 3+ consecutive blank lines to 2
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+/**
+ * XSS sanitizer — strips anything that could execute code when stored or
+ * inserted into the rich-text editor. Applied on every save and every insert.
+ *
+ * Defences (layered):
+ *  1. Decode common HTML entities so encoded payloads are caught in step 2
+ *  2. Strip <script>, <iframe>, <object>, <embed>, <link>, <meta>, <svg> tags entirely
+ *  3. Strip ALL remaining HTML tags
+ *  4. Remove javascript: / vbscript: / data: URI schemes
+ *  5. Remove inline event handler attributes (onerror=, onclick=, etc.)
+ *  6. Remove null bytes and other dangerous control characters
+ */
+function sanitizeForStorage(text: string): string {
+  let s = text
+  // 1. Decode common HTML entities to expose encoded payloads
+  s = s
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&amp;/gi, '&')
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);/gi, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
+  // 2. Strip dangerous tag blocks wholesale (including their content)
+  s = s.replace(/<script[\s\S]*?<\/script>/gi, '')
+  s = s.replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+  s = s.replace(/<object[\s\S]*?<\/object>/gi, '')
+  s = s.replace(/<embed[^>]*>/gi, '')
+  s = s.replace(/<link[^>]*>/gi, '')
+  s = s.replace(/<meta[^>]*>/gi, '')
+  s = s.replace(/<svg[\s\S]*?<\/svg>/gi, '')
+  // 3. Strip all remaining HTML tags
+  s = s.replace(/<[^>]*>/g, '')
+  // 4. Remove dangerous URI schemes
+  s = s.replace(/javascript\s*:/gi, '')
+  s = s.replace(/vbscript\s*:/gi, '')
+  s = s.replace(/data\s*:/gi, '')
+  // 5. Remove inline event handlers (on* = ...)
+  s = s.replace(/\bon\w+\s*=/gi, '')
+  // 6. Remove null bytes and dangerous control chars (except \n and \t)
+  // eslint-disable-next-line no-control-regex
+  s = s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
+  return s.trim()
 }
 
 export const TextPresets: React.FC<TextPresetsProps> = ({ onInsert }) => {
@@ -87,14 +123,12 @@ export const TextPresets: React.FC<TextPresetsProps> = ({ onInsert }) => {
     e.preventDefault()
     const plain = e.clipboardData.getData('text/plain')
     const clean = sanitizeClipboardText(plain)
-    // Insert at cursor position for a natural paste feel
     const target = e.currentTarget
     const start = target.selectionStart ?? 0
     const end = target.selectionEnd ?? 0
     const current = editPresets[idx].content
     const next = current.slice(0, start) + clean + current.slice(end)
     updateEdit(idx, 'content', next)
-    // Restore cursor after the pasted text
     requestAnimationFrame(() => {
       target.selectionStart = start + clean.length
       target.selectionEnd = start + clean.length
@@ -105,7 +139,7 @@ export const TextPresets: React.FC<TextPresetsProps> = ({ onInsert }) => {
   const handleNamePaste = (e: React.ClipboardEvent<HTMLInputElement>, idx: number) => {
     e.preventDefault()
     const plain = e.clipboardData.getData('text/plain')
-    const clean = sanitizeClipboardText(plain).replace(/\n/g, ' ') // names are single-line
+    const clean = sanitizeClipboardText(plain).replace(/\n/g, ' ')
     const target = e.currentTarget
     const start = target.selectionStart ?? 0
     const end = target.selectionEnd ?? 0
@@ -135,13 +169,15 @@ export const TextPresets: React.FC<TextPresetsProps> = ({ onInsert }) => {
         if (!editIds.has(id)) await deleteTextPreset(id)
       }
 
-      // Update existing / create new
+      // Sanitize, then update existing / create new
       for (let i = 0; i < editPresets.length; i++) {
         const ep = editPresets[i]
+        const safeName = sanitizeForStorage(ep.name.trim())
+        const safeContent = sanitizeForStorage(ep.content.trim())
         if (ep.id) {
-          await updateTextPreset(ep.id, { name: ep.name.trim(), content: ep.content.trim(), sort_order: i })
+          await updateTextPreset(ep.id, { name: safeName, content: safeContent, sort_order: i })
         } else {
-          await createTextPreset(ep.name.trim(), ep.content.trim(), i)
+          await createTextPreset(safeName, safeContent, i)
         }
       }
 
@@ -170,7 +206,7 @@ export const TextPresets: React.FC<TextPresetsProps> = ({ onInsert }) => {
           <button
             key={preset.id}
             type="button"
-            onClick={() => onInsert(preset.content)}
+            onClick={() => onInsert(sanitizeForStorage(preset.content))}
             className="btn btn-xs btn-ghost border border-base-300/70 rounded-full px-2.5 h-6 min-h-0 text-[11px] text-base-content/60 hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-all"
             title={`Insert: ${preset.name}`}
           >

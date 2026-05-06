@@ -48,13 +48,13 @@ import { TextPresets } from './TextPresets'
 function sanitizeNoteHtml(html: string): string {
   try {
     const doc = new DOMParser().parseFromString(html, 'text/html')
-    doc.querySelectorAll('script, iframe, object, embed, form, input, link').forEach(el => el.remove())
+    doc.querySelectorAll('script, iframe, object, embed, form, input, link, svg').forEach(el => el.remove())
     doc.querySelectorAll('*').forEach(el => {
       Array.from(el.attributes).forEach(attr => {
         if (
           attr.name.startsWith('on') ||
-          (attr.name === 'href' && /^\s*javascript:/i.test(attr.value)) ||
-          (attr.name === 'src'  && /^\s*javascript:/i.test(attr.value))
+          (attr.name === 'href' && /^\s*(javascript:|data:)/i.test(attr.value)) ||
+          (attr.name === 'src'  && /^\s*(javascript:|data:)/i.test(attr.value))
         ) {
           el.removeAttribute(attr.name)
         }

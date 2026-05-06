@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { useEditor, EditorContent, Extension } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -73,6 +73,12 @@ interface RichTextEditorProps {
   autoFocus?: boolean
 }
 
+// ── Ref handle exposed to parent ──────────────────────────────────────────
+export interface RichTextEditorRef {
+  /** Insert plain-text content at cursor; newlines become paragraphs, multiple spaces preserved */
+  insertContent: (text: string) => void
+}
+
 // ── Toolbar button ─────────────────────────────────────────────────────────
 function ToolBtn({
   active, onClick, title, children, disabled
@@ -101,13 +107,13 @@ function ToolBtn({
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-export default function RichTextEditor({
+const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
   content,
   onChange,
   placeholder = 'Write your note here…',
   minHeight = 120,
   autoFocus = false,
-}: RichTextEditorProps) {
+}, ref) => {
   const [colorOpen, setColorOpen] = useState(false)
   const [sizeOpen, setSizeOpen] = useState(false)
 
@@ -125,6 +131,24 @@ export default function RichTextEditor({
       onChange(editor.getHTML())
     },
   })
+
+  // Expose insertContent method to parent via ref
+  useImperativeHandle(ref, () => ({
+    insertContent: (text: string) => {
+      if (!editor) return
+      // Convert plain text to HTML paragraphs, preserving multiple spaces as &nbsp;
+      const html = text.split('\n').map(line => {
+        if (!line.trim() && line.trim() === line) return '<p><br /></p>'
+        const escaped = line
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/ {2,}/g, (spaces) => '\u00a0'.repeat(spaces.length))
+        return `<p>${escaped}</p>`
+      }).join('')
+      editor.chain().focus().insertContent(html).run()
+    },
+  }), [editor])
 
   const setFontSize = useCallback((size: string) => {
     if (!editor) return
@@ -295,7 +319,10 @@ export default function RichTextEditor({
 
     </div>
   )
-}
+})
+
+RichTextEditor.displayName = 'RichTextEditor'
+export default RichTextEditor
 
 // ── Helper: check if rich-text content is empty ────────────────────────────
 export function isRichTextEmpty(html: string): boolean {

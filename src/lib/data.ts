@@ -2158,3 +2158,52 @@ export async function markAllNotificationsRead(): Promise<void> {
 export async function deleteNotification(id: string): Promise<void> {
   await supabase.from('notifications').delete().eq('id', id)
 }
+
+// ── Text Presets ──────────────────────────────────────────────────────────────
+
+export interface TextPreset {
+  id: string
+  user_id: string
+  name: string
+  content: string
+  sort_order: number
+  created_at: string
+}
+
+export async function fetchTextPresets(): Promise<TextPreset[]> {
+  const { data, error } = await supabase
+    .from('text_presets')
+    .select('*')
+    .order('sort_order', { ascending: true })
+  if (error) throw new Error(`Failed to fetch presets: ${error.message}`)
+  return (data || []) as TextPreset[]
+}
+
+export async function createTextPreset(name: string, content: string, sortOrder: number): Promise<TextPreset> {
+  const { data, error } = await supabase
+    .from('text_presets')
+    .insert({ name, content, sort_order: sortOrder })
+    .select()
+    .single()
+  if (error) throw new Error(`Failed to create preset: ${error.message}`)
+  return data as TextPreset
+}
+
+export async function updateTextPreset(
+  id: string,
+  updates: { name?: string; content?: string; sort_order?: number }
+): Promise<void> {
+  const { error } = await supabase
+    .from('text_presets')
+    .update(updates)
+    .eq('id', id)
+  if (error) throw new Error(`Failed to update preset: ${error.message}`)
+}
+
+export async function deleteTextPreset(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('text_presets')
+    .delete()
+    .eq('id', id)
+  if (error) throw new Error(`Failed to delete preset: ${error.message}`)
+}

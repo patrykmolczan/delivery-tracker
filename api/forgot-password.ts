@@ -1,6 +1,7 @@
 import { getEmailProvider } from './lib/emailProviders'
 import { buildPasswordResetEmail } from './lib/emailTemplates'
 import { createClient } from '@supabase/supabase-js'
+import { checkRateLimit, buildIpKey, triggerCleanup } from './lib/rateLimit'
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://slgtojndmckisjdplhcs.supabase.co'
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -13,6 +14,17 @@ export default async function handler(req: any, res: any) {
 
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  // Rate limit: 5 password reset requests per IP per 15 minutes (900s).
+  // Uses a custom 200 response (not 429) to preserve the anti-enumeration
+  // property — a real user sees a friendly retry message, not an error.
+  // Cleanup of old rate_limit rows is fired here (low-traffic endpoint).
+  triggerCleanup()
+  const rl = await checkRateLimit(buildIpKey('reset', req), 5, 900)
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', rl.retryAfter)
+    return res.status(200).json({ success: false, rateLimited: true, retryAfter: rl.retryAfter })
+  }
 
   const { email } = req.body || {}
   if (!email) return res.status(400).json({ error: 'Email is required' })

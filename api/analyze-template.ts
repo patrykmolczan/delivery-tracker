@@ -5,6 +5,7 @@
 // - systemPrompt is embedded SERVER-SIDE (H-4 fix) — client sends only userPrompt (template data)
 
 import { requireAuth } from './lib/requireAuth'
+import { applyRateLimit, buildUserKey } from './lib/rateLimit'
 
 // Fixed analyst system prompt — not injectable by the client
 const SYSTEM_PROMPT = `You are a Senior Compensation Data Quality Analyst at a global HR consulting firm. You specialize in reviewing Pay Intelligence (pay equity/benchmarking) data templates before submission to the Pay Intel platform.
@@ -73,6 +74,10 @@ export default async function handler(req: any, res: any) {
   // Require authenticated Supabase session (C-1)
   const auth = await requireAuth(req, res)
   if (!auth) return
+
+  // Rate limit: 10 requests per minute per user
+  // Template analysis is a heavier GPT-4.1 call — lower limit than chat
+  if (await applyRateLimit(res, buildUserKey('analyze', auth.userId), 10, 60)) return
 
   const apiKey = process.env.VITE_OPENAI_API_KEY
   if (!apiKey) {

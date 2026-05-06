@@ -21,7 +21,7 @@ import {
   MAX_DELIVERY_FILES,
 } from '../lib/data'
 import type { AuditEntry, ProjectFile, DeliveryFile, DeliveryFileDownload, DeliveryNote } from '../lib/data'
-import RichTextEditor, { isRichTextEmpty } from './RichTextEditor'
+import RichTextEditor, { isRichTextEmpty, type RichTextEditorRef } from './RichTextEditor'
 import {
   fetchDeliveryNotes, createDeliveryNote, updateDeliveryNote, deleteDeliveryNote,
   deleteProject, fetchProjectFeedback, fetchProjectFeedbackUnresolvedCount,
@@ -41,6 +41,7 @@ import { DeleteProjectModal } from './DeleteProjectModal'
 import { ProjectFeedbackModal } from './ProjectFeedbackModal'
 import type { FeedbackActionType } from './ProjectFeedbackModal'
 import { FeedbackThread } from './FeedbackThread'
+import { TextPresets } from './TextPresets'
 
 interface FieldProps {
   icon: React.ReactNode
@@ -212,6 +213,7 @@ export const ProjectDetail: React.FC<{
   const [noteEditText, setNoteEditText] = useState('')
   const [noteDeletingId, setNoteDeletingId] = useState<string | null>(null)
   const [noteError, setNoteError] = useState<string | null>(null)
+  const noteEditorRef = useRef<RichTextEditorRef>(null)
 
   // Completed / Ready to Deliver statuses auto-fill delivered date
   const DELIVERED_STATUSES = ['Completed', 'Ready to Deliver']
@@ -1473,7 +1475,9 @@ export const ProjectDetail: React.FC<{
             {/* Compose form */}
             {isAdmin && noteComposing && (
               <div className="px-4 pb-4 pt-2 bg-base-50 space-y-2">
+                <TextPresets onInsert={(text) => noteEditorRef.current?.insertContent(text)} />
                 <RichTextEditor
+                  ref={noteEditorRef}
                   content={noteText}
                   onChange={setNoteText}
                   placeholder="Enter delivery notes for the requestor — describe the data delivered, methodology, coverage, caveats, etc."

@@ -68,6 +68,10 @@ export const LoginPage: React.FC = () => {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setForgotError(data.error || 'Failed to send reset email. Please try again.')
+      } else if (data.rateLimited) {
+        // Rate limited — show friendly message without revealing limit details
+        const mins = Math.ceil((data.retryAfter ?? 900) / 60)
+        setForgotError(`Too many reset requests. Please wait ${mins} minute${mins !== 1 ? 's' : ''} before trying again.`)
       } else {
         setForgotSent(true)
       }

@@ -1,4 +1,5 @@
 import { requireAuth } from './lib/requireAuth'
+import { applyRateLimit, buildUserKey } from './lib/rateLimit'
 
 export default async function handler(req: any, res: any) {
   // CORS headers
@@ -12,6 +13,10 @@ export default async function handler(req: any, res: any) {
   // Require authenticated Supabase session (C-1)
   const auth = await requireAuth(req, res)
   if (!auth) return
+
+  // Rate limit: 10 requests per minute per user
+  // Each call can generate descriptions for up to 50 job titles via GPT-4.1
+  if (await applyRateLimit(res, buildUserKey('descriptions', auth.userId), 10, 60)) return
 
   const apiKey = process.env.VITE_OPENAI_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'OpenAI API key not configured on server' })

@@ -1,5 +1,6 @@
 // api/chat.ts — Serverless proxy for AI Insights chat
 import { requireAuth } from './lib/requireAuth'
+import { applyRateLimit, buildUserKey } from './lib/rateLimit'
 // Accepts conversation history + pre-built data context, returns GPT-4o-mini response.
 // Data context is built client-side from all loaded projects and injected into the system prompt.
 
@@ -14,6 +15,10 @@ export default async function handler(req: any, res: any) {
   // Require authenticated Supabase session (C-1)
   const auth = await requireAuth(req, res)
   if (!auth) return
+
+  // Rate limit: 20 requests per minute per user
+  // Generous for real conversations; blocks runaway scripts / accidental loops
+  if (await applyRateLimit(res, buildUserKey('chat', auth.userId), 20, 60)) return
 
   const apiKey = process.env.VITE_OPENAI_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'OpenAI API key not configured' })
@@ -31,7 +36,7 @@ export default async function handler(req: any, res: any) {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4.1',
         temperature: 0.2,
         max_tokens: 1500,
         messages: [

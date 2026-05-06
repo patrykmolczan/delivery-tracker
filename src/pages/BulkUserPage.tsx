@@ -30,7 +30,7 @@ import {
   AlertTriangle, RefreshCw, FileText, UserPlus, UserCheck,
   ChevronRight, Eye, EyeOff, Mail, Send, Shield,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { supabase, getAuthHeaders } from '../lib/supabase'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -338,7 +338,7 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
       try {
         const res = await fetch('/api/send-welcome', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await getAuthHeaders(),
           body: JSON.stringify({
             to: row.email,
             full_name: row.full_name || row.email,

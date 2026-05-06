@@ -5,7 +5,7 @@ import {
   Loader2, RefreshCw, Key, Users, Plus, Trash2, Tag, Layers, Upload, Download,
   Search, ChevronLeft, ChevronRight, UserX, UserCheck, Bell, Mail, Image,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { supabase, getAuthHeaders } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import {
   fetchAnalysts, createAnalyst, updateAnalyst, deactivateAnalyst,
@@ -569,7 +569,7 @@ export const AdminPage: React.FC = () => {
       // Send welcome email
       const res = await fetch('/api/send-welcome', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ to: userEmail, full_name: userFullName, temp_password: tempPassword }),
       })
       if (!res.ok) {

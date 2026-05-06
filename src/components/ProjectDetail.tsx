@@ -43,6 +43,29 @@ import type { FeedbackActionType } from './ProjectFeedbackModal'
 import { FeedbackThread } from './FeedbackThread'
 import { TextPresets } from './TextPresets'
 
+
+/** Strip dangerous elements/attributes from TipTap-generated HTML before render. */
+function sanitizeNoteHtml(html: string): string {
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    doc.querySelectorAll('script, iframe, object, embed, form, input, link').forEach(el => el.remove())
+    doc.querySelectorAll('*').forEach(el => {
+      Array.from(el.attributes).forEach(attr => {
+        if (
+          attr.name.startsWith('on') ||
+          (attr.name === 'href' && /^\s*javascript:/i.test(attr.value)) ||
+          (attr.name === 'src'  && /^\s*javascript:/i.test(attr.value))
+        ) {
+          el.removeAttribute(attr.name)
+        }
+      })
+    })
+    return doc.body.innerHTML
+  } catch {
+    return ''
+  }
+}
+
 interface FieldProps {
   icon: React.ReactNode
   label: string
@@ -1597,7 +1620,7 @@ export const ProjectDetail: React.FC<{
                                 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5
                                 [&_li]:my-0.5 [&_hr]:border-base-300 [&_hr]:my-2
                                 [&_strong]:font-semibold [&_em]:italic [&_s]:line-through [&_u]:underline"
-                              dangerouslySetInnerHTML={{ __html: n.note }}
+                              dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(n.note) }}
                             />
 
                             {/* Updater line */}

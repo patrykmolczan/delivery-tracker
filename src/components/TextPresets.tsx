@@ -21,6 +21,28 @@ interface EditablePreset {
   sort_order: number
 }
 
+/** Strip Outlook/Word clipboard junk down to clean plain text */
+function sanitizeClipboardText(raw: string): string {
+  return raw
+    // Replace non-breaking spaces with regular spaces
+    .replace(/\u00a0/g, ' ')
+    // Replace zero-width spaces / joiners / soft hyphens
+    .replace(/[\u200b\u200c\u200d\u00ad\ufeff]/g, '')
+    // Normalize smart quotes → straight quotes
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    // Normalize em/en dashes → hyphen
+    .replace(/[\u2013\u2014]/g, '-')
+    // Normalize Windows-style CRLF and bare CR to LF
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    // Strip any stray HTML tags (Outlook sometimes leaks them into plain text)
+    .replace(/<[^>]*>/g, '')
+    // Collapse 3+ consecutive blank lines to 2
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 export const TextPresets: React.FC<TextPresetsProps> = ({ onInsert }) => {
   const [presets, setPresets] = useState<TextPreset[]>([])
   const [loading, setLoading] = useState(true)
@@ -60,6 +82,43 @@ export const TextPresets: React.FC<TextPresetsProps> = ({ onInsert }) => {
     setEditPresets(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p))
   }
 
+  /** Force plain text paste and sanitize Outlook / Word clipboard content */
+  const handleContentPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>, idx: number) => {
+    e.preventDefault()
+    const plain = e.clipboardData.getData('text/plain')
+    const clean = sanitizeClipboardText(plain)
+    // Insert at cursor position for a natural paste feel
+    const target = e.currentTarget
+    const start = target.selectionStart ?? 0
+    const end = target.selectionEnd ?? 0
+    const current = editPresets[idx].content
+    const next = current.slice(0, start) + clean + current.slice(end)
+    updateEdit(idx, 'content', next)
+    // Restore cursor after the pasted text
+    requestAnimationFrame(() => {
+      target.selectionStart = start + clean.length
+      target.selectionEnd = start + clean.length
+    })
+  }
+
+  /** Sanitize name field pastes too (email subjects etc.) */
+  const handleNamePaste = (e: React.ClipboardEvent<HTMLInputElement>, idx: number) => {
+    e.preventDefault()
+    const plain = e.clipboardData.getData('text/plain')
+    const clean = sanitizeClipboardText(plain).replace(/\n/g, ' ') // names are single-line
+    const target = e.currentTarget
+    const start = target.selectionStart ?? 0
+    const end = target.selectionEnd ?? 0
+    const current = editPresets[idx].name
+    const next = (current.slice(0, start) + clean + current.slice(end)).slice(0, 40)
+    updateEdit(idx, 'name', next)
+    requestAnimationFrame(() => {
+      const pos = Math.min(start + clean.length, 40)
+      target.selectionStart = pos
+      target.selectionEnd = pos
+    })
+  }
+
   const handleSave = async () => {
     for (const p of editPresets) {
       if (!p.name.trim()) { setSaveError('All presets must have a name.'); return }
@@ -90,7 +149,7 @@ export const TextPresets: React.FC<TextPresetsProps> = ({ onInsert }) => {
       setPresets(fresh)
       closeModal()
     } catch (err: any) {
-      setSaveError(err.message || 'Failed to save presets')
+      setSaveError(err.message || 'Failed to save presets. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -186,6 +245,7 @@ export const TextPresets: React.FC<TextPresetsProps> = ({ onInsert }) => {
                       placeholder="Preset name (e.g. Level Guide)"
                       value={ep.name}
                       onChange={e => updateEdit(idx, 'name', e.target.value)}
+                      onPaste={e => handleNamePaste(e, idx)}
                       maxLength={40}
                     />
                     <button
@@ -203,9 +263,10 @@ export const TextPresets: React.FC<TextPresetsProps> = ({ onInsert }) => {
                     placeholder="Text to insert when the preset pill is clicked…"
                     value={ep.content}
                     onChange={e => updateEdit(idx, 'content', e.target.value)}
+                    onPaste={e => handleContentPaste(e, idx)}
                   />
                   <p className="text-[10px] text-base-content/30 pl-6">
-                    Each line becomes a paragraph in the editor
+                    Each line becomes a paragraph in the editor · Paste from anywhere — formatting is stripped automatically
                   </p>
                 </div>
               ))}

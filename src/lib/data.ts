@@ -2180,9 +2180,14 @@ export async function fetchTextPresets(): Promise<TextPreset[]> {
 }
 
 export async function createTextPreset(name: string, content: string, sortOrder: number): Promise<TextPreset> {
+  // Explicitly fetch user id and pass it in the payload.
+  // Safari does not reliably propagate auth.uid() to DB-side triggers,
+  // causing NOT NULL constraint failures when user_id is omitted.
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
   const { data, error } = await supabase
     .from('text_presets')
-    .insert({ name, content, sort_order: sortOrder })
+    .insert({ name, content, sort_order: sortOrder, user_id: user.id })
     .select()
     .single()
   if (error) throw new Error(`Failed to create preset: ${error.message}`)

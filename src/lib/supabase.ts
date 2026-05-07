@@ -10,24 +10,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
 /**
  * Supabase client with navigator.locks bypass.
  *
- * Root cause of the deadlock:
- *   The notification bell's realtime subscription internally calls refreshSession()
- *   which acquires an exclusive navigator.locks Web Lock (keyed by project ref).
- *   Any concurrent auth call — getSession(), insert(), API fetch — queues behind
- *   that lock and waits forever if the realtime client never releases it (e.g.
- *   during a reconnection cycle with a stale connection).
+ * The notification bell's realtime subscription holds an exclusive
+ * navigator.locks Web Lock keyed by project ref. Without the bypass,
+ * any concurrent supabase.auth.* call queues behind that lock and
+ * waits indefinitely after idle time.
  *
- * Fix:
- *   The Supabase auth client accepts a custom `lock` function. We provide a
- *   no-op passthrough so auth operations run immediately without lock contention.
- *   This is the officially supported pattern for environments where navigator.locks
- *   causes issues (documented at supabase.com/docs/reference/javascript/createclient).
+ * The `lock` option (officially supported, documented by Supabase) replaces
+ * the locking strategy with a no-op passthrough so auth operations run
+ * immediately without contention.
  *
  * Security impact: None.
- *   The lock was added to prevent concurrent token refreshes across multiple tabs.
- *   Worst case without it: two concurrent refreshes both succeed; one result is
- *   immediately superseded. This is a negligible risk for a single-user browser
- *   app and does not expose tokens or weaken authentication in any way.
+ * The lock prevents concurrent token refreshes across multiple tabs.
+ * Worst case without it: two concurrent refreshes both succeed; one is
+ * immediately superseded. Negligible risk for a single-user browser session.
  */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -36,32 +31,51 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 })
 
 /**
+ * Module-level token cache — kept fresh by onAuthStateChange.
+ *
+ * Why: Even with the lock bypass, calling supabase.auth.getSession() from
+ * within a form submit handler can deadlock if the Supabase client's internal
+ * Promise queue is stalled after a period of idle time (e.g. realtime
+ * reconnection in progress). By caching the token at module load and updating
+ * it via the auth event system, getAuthHeaders() returns synchronously with
+ * zero async overhead and zero lock contention.
+ */
+let _cachedToken: string | null = null
+
+// Keep cache current via Supabase's event system.
+// Fires on: SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED, USER_UPDATED, PASSWORD_RECOVERY
+supabase.auth.onAuthStateChange((_event, session) => {
+  _cachedToken = session?.access_token ?? null
+})
+
+// Seed the cache from the existing session at module load.
+// This runs once when the module is first imported — before any realtime
+// subscriptions are created by components — so there is no lock contention.
+supabase.auth.getSession().then(({ data }) => {
+  if (data.session?.access_token) {
+    _cachedToken = data.session.access_token
+  }
+})
+
+/**
  * Returns fetch headers including the current Supabase Bearer token.
  * Use for all calls to /api/* serverless functions.
  *
- * Usage:
- *   const headers = await getAuthHeaders()
- *   const res = await fetch('/api/some-endpoint', { method: 'POST', headers, body: ... })
+ * Reads from the module-level cache — resolves immediately with no
+ * async operations, no network calls, and no lock acquisitions.
  */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession()
   return {
     'Content-Type': 'application/json',
-    ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+    ...(_cachedToken ? { Authorization: `Bearer ${_cachedToken}` } : {}),
   }
 }
 
 /**
- * Ensures the current session has a fresh, non-expired access token.
- * Calls refreshSession() over the network if the token expires within 2 minutes.
+ * Legacy helper — no longer needed.
+ * Session freshness is maintained automatically via onAuthStateChange.
+ * Kept to avoid breaking callers; safe to remove over time.
  */
 export async function ensureFreshSession() {
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return null
-  const expiresAt = session.expires_at ?? 0
-  if (expiresAt < Math.floor(Date.now() / 1000) + 120) {
-    const { data } = await supabase.auth.refreshSession()
-    return data.session ?? null
-  }
-  return session
+  return _cachedToken ? { access_token: _cachedToken } : null
 }

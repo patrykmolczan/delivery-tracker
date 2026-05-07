@@ -407,12 +407,17 @@ export const AdminPage: React.FC = () => {
   }
 
   useEffect(() => {
-    // Force session refresh before firing parallel fetches.
-    // After inactivity, the Supabase token may be stale; fetches that race
-    // against the silent refresh hang forever and spinners never clear.
-    // refreshSession() makes an actual network call to get a fresh token.
-    // getSession() only reads from localStorage cache — stale after idle periods.
-    supabase.auth.refreshSession().then(() => {
+    // Use getSession() — not refreshSession() — to ensure the token is ready
+    // before firing the parallel fetches in loadAll().
+    //
+    // refreshSession() force-acquires the navigator.locks Web Lock to refresh
+    // the token unconditionally. The main Supabase client's auto-refresh loop
+    // also holds this lock, so refreshSession() queues behind it and hangs
+    // indefinitely, causing loadAll() to never fire.
+    //
+    // getSession() reads from cache and only refreshes if the token is actually
+    // expired — it does not fight the auto-refresh loop for the lock.
+    supabase.auth.getSession().then(() => {
       loadAll()
       fetchAppSettings().then(s => {
         setCurrentLogoUrl(s.logo_url || null)

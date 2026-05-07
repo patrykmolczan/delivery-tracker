@@ -46,6 +46,21 @@ export default async function handler(req: any, res: any) {
       }),
     })
 
+    if (response.status === 429) {
+      // OpenAI TPM/RPM rate limit — parse retry-after from error body
+      let retryAfterMs = 15000
+      try {
+        const errBody = await response.json()
+        const match = (errBody?.error?.message || '').match(/try again in ([\d.]+)s/)
+        if (match) retryAfterMs = Math.ceil(parseFloat(match[1]) * 1000) + 500
+      } catch { /* ignore parse errors */ }
+      return res.status(429).json({
+        error: 'rate_limited',
+        retryAfterMs,
+        message: `OpenAI rate limit reached. Please wait ${Math.ceil(retryAfterMs / 1000)} seconds and try again.`,
+      })
+    }
+
     if (!response.ok) {
       const errText = await response.text()
       return res.status(502).json({ error: `OpenAI error ${response.status}: ${errText}` })

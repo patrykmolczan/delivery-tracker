@@ -4,6 +4,7 @@ import {
   Globe, ListTodo, Paperclip, Zap, Download, FileText,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 import {
   fetchLookups, createProject, updateProject, fetchProjects,
   buildLookupMaps, buildPredictionStats, predictDeliveryTime,
@@ -464,6 +465,17 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     setUploadProgress(null)
 
     try {
+      // Ensure a fresh auth token before hitting the DB.
+      // After idle (screen locked, tab backgrounded), the cached JWT may be
+      // expired. refreshSession() makes a network call to get a new token so
+      // the insert doesn't silently hang on a PGRST301 JWT-expired error.
+      const { data: { session: freshSession } } = await supabase.auth.refreshSession()
+      if (!freshSession) {
+        setError('Your session has expired. Please refresh the page and sign in again.')
+        setSaving(false)
+        return
+      }
+
       let savedProject: Project
 
       if (editProject) {

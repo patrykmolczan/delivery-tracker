@@ -163,7 +163,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (document.visibilityState !== 'visible') return
       if (isRecoveryUrl.current) return  // don't redirect during password recovery flow
       try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession()
+        // refreshSession() makes a network call — this is intentional.
+        // getSession() only reads from cache, so stale tokens are missed.
+        // After idle (screen lock, laptop close), we MUST hit the network to
+        // get a fresh token before the user's next action fires.
+        const { data: { session: currentSession } } = await supabase.auth.refreshSession()
         if (!currentSession) {
           // Tab was hidden, session is now gone — clean up and redirect to login
           try {

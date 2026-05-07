@@ -18,9 +18,27 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
  *   const res = await fetch('/api/some-endpoint', { method: 'POST', headers, body: ... })
  */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession()
+  // ensureFreshSession proactively refreshes if token expires in < 2 min
+  const session = await ensureFreshSession()
   return {
     'Content-Type': 'application/json',
     ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
   }
 }
+/**
+ * Ensures the current session has a fresh, non-expired access token.
+ * Calls refreshSession() over the network if the token expires within 2 minutes.
+ * Use this before critical DB writes or API calls after any idle period.
+ */
+export async function ensureFreshSession() {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return null
+  // Proactively refresh if token expires within 2 minutes
+  const expiresAt = session.expires_at ?? 0
+  if (expiresAt < Math.floor(Date.now() / 1000) + 120) {
+    const { data } = await supabase.auth.refreshSession()
+    return data.session ?? null
+  }
+  return session
+}
+

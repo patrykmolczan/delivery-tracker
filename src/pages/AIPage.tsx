@@ -398,6 +398,7 @@ export const AIPage: React.FC<Props> = ({ projects }) => {
   const [loading, setLoading] = useState(false)
   const [dataCtx, setDataCtx] = useState<DataContext | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [retryCountdown, setRetryCountdown] = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   // Keep last 10 messages for multi-turn context (saves tokens)
   const historyRef = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([])
@@ -453,6 +454,26 @@ export const AIPage: React.FC<Props> = ({ projects }) => {
         }),
       })
 
+      if (resp.status === 429) {
+        const errData = await resp.json().catch(() => ({ retryAfterMs: 15000 }))
+        const secs = Math.ceil((errData.retryAfterMs ?? 15000) / 1000)
+        setRetryCountdown(secs)
+        // Countdown timer
+        const pendingMsg = (text || input).trim()
+        const tick = setInterval(() => {
+          setRetryCountdown(prev => {
+            if (prev === null || prev <= 1) {
+              clearInterval(tick)
+              setRetryCountdown(null)
+              // Auto-retry
+              sendMessage(pendingMsg)
+              return null
+            }
+            return prev - 1
+          })
+        }, 1000)
+        return
+      }
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }))
         throw new Error(errData.error || `HTTP ${resp.status}`)
@@ -480,6 +501,7 @@ export const AIPage: React.FC<Props> = ({ projects }) => {
   const clearChat = () => {
     historyRef.current = []
     setError(null)
+    setRetryCountdown(null)
     if (dataCtx) {
       const completedCount = dataCtx.overall.byStatus['Completed'] || 0
       const activeCount = (dataCtx.overall.byStatus['In Process'] || 0) + (dataCtx.overall.byStatus['On Hold'] || 0)
@@ -572,7 +594,13 @@ export const AIPage: React.FC<Props> = ({ projects }) => {
           </div>
         )}
 
-        {error && (
+        {retryCountdown !== null && (
+          <div className="alert alert-warning text-sm py-2 px-4 flex items-center gap-2">
+            <span className="loading loading-spinner loading-xs" />
+            <span>OpenAI rate limit reached — auto-retrying in <strong>{retryCountdown}s</strong>…</span>
+          </div>
+        )}
+        {error && retryCountdown === null && (
           <div className="alert alert-error text-sm py-2 px-4">
             <span>⚠ {error} — check your connection and try again.</span>
           </div>

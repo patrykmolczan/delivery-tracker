@@ -128,7 +128,7 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const { logoUrl } = useLogo()
-  const { isDark } = useTheme()
+  const { isDark, toggleTheme } = useTheme()
 
   const [ssoEnabled, setSsoEnabled] = useState(false)
   const [ssoDomain, setSsoDomain] = useState('')
@@ -232,8 +232,26 @@ export const LoginPage: React.FC = () => {
   return (
     <div
       className="min-h-screen flex items-center justify-center p-6"
-      style={{ background: isDark ? '#0a0a12' : '#eef2f7', fontFamily: 'var(--font-sans, system-ui, sans-serif)', transition: 'background 0.35s' }}
+      style={{ background: isDark ? '#0a0a12' : '#eef2f7', fontFamily: 'var(--font-sans, system-ui, sans-serif)', transition: 'background 0.35s', position: 'relative' }}
     >
+      {/* ── Theme toggle ── */}
+      <button
+        onClick={toggleTheme}
+        title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        style={{
+          position: 'fixed', top: 16, right: 16, zIndex: 100,
+          width: 36, height: 36, borderRadius: '50%',
+          border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.10)',
+          background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
+          color: isDark ? '#94a3b8' : '#64748b',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 16, transition: 'all 0.25s', backdropFilter: 'blur(8px)',
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)' }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }}
+      >
+        {isDark ? '☀️' : '🌙'}
+      </button>
       <div
         className="flex flex-col lg:flex-row"
         style={{

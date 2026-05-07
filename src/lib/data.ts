@@ -219,7 +219,6 @@ export async function createProject(
     ai_eta_breakdown: eta?.breakdown ?? null,
   }
 
-  console.log('[createProject] Step A: calling supabase insert...')
   const { data, error } = await supabase
     .from('projects')
     .insert(insertData)
@@ -239,23 +238,17 @@ export async function createProject(
     .single()
 
   if (error) throw error
-  console.log('[createProject] Step B: insert done — data=', !!data, ' error=', error)
 
   const projectId = data.id
-  console.log('[createProject] Step C: projectId=', data.id)
 
   // Sync multi-country entries
   if (form.project_countries.length > 0) {
-  console.log('[createProject] Step D: syncProjectCountries...')
     await syncProjectCountries(projectId, form.project_countries)
-  console.log('[createProject] Step D done')
   }
 
   // Sync task items
   if (form.project_tasks.length > 0) {
-  console.log('[createProject] Step E: syncProjectTasks...')
     await syncProjectTasks(projectId, form.project_tasks, userId)
-  console.log('[createProject] Step E done')
   }
 
   return {
@@ -1540,7 +1533,6 @@ export async function fetchProjectETAData(projectId: string): Promise<{
   ai_eta_override_at: string | null
   ai_eta_override_reason: string | null
 } | null> {
-  console.log('[createProject] Step A: calling supabase insert...')
   const { data, error } = await supabase
     .from('projects')
     .select('ai_eta_days, ai_eta_confidence, ai_eta_breakdown, ai_eta_override_days, ai_eta_override_by, ai_eta_override_at, ai_eta_override_reason')

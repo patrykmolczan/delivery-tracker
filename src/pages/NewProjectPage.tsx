@@ -464,40 +464,31 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     setUploadProgress(null)
 
     try {
-      console.log('[SUBMIT] Step 1: starting try block, user=', user?.id)
 
-      console.log('[SUBMIT] Step 2: skipping getSession (deadlock-safe) — proceeding directly to createProject')
 
       let savedProject: Project
 
       if (editProject) {
-        console.log('[SUBMIT] Step 5: calling updateProject...')
         await updateProject(editProject.id, form)
-        console.log('[SUBMIT] Step 6: updateProject done')
         savedProject = { ...editProject, ...form } as any
         // Upload any newly staged files
         if (stagedFiles.length > 0) {
           for (let i = 0; i < stagedFiles.length; i++) {
             setUploadProgress(`Uploading file ${i + 1} of ${stagedFiles.length}…`)
-            console.log('[SUBMIT] uploading staged file', i + 1, 'of', stagedFiles.length)
             await uploadProjectFile(editProject.id, stagedFiles[i], user.id)
           }
         }
       } else {
-        console.log('[SUBMIT] Step 5: calling createProject — form.client_name=', form.client_name)
         savedProject = await createProject(form, user.id, eta)
-        console.log('[SUBMIT] Step 6: createProject returned — id=', savedProject?.id)
         // Upload staged files now that we have a project ID
         if (stagedFiles.length > 0) {
           for (let i = 0; i < stagedFiles.length; i++) {
             setUploadProgress(`Uploading file ${i + 1} of ${stagedFiles.length}…`)
-            console.log('[SUBMIT] uploading staged file', i + 1, 'of', stagedFiles.length)
             await uploadProjectFile(savedProject.id, stagedFiles[i], user.id)
           }
         }
       }
 
-      console.log('[SUBMIT] Step 7: upload/save done, setting success')
       setUploadProgress(null)
       setSuccess(true)
       setTimeout(() => onSaved(savedProject), 800)
@@ -506,7 +497,6 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
       setError(err.message || 'Failed to save project')
       setUploadProgress(null)
     } finally {
-      console.log('[SUBMIT] finally block — setSaving(false)')
       setSaving(false)
     }
   }

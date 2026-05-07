@@ -465,47 +465,61 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     setUploadProgress(null)
 
     try {
+      console.log('[SUBMIT] Step 1: starting try block, user=', user?.id)
+
       // Ensure a fresh auth token before hitting the DB.
-      // After idle (screen locked, tab backgrounded), the cached JWT may be
-      // expired. refreshSession() makes a network call to get a new token so
-      // the insert doesn't silently hang on a PGRST301 JWT-expired error.
-      const { data: { session: freshSession } } = await supabase.auth.refreshSession()
+      console.log('[SUBMIT] Step 2: calling getSession...')
+      const { data: { session: freshSession }, error: sessionErr } = await supabase.auth.getSession()
+      console.log('[SUBMIT] Step 3: getSession returned — session=', !!freshSession, 'error=', sessionErr)
+
       if (!freshSession) {
+        console.log('[SUBMIT] Step 3a: NO session — aborting')
         setError('Your session has expired. Please refresh the page and sign in again.')
         setSaving(false)
         return
       }
 
+      console.log('[SUBMIT] Step 4: token expires at', new Date(freshSession.expires_at! * 1000).toISOString())
+
       let savedProject: Project
 
       if (editProject) {
+        console.log('[SUBMIT] Step 5: calling updateProject...')
         await updateProject(editProject.id, form)
+        console.log('[SUBMIT] Step 6: updateProject done')
         savedProject = { ...editProject, ...form } as any
         // Upload any newly staged files
         if (stagedFiles.length > 0) {
           for (let i = 0; i < stagedFiles.length; i++) {
             setUploadProgress(`Uploading file ${i + 1} of ${stagedFiles.length}…`)
+            console.log('[SUBMIT] uploading staged file', i + 1, 'of', stagedFiles.length)
             await uploadProjectFile(editProject.id, stagedFiles[i], user.id)
           }
         }
       } else {
+        console.log('[SUBMIT] Step 5: calling createProject — form.client_name=', form.client_name)
         savedProject = await createProject(form, user.id, eta)
+        console.log('[SUBMIT] Step 6: createProject returned — id=', savedProject?.id)
         // Upload staged files now that we have a project ID
         if (stagedFiles.length > 0) {
           for (let i = 0; i < stagedFiles.length; i++) {
             setUploadProgress(`Uploading file ${i + 1} of ${stagedFiles.length}…`)
+            console.log('[SUBMIT] uploading staged file', i + 1, 'of', stagedFiles.length)
             await uploadProjectFile(savedProject.id, stagedFiles[i], user.id)
           }
         }
       }
 
+      console.log('[SUBMIT] Step 7: upload/save done, setting success')
       setUploadProgress(null)
       setSuccess(true)
       setTimeout(() => onSaved(savedProject), 800)
     } catch (err: any) {
+      console.error('[SUBMIT] ERROR caught:', err)
       setError(err.message || 'Failed to save project')
       setUploadProgress(null)
     } finally {
+      console.log('[SUBMIT] finally block — setSaving(false)')
       setSaving(false)
     }
   }

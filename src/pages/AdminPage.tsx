@@ -259,6 +259,8 @@ export const AdminPage: React.FC = () => {
   const [clientsError, setClientsError] = useState<string | null>(null)
   const [clientRequests, setClientRequests] = useState<ClientRequest[]>([])
   const [requestsLoading, setRequestsLoading] = useState(true)
+  const [requestsPage, setRequestsPage] = useState(0)
+  const REQUESTS_PER_PAGE = 10
   const [clientCsvFile, setClientCsvFile] = useState<File | null>(null)
   const [clientCsvImporting, setClientCsvImporting] = useState(false)
   const [clientCsvResult, setClientCsvResult] = useState<{ inserted: number; skipped: number } | null>(null)
@@ -1130,60 +1132,125 @@ export const AdminPage: React.FC = () => {
           {(() => {
             const pending = clientRequests.filter(r => r.status === 'pending')
             if (requestsLoading || pending.length === 0) return null
+
+            // Group duplicates by name (case-insensitive trim)
+            type ReqGroup = { key: string; displayName: string; requests: ClientRequest[] }
+            const grouped: ReqGroup[] = Object.values(
+              pending.reduce((acc, req) => {
+                const key = req.requested_name.trim().toLowerCase()
+                if (!acc[key]) acc[key] = { key, displayName: req.requested_name.trim(), requests: [] }
+                acc[key].requests.push(req)
+                return acc
+              }, {} as Record<string, ReqGroup>)
+            ).sort((a, b) => b.requests.length - a.requests.length || a.displayName.localeCompare(b.displayName))
+
+            const totalRqPages = Math.ceil(grouped.length / REQUESTS_PER_PAGE)
+            const pagedGroups = grouped.slice(requestsPage * REQUESTS_PER_PAGE, (requestsPage + 1) * REQUESTS_PER_PAGE)
+
             return (
               <div className="mt-2 border-t border-base-300 pt-3">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="badge badge-warning badge-sm">{pending.length}</span>
+                  <span className="badge badge-warning badge-sm">{grouped.length}</span>
                   <span className="text-xs font-semibold text-base-content/60 uppercase tracking-wide">Pending Client Requests</span>
+                  {pending.length !== grouped.length && (
+                    <span className="text-xs text-base-content/40">({pending.length} total &middot; {pending.length - grouped.length} duplicate{pending.length - grouped.length !== 1 ? 's' : ''} rolled up)</span>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2">
-                  {pending.map(req => (
-                    <div key={req.id} className="p-3 bg-warning/10 border border-warning/30 rounded-lg">
-                      <div className="flex items-start justify-between gap-2 flex-wrap">
-                        <div>
-                          <p className="text-sm font-semibold">"{req.requested_name}"</p>
-                          <p className="text-xs text-base-content/50">by {req.requester_name || 'Unknown'} · {new Date(req.created_at).toLocaleDateString()}</p>
-                        </div>
-                        <div className="flex gap-2 items-center flex-wrap">
-                          {reassignRequestId === req.id ? (
-                            <div className="flex gap-2 items-center">
-                              <select className="select select-bordered select-xs" value={reassignClientId} onChange={e => setReassignClientId(e.target.value)}>
-                                <option value="">— Pick existing —</option>
-                                {clients.filter(c => c.is_active).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                              </select>
-                              <button className="btn btn-warning btn-xs" disabled={!reassignClientId} onClick={async () => {
-                                if (!reassignClientId) return
-                                try {
-                                  await approveClientRequest(req.id, parseInt(reassignClientId))
-                                  setClientRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'reassigned' as const } : r))
-                                  fetchAllClients().then(setClients); setReassignRequestId(null)
-                                } catch (e: any) { setClientsError(e.message) }
-                              }}>Reassign</button>
-                              <button className="btn btn-ghost btn-xs" onClick={() => setReassignRequestId(null)}>Cancel</button>
+                  {pagedGroups.map(group => {
+                    const isReassigning = reassignRequestId === group.requests[0].id
+                    const latest = group.requests.reduce((a, b) => new Date(a.created_at) > new Date(b.created_at) ? a : b)
+                    return (
+                      <div key={group.key} className="p-3 bg-warning/10 border border-warning/30 rounded-lg">
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold">"{group.displayName}"</p>
+                              {group.requests.length > 1 && (
+                                <span className="badge badge-warning badge-xs">&times;{group.requests.length}</span>
+                              )}
                             </div>
-                          ) : (
-                            <>
-                              <button className="btn btn-success btn-xs gap-1" onClick={async () => {
-                                try {
-                                  await approveClientRequest(req.id)
-                                  setClientRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'approved' as const } : r))
-                                  fetchAllClients().then(setClients)
-                                } catch (e: any) { setClientsError(e.message) }
-                              }}><CheckCircle2 size={11} /> Approve</button>
-                              <button className="btn btn-outline btn-xs gap-1" onClick={() => { setReassignRequestId(req.id); setReassignClientId('') }}><RefreshCw size={11} /> Reassign</button>
-                              <button className="btn btn-ghost btn-xs text-error gap-1" onClick={async () => {
-                                if (window.confirm('Reject this request?')) {
-                                  await rejectClientRequest(req.id)
-                                  setClientRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'rejected' as const } : r))
-                                }
-                              }}><X size={11} /> Reject</button>
-                            </>
-                          )}
+                            <p className="text-xs text-base-content/50">
+                              {group.requests.length === 1
+                                ? `by ${group.requests[0].requester_name || 'Unknown'} \u00b7 ${new Date(group.requests[0].created_at).toLocaleDateString()}`
+                                : `${group.requests.length} requesters \u00b7 latest ${new Date(latest.created_at).toLocaleDateString()}`
+                              }
+                            </p>
+                          </div>
+                          <div className="flex gap-2 items-center flex-wrap">
+                            {isReassigning ? (
+                              <div className="flex gap-2 items-center">
+                                <select className="select select-bordered select-xs" value={reassignClientId} onChange={e => setReassignClientId(e.target.value)}>
+                                  <option value="">— Pick existing —</option>
+                                  {clients.filter(c => c.is_active).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                                <button className="btn btn-warning btn-xs" disabled={!reassignClientId} onClick={async () => {
+                                  if (!reassignClientId) return
+                                  try {
+                                    for (const req of group.requests) {
+                                      await approveClientRequest(req.id, parseInt(reassignClientId))
+                                    }
+                                    const ids = new Set(group.requests.map(r => r.id))
+                                    setClientRequests(prev => prev.map(r => ids.has(r.id) ? { ...r, status: 'reassigned' as const } : r))
+                                    fetchAllClients().then(setClients)
+                                    setReassignRequestId(null)
+                                  } catch (e: any) { setClientsError(e.message) }
+                                }}>Reassign{group.requests.length > 1 ? ` all ${group.requests.length}` : ''}</button>
+                                <button className="btn btn-ghost btn-xs" onClick={() => setReassignRequestId(null)}>Cancel</button>
+                              </div>
+                            ) : (
+                              <>
+                                <button className="btn btn-success btn-xs gap-1" onClick={async () => {
+                                  try {
+                                    await approveClientRequest(group.requests[0].id)
+                                    if (group.requests.length > 1) {
+                                      const updatedClients = await fetchAllClients()
+                                      setClients(updatedClients)
+                                      const newClient = updatedClients.find(c => c.name.toLowerCase() === group.displayName.toLowerCase() && c.is_active)
+                                      if (newClient) {
+                                        for (const req of group.requests.slice(1)) {
+                                          await approveClientRequest(req.id, newClient.id)
+                                        }
+                                      }
+                                    } else {
+                                      fetchAllClients().then(setClients)
+                                    }
+                                    const ids = new Set(group.requests.map(r => r.id))
+                                    setClientRequests(prev => prev.map(r => ids.has(r.id) ? { ...r, status: 'approved' as const } : r))
+                                  } catch (e: any) { setClientsError(e.message) }
+                                }}><CheckCircle2 size={11} /> Approve{group.requests.length > 1 ? ` all ${group.requests.length}` : ''}</button>
+                                <button className="btn btn-outline btn-xs gap-1" onClick={() => { setReassignRequestId(group.requests[0].id); setReassignClientId('') }}><RefreshCw size={11} /> Reassign</button>
+                                <button className="btn btn-ghost btn-xs text-error gap-1" onClick={async () => {
+                                  const label = group.requests.length > 1
+                                    ? `Reject all ${group.requests.length} "${group.displayName}" requests?`
+                                    : 'Reject this request?'
+                                  if (window.confirm(label)) {
+                                    const ids = new Set(group.requests.map(r => r.id))
+                                    for (const req of group.requests) {
+                                      await rejectClientRequest(req.id)
+                                    }
+                                    setClientRequests(prev => prev.map(r => ids.has(r.id) ? { ...r, status: 'rejected' as const } : r))
+                                  }
+                                }}><X size={11} /> Reject{group.requests.length > 1 ? ' all' : ''}</button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
+                {totalRqPages > 1 && (
+                  <div className="flex items-center justify-between mt-3">
+                    <button className="btn btn-ghost btn-xs" disabled={requestsPage === 0} onClick={() => setRequestsPage(p => p - 1)}>
+                      <ChevronLeft size={12} /> Prev
+                    </button>
+                    <span className="text-xs text-base-content/50">Page {requestsPage + 1} of {totalRqPages}</span>
+                    <button className="btn btn-ghost btn-xs" disabled={requestsPage >= totalRqPages - 1} onClick={() => setRequestsPage(p => p + 1)}>
+                      Next <ChevronRight size={12} />
+                    </button>
+                  </div>
+                )}
               </div>
             )
           })()}

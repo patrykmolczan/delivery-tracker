@@ -4,7 +4,6 @@ import {
   Globe, ListTodo, Paperclip, Zap, Download, FileText,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabase'
 import {
   fetchLookups, createProject, updateProject, fetchProjects,
   buildLookupMaps, buildPredictionStats, predictDeliveryTime,

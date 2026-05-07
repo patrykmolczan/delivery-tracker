@@ -467,19 +467,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     try {
       console.log('[SUBMIT] Step 1: starting try block, user=', user?.id)
 
-      // Ensure a fresh auth token before hitting the DB.
-      console.log('[SUBMIT] Step 2: calling getSession...')
-      const { data: { session: freshSession }, error: sessionErr } = await supabase.auth.getSession()
-      console.log('[SUBMIT] Step 3: getSession returned — session=', !!freshSession, 'error=', sessionErr)
-
-      if (!freshSession) {
-        console.log('[SUBMIT] Step 3a: NO session — aborting')
-        setError('Your session has expired. Please refresh the page and sign in again.')
-        setSaving(false)
-        return
-      }
-
-      console.log('[SUBMIT] Step 4: token expires at', new Date(freshSession.expires_at! * 1000).toISOString())
+      console.log('[SUBMIT] Step 2: skipping getSession (deadlock-safe) — proceeding directly to createProject')
 
       let savedProject: Project
 

@@ -8,21 +8,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 /**
- * Supabase client with navigator.locks bypass.
+ * Main Supabase client — used for all DB queries, auth, and API calls.
  *
- * The notification bell's realtime subscription holds an exclusive
- * navigator.locks Web Lock keyed by project ref. Without the bypass,
- * any concurrent supabase.auth.* call queues behind that lock and
- * waits indefinitely after idle time.
- *
- * The `lock` option (officially supported, documented by Supabase) replaces
- * the locking strategy with a no-op passthrough so auth operations run
- * immediately without contention.
- *
- * Security impact: None.
- * The lock prevents concurrent token refreshes across multiple tabs.
- * Worst case without it: two concurrent refreshes both succeed; one is
- * immediately superseded. Negligible risk for a single-user browser session.
+ * navigator.locks bypass is kept as a safety net, but the real fix is
+ * supabaseRealtime (below): NotificationBell uses that client for its
+ * channel subscription so it never holds the Web Lock that would block
+ * the main client's getSession() inside .from().insert().
  */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -31,26 +22,34 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 })
 
 /**
- * Module-level token cache — kept fresh by onAuthStateChange.
+ * Realtime-only Supabase client — used exclusively by NotificationBell.
  *
- * Why: Even with the lock bypass, calling supabase.auth.getSession() from
- * within a form submit handler can deadlock if the Supabase client's internal
- * Promise queue is stalled after a period of idle time (e.g. realtime
- * reconnection in progress). By caching the token at module load and updating
- * it via the auth event system, getAuthHeaders() returns synchronously with
- * zero async overhead and zero lock contention.
+ * autoRefreshToken: false  → never calls navigator.locks.request()
+ *                            so the realtime subscription cannot deadlock
+ *                            the main client's auth operations.
+ * detectSessionInUrl: false → no URL parsing on creation.
+ *
+ * The subscription will use the current stored session. If the session
+ * expires after a long idle, the subscription may eventually need to
+ * reconnect — that is acceptable behaviour for a notification bell.
+ */
+export const supabaseRealtime = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+})
+
+/**
+ * Module-level token cache — kept fresh by onAuthStateChange.
+ * getAuthHeaders() reads from this synchronously — zero async, zero locks.
  */
 let _cachedToken: string | null = null
 
-// Keep cache current via Supabase's event system.
-// Fires on: SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED, USER_UPDATED, PASSWORD_RECOVERY
 supabase.auth.onAuthStateChange((_event, session) => {
   _cachedToken = session?.access_token ?? null
 })
 
-// Seed the cache from the existing session at module load.
-// This runs once when the module is first imported — before any realtime
-// subscriptions are created by components — so there is no lock contention.
 supabase.auth.getSession().then(({ data }) => {
   if (data.session?.access_token) {
     _cachedToken = data.session.access_token
@@ -60,9 +59,7 @@ supabase.auth.getSession().then(({ data }) => {
 /**
  * Returns fetch headers including the current Supabase Bearer token.
  * Use for all calls to /api/* serverless functions.
- *
- * Reads from the module-level cache — resolves immediately with no
- * async operations, no network calls, and no lock acquisitions.
+ * Synchronous read from cache — no locks, no async, cannot hang.
  */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
   return {
@@ -72,9 +69,8 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 /**
- * Legacy helper — no longer needed.
- * Session freshness is maintained automatically via onAuthStateChange.
- * Kept to avoid breaking callers; safe to remove over time.
+ * Legacy helper — session freshness maintained via onAuthStateChange.
+ * Kept to avoid breaking callers.
  */
 export async function ensureFreshSession() {
   return _cachedToken ? { access_token: _cachedToken } : null

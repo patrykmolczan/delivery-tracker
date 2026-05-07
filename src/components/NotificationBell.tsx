@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Bell, CheckCheck, ExternalLink, X, Check } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseRealtime } from '../lib/supabase'
 import type { AppNotification } from '../types'
 import {
   fetchNotifications,
@@ -76,13 +76,16 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
   // Initial load
   useEffect(() => { load() }, [load])
 
-  // Realtime: re-fetch when a new notification arrives for this user
+  // Realtime: re-fetch when a new notification arrives for this user.
+  // Uses supabaseRealtime (autoRefreshToken: false) so this subscription
+  // never holds navigator.locks — prevents deadlocking the main client's
+  // getSession() call inside supabase.from().insert() on project submit.
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null
+    let channel: ReturnType<typeof supabaseRealtime.channel> | null = null
     supabase.auth.getUser().then(({ data }) => {
       const uid = data.user?.id
       if (!uid) return
-      channel = supabase
+      channel = supabaseRealtime
         .channel('notif_bell_' + uid)
         .on('postgres_changes', {
           event: 'INSERT',
@@ -92,7 +95,7 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
         }, () => load())
         .subscribe()
     })
-    return () => { if (channel) supabase.removeChannel(channel) }
+    return () => { if (channel) supabaseRealtime.removeChannel(channel) }
   }, [load])
 
   // Close dropdown on outside click

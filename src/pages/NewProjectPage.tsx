@@ -462,6 +462,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     setSaving(true)
     setError(null)
     setUploadProgress(null)
+    console.log('[SUBMIT] handleSubmit fired — calling createProject...')
 
     try {
 

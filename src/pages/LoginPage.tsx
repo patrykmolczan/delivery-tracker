@@ -18,28 +18,6 @@ const AURORA_CSS = `
 @keyframes alp-cardGlow{0%,100%{box-shadow:0 0 0 0 rgba(14,165,233,0);border-color:rgba(255,255,255,0.08)}50%{box-shadow:0 0 18px 0 rgba(14,165,233,0.15);border-color:rgba(14,165,233,0.28)}}
 @keyframes alp-shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
 @keyframes alp-logoGlow{0%,100%{box-shadow:0 0 0 0 rgba(14,165,233,0)}50%{box-shadow:0 0 14px 3px rgba(14,165,233,0.35)}}
-/* DaaS keyframes */
-@keyframes alp-node-pulse {
-  0%, 100% { opacity: 0.4; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.35); }
-}
-@keyframes alp-flow-dash {
-  0% { stroke-dashoffset: 200; opacity: 0; }
-  20% { opacity: 1; }
-  80% { opacity: 1; }
-  100% { stroke-dashoffset: 0; opacity: 0; }
-}
-@keyframes alp-data-float {
-  0%, 100% { transform: translateY(0px) translateX(0px); opacity: 0.55; }
-  33% { transform: translateY(-6px) translateX(3px); opacity: 0.85; }
-  66% { transform: translateY(4px) translateX(-3px); opacity: 0.65; }
-}
-@keyframes alp-scan-line {
-  0% { transform: translateY(0%); opacity: 0; }
-  10% { opacity: 0.18; }
-  90% { opacity: 0.18; }
-  100% { transform: translateY(100%); opacity: 0; }
-}
 `
 
 function useInjectAuroraKeyframes() {
@@ -73,51 +51,37 @@ function useCountUp(target: number, suffix: string, decimals: number, delay: num
 
 /* ── Shared design tokens ── */
 const LP = {
-  bg: 'linear-gradient(135deg, #0a0a1a 0%, #0f1628 50%, #0a1222 100%)',
-  gridLine: 'rgba(255,255,255,0.025)',
-  scanColor: 'rgba(14,165,233,0.07)',
+  bg: 'linear-gradient(145deg, #060b18 0%, #0a1628 45%, #0b1e3a 100%)',
+  headlineColor: '#f0f8ff',
+  subColor: 'rgba(180,210,255,0.55)',
   badgeBg: 'rgba(14,165,233,0.12)',
-  badgeBorder: 'rgba(14,165,233,0.25)',
+  badgeBorder: 'rgba(14,165,233,0.3)',
   badgeColor: '#38bdf8',
-  gradStart: '#38bdf8',
-  gradEnd: '#2dd4bf',
   cardBg: 'rgba(255,255,255,0.04)',
   cardBorder: 'rgba(255,255,255,0.08)',
-  footerColor: 'rgba(255,255,255,0.2)',
-  subColor: 'rgba(255,255,255,0.45)',
-  headlineColor: '#f0f9ff',
-}
-
-const STAT_GRAD: React.CSSProperties = {
-  background: `linear-gradient(135deg, ${LP.gradStart}, ${LP.gradEnd})`,
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
+  footerColor: 'rgba(255,255,255,0.22)',
+  nodeLine: 'rgba(14,165,233,0.35)',
+  nodeGlow: '#0ea5e9',
 }
 
 const GRAD_TEXT: React.CSSProperties = {
-  background: `linear-gradient(90deg, ${LP.gradStart}, ${LP.gradEnd})`,
+  background: `linear-gradient(90deg, #38bdf8, #2dd4bf)`,
   WebkitBackgroundClip: 'text',
   WebkitTextFillColor: 'transparent',
 }
 
 /* ── Sub-components ── */
 
-const LiveDot = () => (
-  <span style={{ width: 6, height: 6, background: '#4ade80', borderRadius: '50%', display: 'inline-block', flexShrink: 0, animation: 'alp-pulse 2s infinite' }} />
+const LiveDot = ({ size = 6 }: { size?: number }) => (
+  <span style={{ width: size, height: size, background: '#4ade80', borderRadius: '50%', display: 'inline-block', flexShrink: 0, animation: 'alp-pulse 2s infinite' }} />
 )
 
-const GridOverlay = ({ size = 32 }: { size?: number }) => (
+const GridOverlay = ({ size = 28 }: { size?: number }) => (
   <div style={{
     position: 'absolute', inset: 0, pointerEvents: 'none',
-    backgroundImage: `linear-gradient(${LP.gridLine} 1px, transparent 1px), linear-gradient(90deg, ${LP.gridLine} 1px, transparent 1px)`,
+    backgroundImage: `linear-gradient(rgba(99,179,237,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(99,179,237,0.06) 1px, transparent 1px)`,
     backgroundSize: `${size}px ${size}px`, overflow: 'hidden',
-  }}>
-    <div style={{
-      position: 'absolute', left: 0, right: 0, height: 60,
-      background: `linear-gradient(to bottom, transparent 0%, ${LP.scanColor} 40%, ${LP.scanColor} 60%, transparent 100%)`,
-      animation: 'alp-scan 6s ease-in-out infinite',
-    }} />
-  </div>
+  }} />
 )
 
 const Blob = ({ w, h, color, top, left, bottom, right, opacity, anim, blur = 70 }: {
@@ -133,14 +97,26 @@ const Blob = ({ w, h, color, top, left, bottom, right, opacity, anim, blur = 70 
   }} />
 )
 
-const StatPill = ({ val, label, border }: { val: string; label: string; border?: boolean }) => (
-  <>
-    {border && <div style={{ width: 1, background: 'rgba(255,255,255,0.08)', alignSelf: 'stretch' }} />}
-    <div style={{ flex: 1, textAlign: 'center' }}>
-      <div style={{ fontSize: 18, fontWeight: 700, ...STAT_GRAD }}>{val}</div>
-      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>{label}</div>
-    </div>
-  </>
+const StatPill = ({ val, label, icon }: { val: string; label: string; icon?: React.ReactNode }) => (
+  <div style={{
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 2,
+    background: 'rgba(14,165,233,0.08)',
+    border: '1px solid rgba(14,165,233,0.18)',
+    borderRadius: 8,
+    padding: '10px 12px',
+    minWidth: 64,
+    flex: 1,
+    textAlign: 'center',
+  }}>
+    {icon && (
+      <span style={{ fontSize: 14, marginBottom: 2, lineHeight: 1 }}>{icon}</span>
+    )}
+    <div style={{ fontSize: 15, fontWeight: 700, color: '#f0f8ff', lineHeight: 1.1 }}>{val}</div>
+    <div style={{ fontSize: 9, color: 'rgba(180,210,255,0.5)', marginTop: 1 }}>{label}</div>
+  </div>
 )
 
 export const LoginPage: React.FC = () => {
@@ -289,74 +265,151 @@ export const LoginPage: React.FC = () => {
         ══════════════════════════════ */}
         <div className="flex lg:hidden flex-col" style={{ position: 'relative', background: LP.bg, overflow: 'hidden' }}>
           {/* Blobs */}
-          <Blob w={200} h={200} color="radial-gradient(circle, #0ea5e9 0%, #0284c7 60%, transparent 100%)" top={-60} left={-60} opacity={0.55} anim="alp-drift1 10s ease-in-out infinite" blur={60} />
-          <Blob w={160} h={160} color="radial-gradient(circle, #0d9488 0%, #0f766e 60%, transparent 100%)" bottom={-30} right={-30} opacity={0.55} anim="alp-drift2 12s ease-in-out infinite" blur={60} />
-          <GridOverlay size={24} />
+          <Blob w={200} h={200} color="radial-gradient(circle, rgba(14,165,233,0.18) 0%, transparent 70%)" top={-60} left={-60} opacity={1} anim="alp-drift1 10s ease-in-out infinite" blur={60} />
+          <Blob w={160} h={160} color="radial-gradient(circle, rgba(99,102,241,0.14) 0%, transparent 70%)" bottom={-30} right={-30} opacity={1} anim="alp-drift2 12s ease-in-out infinite" blur={60} />
+          <GridOverlay size={28} />
 
           <div style={{ position: 'relative', zIndex: 2, padding: '28px 24px 18px' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: LP.badgeBg, border: `1px solid ${LP.badgeBorder}`, borderRadius: 999, padding: '3px 10px', fontSize: 10, color: LP.badgeColor, marginBottom: 12, animation: 'alp-fadeUp 0.5s 0.2s ease both' }}>
               <LiveDot /> All systems operational
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.3, color: LP.headlineColor, marginBottom: 6, animation: 'alp-fadeUp 0.5s 0.35s ease both' }}>
-              Delivery Intelligence{' '}
-              <span style={GRAD_TEXT}>Redefined.</span>
+              Data.{' '}
+              <span style={GRAD_TEXT}>Intelligence.</span>{' '}
+              Delivered.
             </div>
             <div style={{ fontSize: 11, color: LP.subColor, lineHeight: 1.5, animation: 'alp-fadeUp 0.5s 0.5s ease both' }}>
-              Real-time visibility into every project.
+              Real-time pipeline visibility for fast-moving teams.
             </div>
           </div>
 
           {/* Mobile stats strip */}
-          <div style={{ display: 'flex', borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', position: 'relative', zIndex: 2, animation: 'alp-fadeIn 0.5s 0.6s ease both' }}>
-            {[{ val: stat1, label: 'Projects' }, { val: stat2, label: 'Avg ETA' }, { val: stat3, label: 'On-time' }].map((s, i) => (
-              <div key={i} style={{ flex: 1, textAlign: 'center', padding: '10px 4px', borderRight: i < 2 ? '1px solid rgba(255,255,255,0.06)' : undefined }}>
-                <div style={{ fontSize: 14, fontWeight: 700, ...STAT_GRAD }}>{s.val}</div>
-                <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>{s.label}</div>
-              </div>
-            ))}
+          <div style={{ display: 'flex', borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', position: 'relative', zIndex: 2, animation: 'alp-fadeIn 0.5s 0.6s ease both', gap: 8, padding: '0 8px' }}>
+            <StatPill val={stat1} label="Projects tracked" icon="📦" />
+            <StatPill val={stat2} label="Avg ETA delta" icon="⏱" />
+            <StatPill val={stat3} label="On-time rate" icon="✅" />
           </div>
         </div>
 
         {/* ══════════════════════════════
             DESKTOP LEFT PANEL
         ══════════════════════════════ */}
-        <div
-          className="hidden lg:flex flex-col justify-between flex-1 overflow-hidden"
-          style={{ position: 'relative', background: LP.bg, padding: '40px 36px' }}
-        >
-          {/* Blobs */}
-          <Blob w={260} h={260} color="radial-gradient(circle, #0ea5e9 0%, #0284c7 60%, transparent 100%)" top={-60} left={-60} opacity={0.55} anim="alp-drift1 10s ease-in-out infinite" />
-          <Blob w={220} h={220} color="radial-gradient(circle, #0d9488 0%, #0f766e 60%, transparent 100%)" bottom={-40} right={-40} opacity={0.55} anim="alp-drift2 12s ease-in-out infinite" />
-          <Blob w={160} h={160} color="radial-gradient(circle, #6366f1 0%, #4f46e5 60%, transparent 100%)" top="50%" left="55%" opacity={0.25} anim="alp-drift3 9s ease-in-out infinite" />
-          <GridOverlay size={32} />
+        <div className="hidden lg:flex flex-col justify-between flex-1 overflow-hidden"
+          style={{ position:'relative', background: LP.bg, padding:'40px 36px' }}>
 
-          {/* Top */}
-          <div style={{ position: 'relative', zIndex: 2 }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: LP.badgeBg, border: `1px solid ${LP.badgeBorder}`, borderRadius: 999, padding: '4px 12px', fontSize: 11, color: LP.badgeColor, marginBottom: 24, animation: 'alp-fadeUp 0.6s 0.2s ease both' }}>
+          {/* === BACKGROUND LAYER === */}
+          {/* Ambient blobs — keep alp-drift1/2/3 keyframes */}
+          <Blob w={300} h={300} color="radial-gradient(circle, rgba(14,165,233,0.18) 0%, transparent 70%)" top={-80} left={-80} opacity={1} anim="alp-drift1 12s ease-in-out infinite" blur={80} />
+          <Blob w={240} h={240} color="radial-gradient(circle, rgba(99,102,241,0.14) 0%, transparent 70%)" bottom={-60} right={-60} opacity={1} anim="alp-drift2 14s ease-in-out infinite" blur={80} />
+          <Blob w={180} h={180} color="radial-gradient(circle, rgba(13,148,136,0.12) 0%, transparent 70%)" top="45%" left="50%" opacity={1} anim="alp-drift3 10s ease-in-out infinite" blur={60} />
+          <GridOverlay size={28} />
+
+          {/* === SCAN LINE (DaaS feel) === */}
+          <div style={{ position:'absolute', inset:0, overflow:'hidden', pointerEvents:'none', zIndex:1 }}>
+            <div style={{ position:'absolute', left:0, right:0, height:120,
+              background:'linear-gradient(to bottom, transparent 0%, rgba(14,165,233,0.04) 50%, transparent 100%)',
+              animation:'alp-scan-line 8s linear infinite' }} />
+          </div>
+
+          {/* === DATA FLOW SVG === */}
+          {/* Centered between top section and stats card */}
+          <div style={{ position:'absolute', inset:0, zIndex:1, pointerEvents:'none' }}>
+            <svg width="100%" height="100%" style={{ opacity:0.55 }}>
+              {/* Three horizontal dashed lines suggesting data pipeline */}
+              {[140, 200, 260].map((y, i) => (
+                <line key={i} x1="-20" y1={y} x2="120%" y2={y}
+                  stroke={LP.nodeLine} strokeWidth="1"
+                  strokeDasharray="4 10"
+                  style={{ animation: `alp-flow-dash ${3 + i * 0.8}s linear infinite`, animationDelay: `${i * 0.4}s` }} />
+              ))}
+              {/* Node dots at intersections */}
+              {[[60,140],[160,200],[100,260],[220,140],[280,200]].map(([cx,cy],i) => (
+                <circle key={i} cx={cx} cy={cy} r={3}
+                  fill={LP.nodeGlow}
+                  style={{ animation: `alp-node-pulse 2.5s ease-in-out infinite`, animationDelay: `${i * 0.35}s`, transformOrigin:`${cx}px ${cy}px` }} />
+              ))}
+            </svg>
+          </div>
+
+          {/* === TOP SECTION === */}
+          <div style={{ position:'relative', zIndex:2 }}>
+            {/* Status badge */}
+            <div style={{ display:'inline-flex', alignItems:'center', gap:6,
+              background: LP.badgeBg, border:`1px solid ${LP.badgeBorder}`,
+              borderRadius:999, padding:'4px 12px', fontSize:11, color: LP.badgeColor,
+              marginBottom:28, animation:'alp-fadeUp 0.6s 0.2s ease both' }}>
               <LiveDot /> All systems operational
             </div>
-            <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, color: LP.headlineColor, marginBottom: 10, animation: 'alp-fadeUp 0.6s 0.35s ease both' }}>
-              Delivery<br />Intelligence<br />
-              <span style={GRAD_TEXT}>Redefined.</span>
+
+            {/* Eyebrow label */}
+            <div style={{ fontSize:10, fontWeight:600, letterSpacing:'0.14em', textTransform:'uppercase',
+              color:'rgba(56,189,248,0.7)', marginBottom:10, animation:'alp-fadeUp 0.6s 0.28s ease both' }}>
+              Data as a Service
             </div>
-            <div style={{ fontSize: 12, color: LP.subColor, lineHeight: 1.6, maxWidth: 260, animation: 'alp-fadeUp 0.6s 0.5s ease both' }}>
-              Real-time visibility into every project — from intake to delivery.
+
+            {/* Headline — 3-line stacked */}
+            <div style={{ fontSize:28, fontWeight:800, lineHeight:1.2, color: LP.headlineColor,
+              marginBottom:14, animation:'alp-fadeUp 0.6s 0.35s ease both', letterSpacing:'-0.5px' }}>
+              Data.{' '}
+              <span style={{ background:'linear-gradient(90deg, #38bdf8, #2dd4bf)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Intelligence.</span>{' '}
+              Delivered.
+            </div>
+
+            {/* Sub headline */}
+            <div style={{ fontSize:12, color: LP.subColor, lineHeight:1.7, maxWidth:270,
+              animation:'alp-fadeUp 0.6s 0.48s ease both' }}>
+              Real-time pipeline visibility from intake to delivery — for teams that move fast.
+            </div>
+
+            {/* Feature chips row — 3 small pills */}
+            <div style={{ display:'flex', gap:6, marginTop:20, flexWrap:'wrap', animation:'alp-fadeUp 0.6s 0.58s ease both' }}>
+              {['⚡ Live tracking','🔒 Enterprise SSO','📊 DaaS analytics'].map((chip,i) => (
+                <span key={i} style={{ fontSize:10, fontWeight:500,
+                  padding:'3px 9px', borderRadius:999,
+                  background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.09)',
+                  color:'rgba(200,230,255,0.65)', letterSpacing:'0.02em' }}>
+                  {chip}
+                </span>
+              ))}
             </div>
           </div>
 
-          {/* Stats card */}
-          <div style={{ position: 'relative', zIndex: 2, background: LP.cardBg, border: `1px solid ${LP.cardBorder}`, borderRadius: 12, padding: '14px 16px', backdropFilter: 'blur(10px)', animation: 'alp-fadeUp 0.6s 0.7s ease both, alp-cardGlow 4s 1.5s ease-in-out infinite' }}>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
-              Live platform stats
+          {/* === STATS CARD (redesigned) === */}
+          <div style={{ position:'relative', zIndex:2,
+            background:'rgba(255,255,255,0.035)', border:'1px solid rgba(255,255,255,0.08)',
+            borderRadius:14, padding:'16px 18px', backdropFilter:'blur(16px)',
+            animation:'alp-fadeUp 0.6s 0.7s ease both, alp-cardGlow 4s 1.5s ease-in-out infinite' }}>
+            {/* Card header */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+              <span style={{ fontSize:10, color:'rgba(180,210,255,0.4)', textTransform:'uppercase', letterSpacing:'0.1em' }}>Live platform metrics</span>
+              <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:9,
+                color:'#4ade80', background:'rgba(74,222,128,0.1)', border:'1px solid rgba(74,222,128,0.2)',
+                borderRadius:999, padding:'2px 7px' }}>
+                <LiveDot size={5} /> LIVE
+              </span>
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <StatPill val={stat1} label="Projects tracked" />
-              <StatPill val={stat2} label="Avg ETA" border />
-              <StatPill val={stat3} label="On-time rate" border />
+            {/* Three stat pills */}
+            <div style={{ display:'flex', gap:8 }}>
+              <StatPill val={stat1} label="Projects tracked" icon="📦" />
+              <StatPill val={stat2} label="Avg ETA delta" icon="⏱" />
+              <StatPill val={stat3} label="On-time rate" icon="✅" />
+            </div>
+            {/* Mini sparkline bar visual (purely decorative) */}
+            <div style={{ marginTop:14, display:'flex', gap:2, alignItems:'flex-end', height:20 }}>
+              {[40,65,50,80,60,90,75,100,85,95,70,88].map((h,i) => (
+                <div key={i} style={{ flex:1, height:`${h}%`, borderRadius:2,
+                  background:`linear-gradient(to top, rgba(14,165,233,0.6), rgba(45,212,191,0.4))`,
+                  animation:`alp-data-float ${2.5 + (i % 3) * 0.5}s ease-in-out infinite`,
+                  animationDelay:`${i * 0.12}s` }} />
+              ))}
             </div>
           </div>
 
-          <div style={{ position: 'relative', zIndex: 2, fontSize: 10, color: LP.footerColor, animation: 'alp-fadeIn 0.8s 1s ease both' }}>
+          {/* === FOOTER === */}
+          <div style={{ position:'relative', zIndex:2, fontSize:10, color: LP.footerColor,
+            animation:'alp-fadeIn 0.8s 1s ease both', display:'flex', alignItems:'center', gap:6 }}>
+            <span style={{ display:'inline-block', width:6, height:6, borderRadius:'50%',
+              background:'rgba(14,165,233,0.4)', boxShadow:'0 0 6px rgba(14,165,233,0.5)' }} />
             Secure · Enterprise-ready · Magnit Internal Use Only
           </div>
         </div>
@@ -525,4 +578,33 @@ export const LoginPage: React.FC = () => {
       </div>
     </div>
   )
+}
+
+/* ── DaaS Keyframes ── */
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  if (!document.getElementById('alp-daas-kf')) {
+    const style = document.createElement('style')
+    style.id = 'alp-daas-kf'
+    style.textContent = `
+@keyframes alp-node-pulse {
+  0%,100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+@keyframes alp-flow-dash {
+  0% { stroke-dashoffset: 200; }
+  100% { stroke-dashoffset: 0; }
+}
+@keyframes alp-data-float {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes alp-scan-line {
+  0% { transform: translateY(-100%); opacity: 0; }
+  10% { opacity: 0.4; }
+  90% { opacity: 0.4; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+    `
+    document.head.appendChild(style)
+  }
 }

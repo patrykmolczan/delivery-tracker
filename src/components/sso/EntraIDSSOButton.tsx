@@ -15,7 +15,7 @@ interface EntraIDSSOButtonProps {
   /** Optional override label. Defaults to "Sign in with Microsoft" */
   label?: string
   /** Visual variant: 'default' (white filled) | 'ghost' (transparent/outlined). Defaults to 'default'. */
-  variant?: 'default' | 'ghost'
+  variant?: 'default' | 'ghost' | 'primary' | 'outline'
   /** Optional extra inline styles applied to the button */
   style?: React.CSSProperties
 }
@@ -37,7 +37,7 @@ export const EntraIDSSOButton: React.FC<EntraIDSSOButtonProps> = ({
   variant = 'default',
   style: extraStyle,
 }) => {
-  const isGhost = variant === 'ghost'
+  const isGhost = variant === 'ghost' || variant === 'outline'
   return (
     <button
       type="button"

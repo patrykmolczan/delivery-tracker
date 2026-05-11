@@ -297,8 +297,6 @@ export const AdminPage: React.FC = () => {
   const [notifSaving, setNotifSaving] = useState<string | null>(null)
 
   // SSO settings state
-  const [ssoEnabledState, setSsoEnabledState] = useState(false)
-  const [ssoDomainState, setSsoDomainState] = useState('')
 
   // User management state
   const [userSearch, setUserSearch] = useState('')
@@ -422,8 +420,6 @@ export const AdminPage: React.FC = () => {
       fetchAppSettings().then(s => {
         setCurrentLogoUrl(s.logo_url || null)
         setCurrentLoginIconUrl(s.login_icon_url || null)
-        setSsoEnabledState(s.sso_enabled === 'true')
-        setSsoDomainState(s.sso_domain || '')
       }).catch(() => {})
     })
   }, [])

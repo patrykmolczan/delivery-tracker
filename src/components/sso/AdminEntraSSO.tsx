@@ -22,11 +22,11 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import {
   Key, Save, Loader2, AlertCircle, CheckCircle2, X,
   ExternalLink, Eye, EyeOff, Copy, Check, ChevronDown,
-  ChevronUp, Wifi, WifiOff, RefreshCw,
+  ChevronUp, RefreshCw,
 } from 'lucide-react'
 import { getAuthHeaders } from '../../lib/supabase'
 import { fetchAppSettings } from '../../lib/data'
@@ -359,9 +359,9 @@ export const AdminEntraSSO: React.FC = () => {
             {testResult.status === 'loading'
               ? <Loader2 size={13} className="animate-spin" />
               : testResult.status === 'success'
-              ? <Wifi size={13} className="text-success" />
+              ? <CheckCircle2 size={13} className="text-success" />
               : testResult.status === 'failed'
-              ? <WifiOff size={13} className="text-error" />
+              ? <AlertCircle size={13} className="text-error" />
               : <RefreshCw size={13} />
             }
             Test Connection

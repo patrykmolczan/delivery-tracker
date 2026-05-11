@@ -1,9 +1,21 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { Loader2, AlertCircle, KeyRound, ArrowRight } from 'lucide-react'
 import { useLogo } from '../hooks/useLogo'
 import { useTheme } from '../contexts/ThemeContext'
 import { fetchAppSettings } from '../lib/data'
+import LightModeRounded from '@mui/icons-material/LightModeRounded'
+import DarkModeRounded from '@mui/icons-material/DarkModeRounded'
+import VpnKeyRounded from '@mui/icons-material/VpnKeyRounded'
+import ErrorOutlineRounded from '@mui/icons-material/ErrorOutlineRounded'
+import ArrowForwardRounded from '@mui/icons-material/ArrowForwardRounded'
+import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded'
+import AutorenewRounded from '@mui/icons-material/AutorenewRounded'
+import LockRounded from '@mui/icons-material/LockRounded'
+import BoltRounded from '@mui/icons-material/BoltRounded'
+import InsightsRounded from '@mui/icons-material/InsightsRounded'
+import Inventory2Rounded from '@mui/icons-material/Inventory2Rounded'
+import TimerRounded from '@mui/icons-material/TimerRounded'
+import TaskAltRounded from '@mui/icons-material/TaskAltRounded'
 
 /* ── Keyframes injected once ── */
 const AURORA_KF_ID = 'aurora-login-kf'
@@ -248,7 +260,7 @@ export const LoginPage: React.FC = () => {
         onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)' }}
         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }}
       >
-        {isDark ? '☀️' : '🌙'}
+        {isDark ? <LightModeRounded sx={{ fontSize: 18 }} /> : <DarkModeRounded sx={{ fontSize: 18 }} />}
       </button>
       <div
         className="flex flex-col lg:flex-row"
@@ -285,9 +297,9 @@ export const LoginPage: React.FC = () => {
 
           {/* Mobile stats strip */}
           <div style={{ display: 'flex', borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', position: 'relative', zIndex: 2, animation: 'alp-fadeIn 0.5s 0.6s ease both', gap: 8, padding: '0 8px' }}>
-            <StatPill val={stat1} label="Projects tracked" icon="📦" />
-            <StatPill val={stat2} label="Avg ETA delta" icon="⏱" />
-            <StatPill val={stat3} label="On-time rate" icon="✅" />
+            <StatPill val={stat1} label="Projects tracked" icon={<Inventory2Rounded sx={{ fontSize: 13 }} />} />
+            <StatPill val={stat2} label="Avg ETA delta" icon={<TimerRounded sx={{ fontSize: 13 }} />} />
+            <StatPill val={stat3} label="On-time rate" icon={<TaskAltRounded sx={{ fontSize: 13 }} />} />
           </div>
         </div>
 
@@ -363,12 +375,16 @@ export const LoginPage: React.FC = () => {
 
             {/* Feature chips row — 3 small pills */}
             <div style={{ display:'flex', gap:6, marginTop:20, flexWrap:'wrap', animation:'alp-fadeUp 0.6s 0.58s ease both' }}>
-              {['⚡ Live tracking','🔒 Enterprise SSO','📊 DaaS analytics'].map((chip,i) => (
+              {[
+                { icon: <BoltRounded sx={{ fontSize: 11 }} />, label: 'Live tracking' },
+                { icon: <LockRounded sx={{ fontSize: 11 }} />, label: 'Enterprise SSO' },
+                { icon: <InsightsRounded sx={{ fontSize: 11 }} />, label: 'DaaS analytics' }
+              ].map((item,i) => (
                 <span key={i} style={{ fontSize:10, fontWeight:500,
                   padding:'3px 9px', borderRadius:999,
                   background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.09)',
                   color:'rgba(200,230,255,0.65)', letterSpacing:'0.02em' }}>
-                  {chip}
+                  <>{item.icon} {item.label}</>
                 </span>
               ))}
             </div>
@@ -390,9 +406,9 @@ export const LoginPage: React.FC = () => {
             </div>
             {/* Three stat pills */}
             <div style={{ display:'flex', gap:8 }}>
-              <StatPill val={stat1} label="Projects tracked" icon="📦" />
-              <StatPill val={stat2} label="Avg ETA delta" icon="⏱" />
-              <StatPill val={stat3} label="On-time rate" icon="✅" />
+              <StatPill val={stat1} label="Projects tracked" icon={<Inventory2Rounded sx={{ fontSize: 13 }} />} />
+              <StatPill val={stat2} label="Avg ETA delta" icon={<TimerRounded sx={{ fontSize: 13 }} />} />
+              <StatPill val={stat3} label="On-time rate" icon={<TaskAltRounded sx={{ fontSize: 13 }} />} />
             </div>
             {/* Mini sparkline bar visual (purely decorative) */}
             <div style={{ marginTop:14, display:'flex', gap:2, alignItems:'flex-end', height:20 }}>
@@ -463,12 +479,12 @@ export const LoginPage: React.FC = () => {
             {showSSO && (
               <div className="space-y-4">
                 <button type="button" style={btnStyle} disabled={loading} onClick={handleSSOSignIn}>
-                  {loading ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={15} />}
+                  {loading ? <AutorenewRounded sx={{ fontSize: 17 }} className="animate-spin" /> : <VpnKeyRounded sx={{ fontSize: 17 }} />}
                   {loading ? 'Redirecting to Okta…' : 'Sign in with Okta SSO'}
                 </button>
                 {error && (
                   <div className="alert alert-error py-2">
-                    <AlertCircle size={16} /><span className="text-sm">{error}</span>
+                    <ErrorOutlineRounded sx={{ fontSize: 18 }} /><span className="text-sm">{error}</span>
                   </div>
                 )}
                 <div className="text-center">
@@ -516,14 +532,14 @@ export const LoginPage: React.FC = () => {
 
                 {error && (
                   <div className="alert alert-error py-2 mt-2">
-                    <AlertCircle size={16} /><span className="text-sm">{error}</span>
+                    <ErrorOutlineRounded sx={{ fontSize: 18 }} /><span className="text-sm">{error}</span>
                   </div>
                 )}
 
                 <button type="submit" style={{ ...btnStyle, marginTop: 16 }} disabled={loading}>
-                  {loading ? <Loader2 size={16} className="animate-spin" /> : null}
+                  {loading ? <AutorenewRounded sx={{ fontSize: 17 }} className="animate-spin" /> : null}
                   {loading ? 'Signing in...' : 'Sign in'}
-                  {!loading && <ArrowRight size={14} />}
+                  {!loading && <ArrowForwardRounded sx={{ fontSize: 17 }} />}
                 </button>
 
                 {/* Forgot password */}
@@ -551,7 +567,7 @@ export const LoginPage: React.FC = () => {
                     </div>
                     <button type="button" onClick={handleSSOSignIn}
                       style={{ width: '100%', padding: '9px', background: 'transparent', border: `1px solid ${rp.ssoBorder}`, borderRadius: 8, color: rp.ssoColor, fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, animation: 'alp-fadeUp 0.5s 0.75s ease both', transition: 'border-color 0.2s, color 0.35s' }}>
-                      <KeyRound size={14} />
+                      <VpnKeyRounded sx={{ fontSize: 17 }} />
                       Sign in with Okta SSO
                     </button>
                   </>
@@ -562,7 +578,7 @@ export const LoginPage: React.FC = () => {
                   <div style={{ textAlign: 'center', marginTop: 16 }}>
                     <button type="button" onClick={() => { setShowPasswordFallback(false); setError(null) }}
                       style={{ fontSize: 12, color: rp.footer, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, transition: 'color 0.35s' }}>
-                      ← Back to Okta SSO login
+                      <ArrowBackRounded sx={{ fontSize: 14 }} /> Back to Okta SSO login
                     </button>
                   </div>
                 )}
@@ -570,7 +586,7 @@ export const LoginPage: React.FC = () => {
             )}
 
             <p style={{ fontSize: 12, color: rp.footer, textAlign: 'center', marginTop: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'color 0.35s', animation: 'alp-fadeIn 0.6s 1s ease both' }}>
-              <span>🔐</span> Protected by enterprise-grade security
+              <LockRounded sx={{ fontSize: 14, opacity: 0.7 }} /> Protected by enterprise-grade security
             </p>
           </div>
         </div>

@@ -22,7 +22,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Key, Save, Loader2, AlertCircle, CheckCircle2, X,
   ExternalLink, Eye, EyeOff, Copy, Check, ChevronDown,

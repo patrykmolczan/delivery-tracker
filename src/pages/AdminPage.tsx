@@ -1659,6 +1659,7 @@ export const AdminPage: React.FC = () => {
           <div className="modal-backdrop" onClick={() => { if (!deleting) { setDeleteUserTarget(null); setDeleteConfirmEmail('') } }} />
         </div>
       )}
+    </div>
     </>
   )
 }

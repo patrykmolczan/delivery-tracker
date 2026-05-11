@@ -18,6 +18,7 @@ import {
 } from '../lib/data'
 import type { Analyst, ClientType, ProjectType, Client, ClientRequest } from '../lib/data'
 import type { UserProfile } from '../types'
+import { AdminEntraSSO } from '../components/sso/AdminEntraSSO'
 
 // ─── Reusable inline-editable list section ────────────────────────────────────
 
@@ -1616,85 +1617,10 @@ export const AdminPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── SSO / Authentication Settings ──────────────────────────────── */}
-      <div className="card bg-base-100 border border-base-300 shadow-sm">
-        <div className="card-body gap-4">
-          <div className="flex items-center gap-2">
-            <Key size={18} className="text-primary" />
-            <h2 className="font-semibold text-base-content">SSO / Authentication</h2>
-          </div>
-          <p className="text-xs text-base-content/50 -mt-2">
-            Configure Single Sign-On via Okta. When enabled, the login page shows an Okta SSO button as the primary sign-in option.
-            Password login always remains available as a fallback.
-          </p>
+      {/* ── SSO / Authentication Settings — Microsoft Entra ID ── */}
+      <AdminEntraSSO />
 
-          {ssoError && (
-            <div className="alert alert-error py-2">
-              <AlertCircle size={14} />
-              <span className="text-sm">{ssoError}</span>
-              <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setSsoError('')}><X size={11} /></button>
-            </div>
-          )}
-          {ssoSuccess && (
-            <div className="alert alert-success py-2">
-              <CheckCircle2 size={14} />
-              <span className="text-sm">{ssoSuccess}</span>
-              <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setSsoSuccess('')}><X size={11} /></button>
-            </div>
-          )}
-
-          {/* Enable/disable toggle */}
-          <div className="flex items-center justify-between py-1">
-            <div>
-              <p className="text-sm font-medium text-base-content">Enable SSO Login</p>
-              <p className="text-xs text-base-content/50">Shows "Sign in with Okta SSO" button on login page</p>
-            </div>
-            <input
-              type="checkbox"
-              className="toggle toggle-primary"
-              checked={ssoEnabledState}
-              onChange={e => { setSsoEnabledState(e.target.checked); setSsoSuccess('') }}
-            />
-          </div>
-
-          {/* SSO Domain */}
-          <div className="form-control">
-            <label className="label py-1">
-              <span className="label-text text-sm font-medium">SSO Domain</span>
-              <span className="label-text-alt text-xs text-base-content/40">e.g. magnitglobal.com</span>
-            </label>
-            <input
-              type="text"
-              className="input input-bordered input-sm"
-              placeholder="your-company.com"
-              value={ssoDomainState}
-              onChange={e => { setSsoDomainState(e.target.value); setSsoSuccess('') }}
-            />
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              className="btn btn-primary btn-sm"
-              disabled={ssoSaving}
-              onClick={handleSsoSave}
-            >
-              {ssoSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-              Save SSO Settings
-            </button>
-          </div>
-
-          <div className="text-xs text-base-content/40 border-t border-base-300 pt-3 flex items-start gap-1.5">
-            <span>⚙️</span>
-            <span>
-              To complete SSO setup: (1) configure the Okta SAML/OIDC provider in your Supabase project's Auth settings,
-              then (2) enter the SSO domain above and enable the toggle.
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-      {/* ── Delete User Modal ─────────────────────────────────────────────── */}
+            {/* ── Delete User Modal ─────────────────────────────────────────────── */}
       {deleteUserTarget && (
         <div className="modal modal-open">
           <div className="modal-box max-w-md">

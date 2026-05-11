@@ -3,6 +3,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLogo } from '../hooks/useLogo'
 import { useTheme } from '../contexts/ThemeContext'
 import { fetchAppSettings } from '../lib/data'
+import { useEntraSSO } from '../hooks/useEntraSSO'
+import { EntraIDSSOButton } from '../components/sso/EntraIDSSOButton'
 import LightModeRounded from '@mui/icons-material/LightModeRounded'
 import DarkModeRounded from '@mui/icons-material/DarkModeRounded'
 import VpnKeyRounded from '@mui/icons-material/VpnKeyRounded'
@@ -131,6 +133,14 @@ const StatPill = ({
 
 export const LoginPage: React.FC = () => {
   const { signIn, signInWithSSO } = useAuth()
+  const {
+    entraSettings,
+    settingsLoaded: entraSSOLoaded,
+    loading: entraLoading,
+    error: entraError,
+    clearError: clearEntraError,
+    triggerSignIn: triggerEntraSignIn,
+  } = useEntraSSO()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -272,8 +282,14 @@ export const LoginPage: React.FC = () => {
     }
   }
 
-  const showSSO = ssoEnabled && settingsLoaded && !showPasswordFallback
-  const showPassword = !ssoEnabled || showPasswordFallback
+  // Entra provider check — use Entra settings if configured, else fall back to legacy Okta path
+  const isEntraProvider    = entraSettings.provider === 'entra'
+  const effectiveSSOEnabled = isEntraProvider
+    ? (entraSettings.ssoEnabled && entraSSOLoaded)
+    : (ssoEnabled && settingsLoaded)
+  const showSSO     = effectiveSSOEnabled && !showPasswordFallback
+  const showPassword = !effectiveSSOEnabled || showPasswordFallback
+  const combinedError = error || entraError
 
   /* Right panel theme values */
   const rp = {
@@ -541,18 +557,28 @@ export const LoginPage: React.FC = () => {
             {/* ── SSO Mode ── */}
             {showSSO && (
               <div className="space-y-4">
-                <button type="button" style={btnStyle} disabled={loading} onClick={handleSSOSignIn}>
-                  {loading ? <AutorenewRounded sx={{ fontSize: 17 }} className="animate-spin" /> : <VpnKeyRounded sx={{ fontSize: 17 }} />}
-                  {loading ? 'Redirecting to Okta…' : 'Sign in with Okta SSO'}
-                </button>
-                {error && (
+                {isEntraProvider ? (
+                  <EntraIDSSOButton
+                    variant="primary"
+                    loading={entraLoading}
+                    onClick={() => { clearEntraError(); triggerEntraSignIn() }}
+                    style={{ animation: 'alp-fadeUp 0.5s 0.3s ease both' }}
+                  />
+                ) : (
+                  /* Legacy Okta SAML path */
+                  <button type="button" style={btnStyle} disabled={loading} onClick={handleSSOSignIn}>
+                    {loading ? <AutorenewRounded sx={{ fontSize: 17 }} className="animate-spin" /> : <VpnKeyRounded sx={{ fontSize: 17 }} />}
+                    {loading ? 'Redirecting…' : 'Sign in with SSO'}
+                  </button>
+                )}
+                {combinedError && (
                   <div className="alert alert-error py-2">
-                    <ErrorOutlineRounded sx={{ fontSize: 18 }} /><span className="text-sm">{error}</span>
+                    <ErrorOutlineRounded sx={{ fontSize: 18 }} /><span className="text-sm">{combinedError}</span>
                   </div>
                 )}
                 <div className="text-center">
                   <button type="button" style={{ fontSize: 12, color: rp.footer, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, transition: 'color 0.35s' }}
-                    onClick={() => { setShowPasswordFallback(true); setError(null) }}>
+                    onClick={() => { setShowPasswordFallback(true); setError(null); clearEntraError() }}>
                     Sign in with email &amp; password instead
                   </button>
                 </div>
@@ -620,19 +646,28 @@ export const LoginPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* SSO fallback */}
-                {!ssoEnabled && (
+                {/* SSO alternate — shown in password mode */}
+                {!effectiveSSOEnabled && (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0', animation: 'alp-fadeUp 0.5s 0.7s ease both' }}>
                       <div style={{ flex: 1, height: 1, background: rp.divLine, transition: 'background 0.35s' }} />
                       <span style={{ fontSize: 11, color: rp.divText, transition: 'color 0.35s' }}>or continue with</span>
                       <div style={{ flex: 1, height: 1, background: rp.divLine, transition: 'background 0.35s' }} />
                     </div>
-                    <button type="button" onClick={handleSSOSignIn}
-                      style={{ width: '100%', padding: '9px', background: 'transparent', border: `1px solid ${rp.ssoBorder}`, borderRadius: 8, color: rp.ssoColor, fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, animation: 'alp-fadeUp 0.5s 0.75s ease both', transition: 'border-color 0.2s, color 0.35s' }}>
-                      <VpnKeyRounded sx={{ fontSize: 17 }} />
-                      Sign in with Okta SSO
-                    </button>
+                    {isEntraProvider ? (
+                      <EntraIDSSOButton
+                        variant="outline"
+                        loading={entraLoading}
+                        onClick={() => { clearEntraError(); triggerEntraSignIn() }}
+                        style={{ animation: 'alp-fadeUp 0.5s 0.75s ease both' }}
+                      />
+                    ) : (
+                      <button type="button" onClick={handleSSOSignIn}
+                        style={{ width: '100%', padding: '9px', background: 'transparent', border: `1px solid ${rp.ssoBorder}`, borderRadius: 8, color: rp.ssoColor, fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, animation: 'alp-fadeUp 0.5s 0.75s ease both', transition: 'border-color 0.2s, color 0.35s' }}>
+                        <VpnKeyRounded sx={{ fontSize: 17 }} />
+                        Sign in with SSO
+                      </button>
+                    )}
                   </>
                 )}
 
@@ -641,7 +676,7 @@ export const LoginPage: React.FC = () => {
                   <div style={{ textAlign: 'center', marginTop: 16 }}>
                     <button type="button" onClick={() => { setShowPasswordFallback(false); setError(null) }}
                       style={{ fontSize: 12, color: rp.footer, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, transition: 'color 0.35s' }}>
-                      <ArrowBackRounded sx={{ fontSize: 14 }} /> Back to Okta SSO login
+                      <ArrowBackRounded sx={{ fontSize: 14 }} /> Back to Microsoft sign-in
                     </button>
                   </div>
                 )}

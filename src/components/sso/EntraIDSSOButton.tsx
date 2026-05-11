@@ -14,6 +14,10 @@ interface EntraIDSSOButtonProps {
   onClick: () => void
   /** Optional override label. Defaults to "Sign in with Microsoft" */
   label?: string
+  /** Visual variant: 'default' (white filled) | 'ghost' (transparent/outlined). Defaults to 'default'. */
+  variant?: 'default' | 'ghost'
+  /** Optional extra inline styles applied to the button */
+  style?: React.CSSProperties
 }
 
 /** Microsoft logo — four coloured squares */
@@ -30,7 +34,10 @@ export const EntraIDSSOButton: React.FC<EntraIDSSOButtonProps> = ({
   loading,
   onClick,
   label = 'Sign in with Microsoft',
+  variant = 'default',
+  style: extraStyle,
 }) => {
+  const isGhost = variant === 'ghost'
   return (
     <button
       type="button"
@@ -43,23 +50,26 @@ export const EntraIDSSOButton: React.FC<EntraIDSSOButtonProps> = ({
         gap: '10px',
         width: '100%',
         padding: '11px 16px',
-        border: '1.5px solid rgba(0,0,0,0.15)',
+        border: isGhost ? '1.5px solid rgba(255,255,255,0.25)' : '1.5px solid rgba(0,0,0,0.15)',
         borderRadius: '10px',
-        background: '#fff',
-        color: '#1a1a1a',
+        background: isGhost ? 'rgba(255,255,255,0.08)' : '#fff',
+        color: isGhost ? '#fff' : '#1a1a1a',
         fontSize: '14px',
         fontWeight: 600,
         cursor: loading ? 'not-allowed' : 'pointer',
         opacity: loading ? 0.7 : 1,
         transition: 'background 0.15s, box-shadow 0.15s, opacity 0.15s',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        boxShadow: isGhost ? 'none' : '0 1px 3px rgba(0,0,0,0.06)',
         letterSpacing: '0.01em',
+        ...extraStyle,
       }}
       onMouseEnter={e => {
-        if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#f5f5f5'
+        if (!loading) (e.currentTarget as HTMLButtonElement).style.background =
+          isGhost ? 'rgba(255,255,255,0.15)' : '#f5f5f5'
       }}
       onMouseLeave={e => {
-        (e.currentTarget as HTMLButtonElement).style.background = '#fff'
+        (e.currentTarget as HTMLButtonElement).style.background =
+          isGhost ? 'rgba(255,255,255,0.08)' : '#fff'
       }}
       aria-label={label}
     >

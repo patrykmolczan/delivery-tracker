@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import BulkUserPage from './BulkUserPage'
 import {
   UserPlus, Shield, User, CheckCircle2, Edit2, Save, X, AlertCircle,
-  Loader2, RefreshCw, Key, Users, Plus, Trash2, Tag, Layers, Upload, Download,
+  Loader2, RefreshCw, Users, Plus, Trash2, Tag, Layers, Upload, Download,
   Search, ChevronLeft, ChevronRight, UserX, UserCheck, Bell, Mail, Image,
 } from 'lucide-react'
 import { supabase, getAuthHeaders } from '../lib/supabase'
@@ -299,9 +299,6 @@ export const AdminPage: React.FC = () => {
   // SSO settings state
   const [ssoEnabledState, setSsoEnabledState] = useState(false)
   const [ssoDomainState, setSsoDomainState] = useState('')
-  const [ssoSaving, setSsoSaving] = useState(false)
-  const [ssoError, setSsoError] = useState('')
-  const [ssoSuccess, setSsoSuccess] = useState('')
 
   // User management state
   const [userSearch, setUserSearch] = useState('')
@@ -451,20 +448,6 @@ export const AdminPage: React.FC = () => {
     }
   }
 
-  const handleSsoSave = async () => {
-    setSsoSaving(true)
-    setSsoError('')
-    setSsoSuccess('')
-    try {
-      await updateAppSetting('sso_enabled', ssoEnabledState ? 'true' : 'false')
-      await updateAppSetting('sso_domain', ssoDomainState.trim())
-      setSsoSuccess('SSO settings saved.')
-    } catch (err: any) {
-      setSsoError(err?.message ?? 'Failed to save SSO settings')
-    } finally {
-      setSsoSaving(false)
-    }
-  }
 
   useEffect(() => {
     setUserPage(1)

@@ -169,8 +169,6 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
-  const qualityOverrideConfirmed = useRef(false)
-  const [showOverrideModal, setShowOverrideModal] = useState(false)
 
   // Load lookups
   useEffect(() => {
@@ -453,12 +451,6 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isValid || !user) return
-    // Quality gate override: if score is below threshold and override not confirmed, show modal
-    if (!editProject && !qualityOverrideConfirmed.current && qualityResult && qualityResult.overallScore !== -1 && qualityResult.overallScore < PASSING_QUALITY_SCORE) {
-      setShowOverrideModal(true)
-      return
-    }
-    qualityOverrideConfirmed.current = false
     setSaving(true)
     setError(null)
     setUploadProgress(null)
@@ -1245,38 +1237,13 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
 
         </div>{/* end flex col */}
 
-        {/* ── Actions ──────────────────────────────────────────────────────── */}
-        {!editProject && (() => {
-          if (!parseResult) return (
-            <div className="flex items-center gap-2 justify-end mt-4 text-xs text-base-content/50">
-              <span>📋 Upload a template file to enable project submission</span>
-            </div>
-          )
-          if (isAnalyzing) return (
-            <div className="flex items-center gap-2 justify-end mt-4 text-xs text-base-content/50">
-              <span className="loading loading-spinner loading-xs" />
-              <span>Analyzing template quality…</span>
-            </div>
-          )
-          if (qualityResult && qualityResult.overallScore !== -1 && qualityResult.overallScore < PASSING_QUALITY_SCORE) return (
-            <div className="flex items-center gap-2 justify-end mt-4 text-xs text-warning/80">
-              <span>⚠️ Quality score {qualityResult.overallScore}/{PASSING_QUALITY_SCORE} — submit anyway to override (may cause delays or rejection)</span>
-            </div>
-          )
-          return null
-        })()}
+
         <div className="flex justify-end gap-3 mt-2">
           <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>
           <button
             type="submit"
             className={`btn btn-primary gap-2 ${saving ? 'loading' : ''}`}
-            disabled={
-              !isValid || saving || success ||
-              (!editProject && (
-                !parseResult ||
-                isAnalyzing
-              ))
-            }
+            disabled={!isValid || saving || success}
           >
             {!saving && <Save size={16} />}
             {saving
@@ -1285,53 +1252,4 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
           </button>
         </div>
 
-        {/* Quality score override modal */}
-        {showOverrideModal && (
-          <div className="modal modal-open" style={{zIndex: 9999}}>
-            <div className="modal-box max-w-md">
-              <h3 className="font-bold text-lg flex items-center gap-2">
-                <span className="text-warning text-xl">⚠️</span>
-                Submit with quality issues?
-              </h3>
-              <p className="py-4 text-sm text-base-content/80">
-                Your template quality score is{' '}
-                <strong className="text-warning">{qualityResult?.overallScore ?? 0}/{PASSING_QUALITY_SCORE}</strong>,
-                which is below the required passing threshold.
-              </p>
-              <p className="text-sm text-base-content/80 font-medium">Submitting with unresolved issues may result in:</p>
-              <ul className="list-disc list-inside text-sm text-base-content/70 mt-2 space-y-1">
-                <li>Project processing delays</li>
-                <li>Requests for rework or clarification from the review team</li>
-                <li>Project rejection due to unresolved data issues</li>
-              </ul>
-              <p className="text-sm font-semibold text-warning mt-4">
-                By proceeding, you acknowledge and accept these risks.
-              </p>
-              <div className="modal-action mt-4">
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 font-medium text-sm transition-colors"
-                  onClick={() => setShowOverrideModal(false)}
-                >
-                  Cancel — fix issues first
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-warning gap-2"
-                  onClick={() => {
-                    qualityOverrideConfirmed.current = true
-                    setShowOverrideModal(false)
-                    setTimeout(() => formRef.current?.requestSubmit(), 0)
-                  }}
-                >
-                  I understand — submit anyway
-                </button>
-              </div>
-            </div>
-            <div className="modal-backdrop bg-black/40" onClick={() => setShowOverrideModal(false)} />
-          </div>
-        )}
       </form>
-    </div>
-  )
-}

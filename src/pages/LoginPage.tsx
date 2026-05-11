@@ -297,9 +297,9 @@ export const LoginPage: React.FC = () => {
 
           {/* Mobile stats strip */}
           <div style={{ display: 'flex', borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', position: 'relative', zIndex: 2, animation: 'alp-fadeIn 0.5s 0.6s ease both', gap: 8, padding: '0 8px' }}>
-            <StatPill val={stat1} label="Projects tracked" icon={<Inventory2Rounded sx={{ fontSize: 13 }} />} />
-            <StatPill val={stat2} label="Avg ETA delta" icon={<TimerRounded sx={{ fontSize: 13 }} />} />
-            <StatPill val={stat3} label="On-time rate" icon={<TaskAltRounded sx={{ fontSize: 13 }} />} />
+            <StatPill val={stat1} label="Projects tracked" icon={<Inventory2Rounded sx={{ fontSize: 13, color: isDark ? '#fff' : undefined }} />} />
+            <StatPill val={stat2} label="Avg ETA delta" icon={<TimerRounded sx={{ fontSize: 13, color: isDark ? '#fff' : undefined }} />} />
+            <StatPill val={stat3} label="On-time rate" icon={<TaskAltRounded sx={{ fontSize: 13, color: isDark ? '#fff' : undefined }} />} />
           </div>
         </div>
 
@@ -406,9 +406,9 @@ export const LoginPage: React.FC = () => {
             </div>
             {/* Three stat pills */}
             <div style={{ display:'flex', gap:8 }}>
-              <StatPill val={stat1} label="Projects tracked" icon={<Inventory2Rounded sx={{ fontSize: 13 }} />} />
-              <StatPill val={stat2} label="Avg ETA delta" icon={<TimerRounded sx={{ fontSize: 13 }} />} />
-              <StatPill val={stat3} label="On-time rate" icon={<TaskAltRounded sx={{ fontSize: 13 }} />} />
+              <StatPill val={stat1} label="Projects tracked" icon={<Inventory2Rounded sx={{ fontSize: 13, color: isDark ? '#fff' : undefined }} />} />
+              <StatPill val={stat2} label="Avg ETA delta" icon={<TimerRounded sx={{ fontSize: 13, color: isDark ? '#fff' : undefined }} />} />
+              <StatPill val={stat3} label="On-time rate" icon={<TaskAltRounded sx={{ fontSize: 13, color: isDark ? '#fff' : undefined }} />} />
             </div>
             {/* Mini sparkline bar visual (purely decorative) */}
             <div style={{ marginTop:14, display:'flex', gap:2, alignItems:'flex-end', height:20 }}>

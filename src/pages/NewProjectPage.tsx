@@ -1253,3 +1253,6 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
         </div>
 
       </form>
+    </div>
+  )
+}

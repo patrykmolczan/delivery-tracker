@@ -61,20 +61,7 @@ function useCountUp(target: number, suffix: string, decimals: number, delay: num
   return value
 }
 
-/* ── Shared design tokens ── */
-const LP = {
-  bg: 'linear-gradient(145deg, #060b18 0%, #0a1628 45%, #0b1e3a 100%)',
-  headlineColor: '#f0f8ff',
-  subColor: 'rgba(180,210,255,0.55)',
-  badgeBg: 'rgba(14,165,233,0.12)',
-  badgeBorder: 'rgba(14,165,233,0.3)',
-  badgeColor: '#38bdf8',
-  cardBg: 'rgba(255,255,255,0.04)',
-  cardBorder: 'rgba(255,255,255,0.08)',
-  footerColor: 'rgba(255,255,255,0.22)',
-  nodeLine: 'rgba(14,165,233,0.35)',
-  nodeGlow: '#0ea5e9',
-}
+/* ── Shared design tokens (moved inside component for theme reactivity) ── */
 
 const GRAD_TEXT: React.CSSProperties = {
   background: `linear-gradient(90deg, #38bdf8, #2dd4bf)`,
@@ -88,11 +75,12 @@ const LiveDot = ({ size = 6 }: { size?: number }) => (
   <span style={{ width: size, height: size, background: '#4ade80', borderRadius: '50%', display: 'inline-block', flexShrink: 0, animation: 'alp-pulse 2s infinite' }} />
 )
 
-const GridOverlay = ({ size = 28 }: { size?: number }) => (
+const GridOverlay = ({ size = 28, color = 'rgba(99,179,237,0.06)' }: { size?: number; color?: string }) => (
   <div style={{
     position: 'absolute', inset: 0, pointerEvents: 'none',
-    backgroundImage: `linear-gradient(rgba(99,179,237,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(99,179,237,0.06) 1px, transparent 1px)`,
+    backgroundImage: `linear-gradient(${color} 1px, transparent 1px), linear-gradient(90deg, ${color} 1px, transparent 1px)`,
     backgroundSize: `${size}px ${size}px`, overflow: 'hidden',
+    transition: 'background-image 0.35s',
   }} />
 )
 
@@ -109,25 +97,35 @@ const Blob = ({ w, h, color, top, left, bottom, right, opacity, anim, blur = 70 
   }} />
 )
 
-const StatPill = ({ val, label, icon }: { val: string; label: string; icon?: React.ReactNode }) => (
+const StatPill = ({
+  val, label, icon,
+  valColor = '#f0f8ff',
+  labelColor = 'rgba(180,210,255,0.5)',
+  bg = 'rgba(14,165,233,0.08)',
+  border = '1px solid rgba(14,165,233,0.18)',
+}: {
+  val: string; label: string; icon?: React.ReactNode;
+  valColor?: string; labelColor?: string; bg?: string; border?: string;
+}) => (
   <div style={{
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: 2,
-    background: 'rgba(14,165,233,0.08)',
-    border: '1px solid rgba(14,165,233,0.18)',
+    background: bg,
+    border: border,
     borderRadius: 8,
     padding: '10px 12px',
     minWidth: 64,
     flex: 1,
     textAlign: 'center',
+    transition: 'background 0.35s, border-color 0.35s',
   }}>
     {icon && (
       <span style={{ fontSize: 14, marginBottom: 2, lineHeight: 1 }}>{icon}</span>
     )}
-    <div style={{ fontSize: 15, fontWeight: 700, color: '#f0f8ff', lineHeight: 1.1 }}>{val}</div>
-    <div style={{ fontSize: 9, color: 'rgba(180,210,255,0.5)', marginTop: 1 }}>{label}</div>
+    <div style={{ fontSize: 15, fontWeight: 700, color: valColor, lineHeight: 1.1, transition: 'color 0.35s' }}>{val}</div>
+    <div style={{ fontSize: 9, color: labelColor, marginTop: 1, transition: 'color 0.35s' }}>{label}</div>
   </div>
 )
 
@@ -139,6 +137,71 @@ export const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const { logoUrl } = useLogo()
   const { isDark, toggleTheme } = useTheme()
+
+  /* ── Left panel design tokens — reactive to theme ── */
+  const LP = isDark ? {
+    bg: 'linear-gradient(145deg, #060b18 0%, #0a1628 45%, #0b1e3a 100%)',
+    headlineColor: '#f0f8ff',
+    subColor: 'rgba(180,210,255,0.55)',
+    badgeBg: 'rgba(14,165,233,0.12)',
+    badgeBorder: 'rgba(14,165,233,0.3)',
+    badgeColor: '#38bdf8',
+    footerColor: 'rgba(255,255,255,0.22)',
+    nodeLine: 'rgba(14,165,233,0.35)',
+    nodeGlow: '#0ea5e9',
+    statVal: '#f0f8ff',
+    statLabel: 'rgba(180,210,255,0.5)',
+    statIcon: '#fff' as string,
+    statBg: 'rgba(14,165,233,0.08)',
+    statBorder: '1px solid rgba(14,165,233,0.18)',
+    cardBg: 'rgba(255,255,255,0.035)',
+    cardBorder: '1px solid rgba(255,255,255,0.08)',
+    liveMetricsLabel: 'rgba(180,210,255,0.4)',
+    sparkTop: 'rgba(14,165,233,0.6)',
+    sparkBot: 'rgba(45,212,191,0.4)',
+    eyebrow: 'rgba(56,189,248,0.7)',
+    chipBg: 'rgba(255,255,255,0.05)',
+    chipBorder: '1px solid rgba(255,255,255,0.09)',
+    chipColor: 'rgba(200,230,255,0.65)',
+    chipIconColor: '#fff' as string,
+    blob1: 'radial-gradient(circle, rgba(14,165,233,0.18) 0%, transparent 70%)',
+    blob2: 'radial-gradient(circle, rgba(99,102,241,0.14) 0%, transparent 70%)',
+    blob3: 'radial-gradient(circle, rgba(13,148,136,0.12) 0%, transparent 70%)',
+    gridColor: 'rgba(99,179,237,0.06)',
+    liveFooterDot: 'rgba(14,165,233,0.4)',
+    liveFooterGlow: 'rgba(14,165,233,0.5)',
+  } : {
+    bg: 'linear-gradient(145deg, #f0f7ff 0%, #e4eef9 45%, #daedfb 100%)',
+    headlineColor: '#0f172a',
+    subColor: 'rgba(15,23,42,0.55)',
+    badgeBg: 'rgba(14,165,233,0.09)',
+    badgeBorder: 'rgba(14,165,233,0.25)',
+    badgeColor: '#0284c7',
+    footerColor: 'rgba(15,23,42,0.35)',
+    nodeLine: 'rgba(14,165,233,0.28)',
+    nodeGlow: '#0284c7',
+    statVal: '#0f172a',
+    statLabel: 'rgba(15,23,42,0.5)',
+    statIcon: '#0284c7' as string,
+    statBg: 'rgba(14,165,233,0.07)',
+    statBorder: '1px solid rgba(14,165,233,0.15)',
+    cardBg: 'rgba(255,255,255,0.75)',
+    cardBorder: '1px solid rgba(14,165,233,0.12)',
+    liveMetricsLabel: 'rgba(15,23,42,0.4)',
+    sparkTop: 'rgba(14,165,233,0.5)',
+    sparkBot: 'rgba(45,212,191,0.35)',
+    eyebrow: 'rgba(2,132,199,0.8)',
+    chipBg: 'rgba(14,165,233,0.06)',
+    chipBorder: '1px solid rgba(14,165,233,0.14)',
+    chipColor: 'rgba(15,23,42,0.65)',
+    chipIconColor: '#0284c7' as string,
+    blob1: 'radial-gradient(circle, rgba(14,165,233,0.12) 0%, transparent 70%)',
+    blob2: 'radial-gradient(circle, rgba(99,102,241,0.09) 0%, transparent 70%)',
+    blob3: 'radial-gradient(circle, rgba(13,148,136,0.08) 0%, transparent 70%)',
+    gridColor: 'rgba(14,165,233,0.05)',
+    liveFooterDot: 'rgba(14,165,233,0.5)',
+    liveFooterGlow: 'rgba(14,165,233,0.6)',
+  }
 
   const [ssoEnabled, setSsoEnabled] = useState(false)
   const [ssoDomain, setSsoDomain] = useState('')
@@ -275,11 +338,11 @@ export const LoginPage: React.FC = () => {
         {/* ══════════════════════════════
             MOBILE BANNER (< lg)
         ══════════════════════════════ */}
-        <div className="flex lg:hidden flex-col" style={{ position: 'relative', background: LP.bg, overflow: 'hidden' }}>
+        <div className="flex lg:hidden flex-col" style={{ position: 'relative', background: LP.bg, overflow: 'hidden', transition: 'background 0.35s' }}>
           {/* Blobs */}
-          <Blob w={200} h={200} color="radial-gradient(circle, rgba(14,165,233,0.18) 0%, transparent 70%)" top={-60} left={-60} opacity={1} anim="alp-drift1 10s ease-in-out infinite" blur={60} />
-          <Blob w={160} h={160} color="radial-gradient(circle, rgba(99,102,241,0.14) 0%, transparent 70%)" bottom={-30} right={-30} opacity={1} anim="alp-drift2 12s ease-in-out infinite" blur={60} />
-          <GridOverlay size={28} />
+          <Blob w={200} h={200} color={LP.blob1} top={-60} left={-60} opacity={1} anim="alp-drift1 10s ease-in-out infinite" blur={60} />
+          <Blob w={160} h={160} color={LP.blob2} bottom={-30} right={-30} opacity={1} anim="alp-drift2 12s ease-in-out infinite" blur={60} />
+          <GridOverlay size={28} color={LP.gridColor} />
 
           <div style={{ position: 'relative', zIndex: 2, padding: '28px 24px 18px' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: LP.badgeBg, border: `1px solid ${LP.badgeBorder}`, borderRadius: 999, padding: '3px 10px', fontSize: 10, color: LP.badgeColor, marginBottom: 12, animation: 'alp-fadeUp 0.5s 0.2s ease both' }}>
@@ -297,9 +360,9 @@ export const LoginPage: React.FC = () => {
 
           {/* Mobile stats strip */}
           <div style={{ display: 'flex', borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', position: 'relative', zIndex: 2, animation: 'alp-fadeIn 0.5s 0.6s ease both', gap: 8, padding: '0 8px' }}>
-            <StatPill val={stat1} label="Projects tracked" icon={<Inventory2Rounded sx={{ fontSize: 13, color: '#fff' }} />} />
-            <StatPill val={stat2} label="Avg ETA delta" icon={<TimerRounded sx={{ fontSize: 13, color: '#fff' }} />} />
-            <StatPill val={stat3} label="On-time rate" icon={<TaskAltRounded sx={{ fontSize: 13, color: '#fff' }} />} />
+            <StatPill val={stat1} label="Projects tracked" icon={<Inventory2Rounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+            <StatPill val={stat2} label="Avg ETA delta" icon={<TimerRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+            <StatPill val={stat3} label="On-time rate" icon={<TaskAltRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
           </div>
         </div>
 
@@ -307,14 +370,14 @@ export const LoginPage: React.FC = () => {
             DESKTOP LEFT PANEL
         ══════════════════════════════ */}
         <div className="hidden lg:flex flex-col justify-between flex-1 overflow-hidden"
-          style={{ position:'relative', background: LP.bg, padding:'40px 36px' }}>
+          style={{ position:'relative', background: LP.bg, padding:'40px 36px', transition: 'background 0.35s' }}>
 
           {/* === BACKGROUND LAYER === */}
           {/* Ambient blobs — keep alp-drift1/2/3 keyframes */}
-          <Blob w={300} h={300} color="radial-gradient(circle, rgba(14,165,233,0.18) 0%, transparent 70%)" top={-80} left={-80} opacity={1} anim="alp-drift1 12s ease-in-out infinite" blur={80} />
-          <Blob w={240} h={240} color="radial-gradient(circle, rgba(99,102,241,0.14) 0%, transparent 70%)" bottom={-60} right={-60} opacity={1} anim="alp-drift2 14s ease-in-out infinite" blur={80} />
-          <Blob w={180} h={180} color="radial-gradient(circle, rgba(13,148,136,0.12) 0%, transparent 70%)" top="45%" left="50%" opacity={1} anim="alp-drift3 10s ease-in-out infinite" blur={60} />
-          <GridOverlay size={28} />
+          <Blob w={300} h={300} color={LP.blob1} top={-80} left={-80} opacity={1} anim="alp-drift1 12s ease-in-out infinite" blur={80} />
+          <Blob w={240} h={240} color={LP.blob2} bottom={-60} right={-60} opacity={1} anim="alp-drift2 14s ease-in-out infinite" blur={80} />
+          <Blob w={180} h={180} color={LP.blob3} top="45%" left="50%" opacity={1} anim="alp-drift3 10s ease-in-out infinite" blur={60} />
+          <GridOverlay size={28} color={LP.gridColor} />
 
           {/* === SCAN LINE (DaaS feel) === */}
           <div style={{ position:'absolute', inset:0, overflow:'hidden', pointerEvents:'none', zIndex:1 }}>
@@ -355,12 +418,12 @@ export const LoginPage: React.FC = () => {
 
             {/* Eyebrow label */}
             <div style={{ fontSize:10, fontWeight:600, letterSpacing:'0.14em', textTransform:'uppercase',
-              color:'rgba(56,189,248,0.7)', marginBottom:10, animation:'alp-fadeUp 0.6s 0.28s ease both' }}>
+              color:LP.eyebrow, marginBottom:10, animation:'alp-fadeUp 0.6s 0.28s ease both' }}>
               Data as a Service
             </div>
 
             {/* Headline — 3-line stacked */}
-            <div style={{ fontSize:28, fontWeight:800, lineHeight:1.2, color: LP.headlineColor,
+            <div style={{ fontSize:28, fontWeight:800, lineHeight:1.2, color: LP.headlineColor, transition: 'color 0.35s',
               marginBottom:14, animation:'alp-fadeUp 0.6s 0.35s ease both', letterSpacing:'-0.5px' }}>
               Data.{' '}
               <span style={{ background:'linear-gradient(90deg, #38bdf8, #2dd4bf)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Intelligence.</span>{' '}
@@ -376,14 +439,14 @@ export const LoginPage: React.FC = () => {
             {/* Feature chips row — 3 small pills */}
             <div style={{ display:'flex', gap:6, marginTop:20, flexWrap:'wrap', animation:'alp-fadeUp 0.6s 0.58s ease both' }}>
               {[
-                { icon: <BoltRounded sx={{ color: '#fff', fontSize: 12, verticalAlign: 'middle' }} />, label: 'Live tracking' },
-                { icon: <LockRounded sx={{ color: '#fff', fontSize: 12, verticalAlign: 'middle' }} />, label: 'Enterprise SSO' },
-                { icon: <InsightsRounded sx={{ color: '#fff', fontSize: 12, verticalAlign: 'middle' }} />, label: 'DaaS analytics' }
+                { icon: <BoltRounded sx={{ color: LP.chipIconColor, fontSize: 12, verticalAlign: 'middle' }} />, label: 'Live tracking' },
+                { icon: <LockRounded sx={{ color: LP.chipIconColor, fontSize: 12, verticalAlign: 'middle' }} />, label: 'Enterprise SSO' },
+                { icon: <InsightsRounded sx={{ color: LP.chipIconColor, fontSize: 12, verticalAlign: 'middle' }} />, label: 'DaaS analytics' }
               ].map((item,i) => (
                 <span key={i} style={{ fontSize:10, fontWeight:500,
                   padding:'3px 9px', borderRadius:999,
-                  background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.09)',
-                  color:'rgba(200,230,255,0.65)', letterSpacing:'0.02em' }}>
+                  background:LP.chipBg, border:LP.chipBorder,
+                  color:LP.chipColor, transition: 'background 0.35s, color 0.35s, border-color 0.35s', letterSpacing:'0.02em' }}>
                   <>{item.icon} {item.label}</>
                 </span>
               ))}
@@ -392,12 +455,12 @@ export const LoginPage: React.FC = () => {
 
           {/* === STATS CARD (redesigned) === */}
           <div style={{ position:'relative', zIndex:2,
-            background:'rgba(255,255,255,0.035)', border:'1px solid rgba(255,255,255,0.08)',
+            background:LP.cardBg, border:LP.cardBorder,
             borderRadius:14, padding:'16px 18px', backdropFilter:'blur(16px)',
             animation:'alp-fadeUp 0.6s 0.7s ease both, alp-cardGlow 4s 1.5s ease-in-out infinite' }}>
             {/* Card header */}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-              <span style={{ fontSize:10, color:'rgba(180,210,255,0.4)', textTransform:'uppercase', letterSpacing:'0.1em' }}>Live platform metrics</span>
+              <span style={{ fontSize:10, color:LP.liveMetricsLabel, textTransform:'uppercase', transition:'color 0.35s', letterSpacing:'0.1em' }}>Live platform metrics</span>
               <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:9,
                 color:'#4ade80', background:'rgba(74,222,128,0.1)', border:'1px solid rgba(74,222,128,0.2)',
                 borderRadius:999, padding:'2px 7px' }}>
@@ -406,15 +469,15 @@ export const LoginPage: React.FC = () => {
             </div>
             {/* Three stat pills */}
             <div style={{ display:'flex', gap:8 }}>
-              <StatPill val={stat1} label="Projects tracked" icon={<Inventory2Rounded sx={{ fontSize: 13, color: '#fff' }} />} />
-              <StatPill val={stat2} label="Avg ETA delta" icon={<TimerRounded sx={{ fontSize: 13, color: '#fff' }} />} />
-              <StatPill val={stat3} label="On-time rate" icon={<TaskAltRounded sx={{ fontSize: 13, color: '#fff' }} />} />
+              <StatPill val={stat1} label="Projects tracked" icon={<Inventory2Rounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+              <StatPill val={stat2} label="Avg ETA delta" icon={<TimerRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+              <StatPill val={stat3} label="On-time rate" icon={<TaskAltRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
             </div>
             {/* Mini sparkline bar visual (purely decorative) */}
             <div style={{ marginTop:14, display:'flex', gap:2, alignItems:'flex-end', height:20 }}>
               {[40,65,50,80,60,90,75,100,85,95,70,88].map((h,i) => (
                 <div key={i} style={{ flex:1, height:`${h}%`, borderRadius:2,
-                  background:`linear-gradient(to top, rgba(14,165,233,0.6), rgba(45,212,191,0.4))`,
+                  background:`linear-gradient(to top, ${LP.sparkTop}, ${LP.sparkBot})`,
                   animation:`alp-data-float ${2.5 + (i % 3) * 0.5}s ease-in-out infinite`,
                   animationDelay:`${i * 0.12}s` }} />
               ))}
@@ -425,7 +488,7 @@ export const LoginPage: React.FC = () => {
           <div style={{ position:'relative', zIndex:2, fontSize:10, color: LP.footerColor,
             animation:'alp-fadeIn 0.8s 1s ease both', display:'flex', alignItems:'center', gap:6 }}>
             <span style={{ display:'inline-block', width:6, height:6, borderRadius:'50%',
-              background:'rgba(14,165,233,0.4)', boxShadow:'0 0 6px rgba(14,165,233,0.5)' }} />
+              background:LP.liveFooterDot, boxShadow:`0 0 6px ${LP.liveFooterGlow}` }} />
             Secure · Enterprise-ready · Magnit Internal Use Only
           </div>
         </div>

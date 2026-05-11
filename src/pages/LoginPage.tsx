@@ -376,9 +376,9 @@ export const LoginPage: React.FC = () => {
             {/* Feature chips row — 3 small pills */}
             <div style={{ display:'flex', gap:6, marginTop:20, flexWrap:'wrap', animation:'alp-fadeUp 0.6s 0.58s ease both' }}>
               {[
-                { icon: <BoltRounded sx={{ fontSize: 11 }} />, label: 'Live tracking' },
-                { icon: <LockRounded sx={{ fontSize: 11 }} />, label: 'Enterprise SSO' },
-                { icon: <InsightsRounded sx={{ fontSize: 11 }} />, label: 'DaaS analytics' }
+                { icon: <BoltRounded sx={{ color: '#fff', fontSize: 12, verticalAlign: 'middle' }} />, label: 'Live tracking' },
+                { icon: <LockRounded sx={{ color: '#fff', fontSize: 12, verticalAlign: 'middle' }} />, label: 'Enterprise SSO' },
+                { icon: <InsightsRounded sx={{ color: '#fff', fontSize: 12, verticalAlign: 'middle' }} />, label: 'DaaS analytics' }
               ].map((item,i) => (
                 <span key={i} style={{ fontSize:10, fontWeight:500,
                   padding:'3px 9px', borderRadius:999,

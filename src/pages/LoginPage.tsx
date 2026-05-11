@@ -18,6 +18,28 @@ const AURORA_CSS = `
 @keyframes alp-cardGlow{0%,100%{box-shadow:0 0 0 0 rgba(14,165,233,0);border-color:rgba(255,255,255,0.08)}50%{box-shadow:0 0 18px 0 rgba(14,165,233,0.15);border-color:rgba(14,165,233,0.28)}}
 @keyframes alp-shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
 @keyframes alp-logoGlow{0%,100%{box-shadow:0 0 0 0 rgba(14,165,233,0)}50%{box-shadow:0 0 14px 3px rgba(14,165,233,0.35)}}
+/* DaaS keyframes */
+@keyframes alp-node-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.35); }
+}
+@keyframes alp-flow-dash {
+  0% { stroke-dashoffset: 200; opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+@keyframes alp-data-float {
+  0%, 100% { transform: translateY(0px) translateX(0px); opacity: 0.55; }
+  33% { transform: translateY(-6px) translateX(3px); opacity: 0.85; }
+  66% { transform: translateY(4px) translateX(-3px); opacity: 0.65; }
+}
+@keyframes alp-scan-line {
+  0% { transform: translateY(0%); opacity: 0; }
+  10% { opacity: 0.18; }
+  90% { opacity: 0.18; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
 `
 
 function useInjectAuroraKeyframes() {

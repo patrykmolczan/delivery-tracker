@@ -63,11 +63,6 @@ function useCountUp(target: number, suffix: string, decimals: number, delay: num
 
 /* ── Shared design tokens (moved inside component for theme reactivity) ── */
 
-const GRAD_TEXT: React.CSSProperties = {
-  background: `linear-gradient(90deg, #38bdf8, #2dd4bf)`,
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
-}
 
 /* ── Sub-components ── */
 

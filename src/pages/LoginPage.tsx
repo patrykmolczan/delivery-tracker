@@ -135,85 +135,68 @@ export const LoginPage: React.FC = () => {
 
   /* ── Left panel design tokens — reactive to theme ── */
   const LP = isDark ? {
-    bg: 'linear-gradient(160deg, #050d1a 0%, #071325 55%, #081b33 100%)',
-    accent: '#06b6d4',
-    accent2: '#6366f1',
-    accent3: '#10b981',
-    headlineColor: '#f0f9ff',
-    subColor: 'rgba(186,230,255,0.52)',
-    eyebrow: 'rgba(6,182,212,0.75)',
-    badgeBg: 'rgba(6,182,212,0.1)',
+    bg: 'linear-gradient(155deg, #04090f 0%, #070e1c 40%, #080f20 100%)',
+    accent1: '#06b6d4',        // cyan
+    accent2: '#818cf8',        // indigo
+    accent3: '#34d399',        // emerald
+    accent4: '#f59e0b',        // amber
+    headline: '#e2eeff',
+    sub: 'rgba(180,210,255,0.5)',
+    eyebrow: 'rgba(99,210,255,0.65)',
+    badgeBg: 'rgba(6,182,212,0.12)',
     badgeBorder: 'rgba(6,182,212,0.28)',
     badgeColor: '#22d3ee',
-    footerColor: 'rgba(255,255,255,0.2)',
-    cardBg: 'rgba(6,182,212,0.045)',
-    cardBorder: 'rgba(6,182,212,0.14)',
-    trackBg: 'rgba(255,255,255,0.05)',
-    trackGlow: 'rgba(6,182,212,0.22)',
-    statVal: '#f0f9ff',
-    statLabel: 'rgba(186,230,255,0.48)',
-    statRingBg: 'rgba(6,182,212,0.1)',
-    meshColor: 'rgba(6,182,212,0.055)',
-    particleColor: '#22d3ee',
-    stageDone: '#10b981',
-    stageActive: '#06b6d4',
-    stagePending: 'rgba(255,255,255,0.09)',
-    stageText: 'rgba(255,255,255,0.55)',
-    stageActiveText: '#fff',
-    boardCardBg: 'rgba(255,255,255,0.04)',
-    boardCardBorder: 'rgba(255,255,255,0.07)',
-    progressTrack: 'rgba(255,255,255,0.07)',
-    glow1: 'radial-gradient(circle, rgba(6,182,212,0.18) 0%, transparent 68%)',
-    glow2: 'radial-gradient(circle, rgba(99,102,241,0.14) 0%, transparent 68%)',
-    glow3: 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 68%)',
+    cardBg: 'rgba(6,182,212,0.05)',
+    cardBorder: '1px solid rgba(6,182,212,0.14)',
+    gridColor: 'rgba(6,182,212,0.055)',
+    ringTrack: 'rgba(255,255,255,0.06)',
+    footerColor: 'rgba(200,230,255,0.22)',
+    liveFooterDot: '#22d3ee',
+    liveFooterGlow: 'rgba(6,182,212,0.6)',
+    sparkTop: 'rgba(6,182,212,0.7)',
+    sparkBot: 'rgba(52,211,153,0.4)',
+    statVal: '#e2eeff',
+    statLabel: 'rgba(180,210,255,0.48)',
+    statIcon: '#06b6d4' as string,
+    statBg: 'rgba(6,182,212,0.08)',
+    statBorder: '1px solid rgba(6,182,212,0.18)',
+    pipelineBg: 'rgba(255,255,255,0.04)',
+    pipelineBorder: '1px solid rgba(255,255,255,0.08)',
+    blob1: 'radial-gradient(circle, rgba(6,182,212,0.18) 0%, transparent 70%)',
+    blob2: 'radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)',
+    blob3: 'radial-gradient(circle, rgba(52,211,153,0.10) 0%, transparent 70%)',
   } : {
-    bg: 'linear-gradient(160deg, #f0f7ff 0%, #e3effe 55%, #d8ecfb 100%)',
-    accent: '#0284c7',
+    bg: 'linear-gradient(155deg, #f0f7ff 0%, #e8f2fb 40%, #ddeefa 100%)',
+    accent1: '#0284c7',
     accent2: '#6366f1',
     accent3: '#059669',
-    headlineColor: '#0c1a2e',
-    subColor: 'rgba(15,40,80,0.52)',
+    accent4: '#d97706',
+    headline: '#0c1a2e',
+    sub: 'rgba(15,23,42,0.52)',
     eyebrow: 'rgba(2,132,199,0.75)',
-    badgeBg: 'rgba(2,132,199,0.08)',
+    badgeBg: 'rgba(2,132,199,0.09)',
     badgeBorder: 'rgba(2,132,199,0.22)',
     badgeColor: '#0284c7',
-    footerColor: 'rgba(15,40,80,0.32)',
     cardBg: 'rgba(255,255,255,0.82)',
-    cardBorder: 'rgba(2,132,199,0.14)',
-    trackBg: 'rgba(2,132,199,0.06)',
-    trackGlow: 'rgba(2,132,199,0.14)',
+    cardBorder: '1px solid rgba(6,182,212,0.16)',
+    gridColor: 'rgba(6,182,212,0.045)',
+    ringTrack: 'rgba(0,0,0,0.07)',
+    footerColor: 'rgba(15,23,42,0.32)',
+    liveFooterDot: '#0284c7',
+    liveFooterGlow: 'rgba(2,132,199,0.45)',
+    sparkTop: 'rgba(2,132,199,0.6)',
+    sparkBot: 'rgba(5,150,105,0.35)',
     statVal: '#0c1a2e',
-    statLabel: 'rgba(15,40,80,0.48)',
-    statRingBg: 'rgba(2,132,199,0.08)',
-    meshColor: 'rgba(2,132,199,0.055)',
-    particleColor: '#0284c7',
-    stageDone: '#059669',
-    stageActive: '#0284c7',
-    stagePending: 'rgba(2,132,199,0.07)',
-    stageText: 'rgba(15,40,80,0.45)',
-    stageActiveText: '#fff',
-    boardCardBg: 'rgba(255,255,255,0.9)',
-    boardCardBorder: 'rgba(2,132,199,0.12)',
-    progressTrack: 'rgba(2,132,199,0.09)',
-    glow1: 'radial-gradient(circle, rgba(2,132,199,0.12) 0%, transparent 68%)',
-    glow2: 'radial-gradient(circle, rgba(99,102,241,0.09) 0%, transparent 68%)',
-    glow3: 'radial-gradient(circle, rgba(5,150,105,0.09) 0%, transparent 68%)',
+    statLabel: 'rgba(15,23,42,0.48)',
+    statIcon: '#0284c7' as string,
+    statBg: 'rgba(2,132,199,0.07)',
+    statBorder: '1px solid rgba(2,132,199,0.15)',
+    pipelineBg: 'rgba(255,255,255,0.7)',
+    pipelineBorder: '1px solid rgba(6,182,212,0.14)',
+    blob1: 'radial-gradient(circle, rgba(6,182,212,0.13) 0%, transparent 70%)',
+    blob2: 'radial-gradient(circle, rgba(99,102,241,0.10) 0%, transparent 70%)',
+    blob3: 'radial-gradient(circle, rgba(52,211,153,0.08) 0%, transparent 70%)',
   }
-
-  // Pipeline stage data
-  const PIPELINE_STAGES = [
-    { label: 'Intake',    pct: 100, done: true  },
-    { label: 'Analysis', pct: 100, done: true  },
-    { label: 'Build',    pct: 72,  done: false, active: true },
-    { label: 'QA',       pct: 0,   done: false },
-    { label: 'Deploy',   pct: 0,   done: false },
-  ]
-  // Mini project board rows
-  const BOARD_ROWS = [
-    { name: 'Data Sync Pipeline',   progress: 88, status: 'On track',  statusColor: '#10b981' },
-    { name: 'ETL Migration v4',     progress: 61, status: 'At risk',   statusColor: '#f59e0b' },
-    { name: 'Reporting Dashboard',  progress: 34, status: 'On track',  statusColor: '#10b981' },
-  ]
 
   const [ssoEnabled, setSsoEnabled] = useState(false)
   const [ssoDomain, setSsoDomain] = useState('')
@@ -441,66 +424,70 @@ export const LoginPage: React.FC = () => {
           zIndex: 1,
         }}
       >
-        {/* MOBILE BANNER — new design */}
+        {/* MOBILE BANNER */}
         <div
           className="flex lg:hidden flex-col"
           style={{
-            background: LP.bg,
+            background: isDark
+              ? 'linear-gradient(160deg, #04090f 0%, #070e1c 60%, #080f20 100%)'
+              : 'linear-gradient(160deg, #e8f4fd 0%, #dbeafe 60%, #cfe9fb 100%)',
             position: 'relative',
             zIndex: 2,
             overflow: 'hidden',
           }}
         >
-          {/* Mesh background */}
-          <div style={{ position:'absolute', inset:0, pointerEvents:'none',
-            backgroundImage: `linear-gradient(${LP.meshColor} 1px, transparent 1px), linear-gradient(90deg, ${LP.meshColor} 1px, transparent 1px)`,
-            backgroundSize: '28px 28px', zIndex:0 }} />
-          {/* Glow blobs */}
-          <div style={{ position:'absolute', top:-60, left:-60, width:200, height:200, background:LP.glow1, filter:'blur(60px)', pointerEvents:'none', zIndex:0, animation:'alp-drift1 12s ease-in-out infinite' }} />
-          <div style={{ position:'absolute', bottom:-40, right:-40, width:160, height:160, background:LP.glow2, filter:'blur(50px)', pointerEvents:'none', zIndex:0, animation:'alp-drift2 14s ease-in-out infinite' }} />
+          <GridOverlay size={28} color={LP.gridColor} />
+          <Blob w={200} h={200} color={LP.blob1} top={-60} left={-60} opacity={1} anim="alp-drift1 12s ease-in-out infinite" blur={70} />
+          <Blob w={150} h={150} color={LP.blob2} bottom={-40} right={-30} opacity={1} anim="alp-drift2 14s ease-in-out infinite" blur={60} />
 
-          <div style={{ position:'relative', zIndex:2, padding:'28px 24px 16px' }}>
-            {/* Eyebrow + badge */}
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10, animation:'alp-fadeUp 0.5s 0.1s ease both' }}>
-              <span style={{ fontSize:9, fontWeight:700, letterSpacing:'0.18em', color:LP.eyebrow, textTransform:'uppercase' }}>PROJECT DELIVERY</span>
-              <span style={{ display:'inline-flex', alignItems:'center', gap:4, background:LP.badgeBg, border:`1px solid ${LP.badgeBorder}`, borderRadius:999, padding:'2px 8px', fontSize:9, color:LP.badgeColor }}>
-                <span style={{ width:5, height:5, borderRadius:'50%', background:LP.accent, display:'inline-block', animation:'alp-pulse 2s infinite' }} /> LIVE
-              </span>
+          <div style={{ position: 'relative', zIndex: 2, padding: '28px 22px 0' }}>
+            {/* Eyebrow */}
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', color: LP.eyebrow, textTransform: 'uppercase', marginBottom: 8, animation: 'alp-fadeUp 0.5s 0.1s ease both' }}>
+              PROJECT DELIVERY TRACKER
+            </div>
+            {/* Badge */}
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: LP.badgeBg, border: `1px solid ${LP.badgeBorder}`, borderRadius: 999, padding: '3px 9px', fontSize: 10, color: LP.badgeColor, marginBottom: 10, animation: 'alp-fadeUp 0.5s 0.18s ease both' }}>
+              <LiveDot /> Systems nominal
             </div>
             {/* Headline */}
-            <div style={{ fontSize:20, fontWeight:900, lineHeight:1.18, color:LP.headlineColor, letterSpacing:'-0.5px', animation:'alp-fadeUp 0.5s 0.2s ease both', marginBottom:4 }}>
-              Track every project,{' '}
-              <span style={{ background:`linear-gradient(90deg, ${LP.accent}, ${LP.accent3})`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>end to end.</span>
+            <div style={{ fontSize: 20, fontWeight: 900, color: LP.headline, lineHeight: 1.2, letterSpacing: '-0.5px', animation: 'alp-fadeUp 0.5s 0.26s ease both' }}>
+              Mission{' '}
+              <span style={{ background: `linear-gradient(90deg, ${LP.accent1}, ${LP.accent3})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+                Control
+              </span>
             </div>
-            <div style={{ fontSize:11, color:LP.subColor, lineHeight:1.6, animation:'alp-fadeUp 0.5s 0.3s ease both', marginBottom:14 }}>Real-time pipeline visibility for fast-moving teams.</div>
-            {/* Pipeline stage strip */}
-            <div style={{ display:'flex', gap:4, animation:'alp-fadeUp 0.5s 0.4s ease both' }}>
-              {PIPELINE_STAGES.map((s, i) => (
-                <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
-                  <div style={{
-                    width:'100%', height:4, borderRadius:999,
-                    background: s.done ? LP.stageDone : s.active ? `linear-gradient(90deg, ${LP.stageActive} ${s.pct}%, ${LP.progressTrack} ${s.pct}%)` : LP.stagePending,
-                    boxShadow: s.active ? `0 0 6px ${LP.trackGlow}` : 'none',
-                    transition: 'background 0.4s',
-                  }} />
-                  <span style={{ fontSize:7.5, color: s.active ? LP.stageActive : s.done ? LP.stageDone : LP.stageText, fontWeight: s.active ? 700 : 500, letterSpacing:'0.04em' }}>{s.label}</span>
+            <div style={{ fontSize: 11, color: LP.sub, marginTop: 5, marginBottom: 14, lineHeight: 1.5, animation: 'alp-fadeUp 0.5s 0.34s ease both' }}>
+              Intake-to-delivery visibility for fast teams.
+            </div>
+
+            {/* Mini pipeline stages — horizontal scroll strip */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 0, animation: 'alp-fadeUp 0.5s 0.42s ease both', overflowX: 'auto', paddingBottom: 4 }}>
+              {[
+                { label: 'Intake', pct: 100, color: LP.accent3 },
+                { label: 'Build', pct: 78, color: LP.accent1 },
+                { label: 'QA', pct: 55, color: LP.accent2 },
+                { label: 'Deploy', pct: 32, color: LP.accent4 },
+              ].map((stage, i) => (
+                <div key={i} style={{ minWidth: 68, background: LP.pipelineBg, border: LP.pipelineBorder, borderRadius: 10, padding: '8px 10px', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
+                  <div style={{ fontSize: 9, color: LP.statLabel, letterSpacing: '0.06em', marginBottom: 4 }}>{stage.label}</div>
+                  <div style={{ height: 4, borderRadius: 99, background: LP.ringTrack, marginBottom: 4, overflow: 'hidden' }}>
+                    <div style={{ width: `${stage.pct}%`, height: '100%', borderRadius: 99, background: stage.color, animation: `alp-data-float ${2 + i * 0.4}s ease-in-out infinite`, animationDelay: `${i * 0.15}s` }} />
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: LP.statVal }}>{stage.pct}<span style={{ fontSize: 9, color: LP.statLabel }}>%</span></div>
                 </div>
               ))}
             </div>
           </div>
-          {/* Mobile stats strip */}
-          <div style={{ display:'flex', gap:6, padding:'12px 24px 16px', borderTop:`1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(2,132,199,0.08)'}`, background: isDark ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.65)', zIndex:2, position:'relative' }}>
-            {[{val:stat1,label:'Projects',icon:'📦'},{val:stat2,label:'Avg ETA',icon:'⏱'},{val:stat3,label:'On-time',icon:'✓'}].map((s,i) => (
-              <div key={i} style={{ flex:1, background:LP.cardBg, border:`1px solid ${LP.cardBorder}`, borderRadius:10, padding:'8px 6px', textAlign:'center', backdropFilter:'blur(8px)' }}>
-                <div style={{ fontSize:9, marginBottom:2 }}>{s.icon}</div>
-                <div style={{ fontSize:13, fontWeight:800, color:LP.statVal, lineHeight:1 }}>{s.val}</div>
-                <div style={{ fontSize:8.5, color:LP.statLabel, marginTop:1, letterSpacing:'0.04em' }}>{s.label}</div>
-              </div>
-            ))}
+
+          {/* Mobile stat strip */}
+          <div style={{ display: 'flex', gap: 8, padding: '14px 22px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(6,182,212,0.12)'}`, background: isDark ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.65)', zIndex: 2, position: 'relative', marginTop: 14 }}>
+            <StatPill val={stat1} label="Projects" icon={<Inventory2Rounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+            <StatPill val={stat2} label="Avg ETA" icon={<TimerRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+            <StatPill val={stat3} label="On-time" icon={<TaskAltRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
           </div>
         </div>
 
-        {/* DESKTOP LEFT PANEL — new design */}
+        {/* DESKTOP LEFT PANEL */}
         <div
           className="hidden lg:flex flex-col justify-between"
           style={{
@@ -513,176 +500,327 @@ export const LoginPage: React.FC = () => {
             overflow: 'hidden',
           }}
         >
-          {/* ── Background layers ── */}
-          {/* Mesh grid */}
-          <div style={{ position:'absolute', inset:0, pointerEvents:'none', zIndex:0,
-            backgroundImage: `linear-gradient(${LP.meshColor} 1px, transparent 1px), linear-gradient(90deg, ${LP.meshColor} 1px, transparent 1px)`,
-            backgroundSize: '36px 36px' }} />
-          {/* Glow blobs */}
-          <div style={{ position:'absolute', top:-120, left:-80, width:400, height:400, background:LP.glow1, filter:'blur(90px)', pointerEvents:'none', zIndex:0, animation:'alp-drift1 16s ease-in-out infinite' }} />
-          <div style={{ position:'absolute', bottom:-100, right:-80, width:320, height:320, background:LP.glow2, filter:'blur(80px)', pointerEvents:'none', zIndex:0, animation:'alp-drift2 18s ease-in-out infinite' }} />
-          <div style={{ position:'absolute', top:'38%', left:'35%', width:240, height:240, background:LP.glow3, filter:'blur(70px)', pointerEvents:'none', zIndex:0, animation:'alp-drift3 13s ease-in-out infinite' }} />
-          {/* Animated data-particle SVG */}
-          <div style={{ position:'absolute', inset:0, pointerEvents:'none', zIndex:1 }}>
-            <svg width="100%" height="100%">
-              {/* Diagonal pipeline connectors */}
-              {[
-                { x1:'5%',  y1:'15%', x2:'95%', y2:'22%', dur:5 },
-                { x1:'5%',  y1:'42%', x2:'95%', y2:'48%', dur:6 },
-                { x1:'5%',  y1:'68%', x2:'95%', y2:'73%', dur:7 },
-              ].map((l, i) => (
-                <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
-                  stroke={isDark ? 'rgba(6,182,212,0.12)' : 'rgba(2,132,199,0.1)'}
-                  strokeWidth="1" strokeDasharray="5 16"
-                  style={{ animation:`alp-flow-dash ${l.dur}s linear infinite`, animationDelay:`${i*0.8}s` }} />
-              ))}
-              {/* Glowing node dots */}
-              {[
-                [55,90],[145,155],[95,215],[225,270],[175,155],[310,90],
-                [265,215],[350,330],[85,330],[205,90],[330,215],[155,270],
-                [420,145],[60,340],[390,270]
-              ].map(([cx,cy],i) => (
-                <circle key={i} cx={`${cx}`} cy={`${cy}`} r="2.8"
-                  fill={i % 3 === 0 ? LP.accent : i % 3 === 1 ? LP.accent2 : LP.accent3}
-                  opacity={isDark ? 0.5 : 0.35}
-                  style={{ animation:'alp-node-pulse 3s ease-in-out infinite', animationDelay:`${i*0.22}s`, transformOrigin:`${cx}px ${cy}px` }} />
-              ))}
-              {/* Travelling data packets */}
-              {[0,1,2,3,4].map(i => (
-                <circle key={i} r="2.2" fill={LP.particleColor} opacity="0.65"
-                  style={{ animation:`alp-flow-dash ${2.8 + i * 0.6}s linear infinite`, animationDelay:`${i * 0.55}s` }}>
-                  <animate attributeName="cx" values="20;480" dur={`${2.8 + i*0.6}s`} repeatCount="indefinite" />
-                  <animate attributeName="cy" values={`${80 + i*55};${130 + i*55}`} dur={`${2.8 + i*0.6}s`} repeatCount="indefinite" />
-                </circle>
-              ))}
-            </svg>
+          {/* ── BG layers ── */}
+          <GridOverlay size={28} color={LP.gridColor} />
+          <Blob w={380} h={380} color={LP.blob1} top={-120} left={-120} opacity={1} anim="alp-drift1 15s ease-in-out infinite" blur={110} />
+          <Blob w={300} h={300} color={LP.blob2} bottom={-90} right={-90} opacity={1} anim="alp-drift2 17s ease-in-out infinite" blur={100} />
+          <Blob w={220} h={220} color={LP.blob3} top="38%" left="42%" opacity={1} anim="alp-drift3 12s ease-in-out infinite" blur={80} />
+
+          {/* ── Vertical ticker strip (right edge) ── */}
+          <div
+            style={{
+              position: 'absolute',
+              right: 18,
+              top: 60,
+              bottom: 60,
+              width: 2,
+              borderRadius: 99,
+              background: isDark ? 'rgba(6,182,212,0.09)' : 'rgba(6,182,212,0.12)',
+              pointerEvents: 'none',
+              zIndex: 1,
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '35%',
+                background: `linear-gradient(to bottom, transparent, ${LP.accent1}, transparent)`,
+                animation: 'alp-scan-line 4s linear infinite',
+                opacity: 0.7,
+              }}
+            />
           </div>
 
+          {/* ── Horizontal scan line ── */}
+          <div
+            style={{
+              position: 'absolute',
+              left: 0, right: 0, top: 0,
+              height: 140,
+              background: `linear-gradient(to bottom, transparent, rgba(6,182,212,0.04) 50%, transparent)`,
+              animation: 'alp-scan-line 12s linear infinite',
+              pointerEvents: 'none',
+              zIndex: 1,
+            }}
+          />
+
           {/* ── TOP SECTION ── */}
-          <div style={{ position:'relative', zIndex:2 }}>
+          <div style={{ position: 'relative', zIndex: 2 }}>
             {/* Eyebrow */}
-            <div style={{ fontSize:9.5, fontWeight:700, letterSpacing:'0.2em', color:LP.eyebrow, textTransform:'uppercase', marginBottom:14, animation:'alp-fadeUp 0.6s 0.15s ease both', display:'flex', alignItems:'center', gap:8 }}>
-              <span style={{ width:18, height:1.5, background:LP.accent, display:'inline-block', borderRadius:999 }} />
-              PROJECT DELIVERY PLATFORM
-              <span style={{ width:18, height:1.5, background:LP.accent, display:'inline-block', borderRadius:999 }} />
-            </div>
-            {/* Live badge */}
-            <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:LP.badgeBg, border:`1px solid ${LP.badgeBorder}`, borderRadius:999, padding:'4px 12px', fontSize:10, color:LP.badgeColor, marginBottom:20, animation:'alp-fadeUp 0.6s 0.22s ease both' }}>
-              <span style={{ width:6, height:6, borderRadius:'50%', background:LP.accent, display:'inline-block', animation:'alp-pulse 2s infinite' }} />
-              All pipelines operational
-            </div>
-            {/* Headline */}
-            <div style={{ fontSize:34, fontWeight:900, lineHeight:1.15, letterSpacing:'-1px', color:LP.headlineColor, animation:'alp-fadeUp 0.6s 0.3s ease both' }}>
-              <div>Track every project.</div>
-              <div style={{ marginTop:2 }}>
-                <span style={{ background:`linear-gradient(100deg, ${LP.accent}, ${LP.accent3})`, WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Deliver with confidence.</span>
-              </div>
-            </div>
-            {/* Sub */}
-            <div style={{ fontSize:13, color:LP.subColor, lineHeight:1.75, maxWidth:290, marginTop:12, animation:'alp-fadeUp 0.6s 0.42s ease both' }}>
-              End-to-end pipeline visibility — from intake to deployment — for data teams that never miss a deadline.
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.2em',
+                color: LP.eyebrow,
+                textTransform: 'uppercase',
+                marginBottom: 14,
+                animation: 'alp-fadeUp 0.6s 0.15s ease both',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+              }}
+            >
+              <span
+                style={{
+                  display: 'inline-block',
+                  width: 18,
+                  height: 2,
+                  borderRadius: 99,
+                  background: `linear-gradient(90deg, ${LP.accent1}, ${LP.accent2})`,
+                }}
+              />
+              PROJECT DELIVERY TRACKER
             </div>
 
-            {/* ── PIPELINE STAGE VISUALIZER ── */}
-            <div style={{ marginTop:28, animation:'alp-fadeUp 0.6s 0.52s ease both' }}>
-              {/* Stage track */}
-              <div style={{ display:'flex', alignItems:'center', gap:0, marginBottom:8 }}>
-                {PIPELINE_STAGES.map((s, i) => (
-                  <React.Fragment key={i}>
-                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5, flex:1 }}>
-                      {/* Circle indicator */}
-                      <div style={{
-                        width: s.active ? 30 : 22,
-                        height: s.active ? 30 : 22,
-                        borderRadius:'50%',
-                        background: s.done
-                          ? LP.stageDone
-                          : s.active
-                            ? `conic-gradient(${LP.stageActive} ${s.pct * 3.6}deg, ${LP.progressTrack} 0deg)`
-                            : LP.stagePending,
-                        border: s.active ? `2.5px solid ${LP.stageActive}` : s.done ? `2px solid ${LP.stageDone}` : `1.5px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(2,132,199,0.15)'}`,
-                        boxShadow: s.active ? `0 0 12px ${LP.trackGlow}` : s.done ? `0 0 8px rgba(16,185,129,0.3)` : 'none',
-                        display:'flex', alignItems:'center', justifyContent:'center',
-                        transition:'all 0.4s',
-                        animation: s.active ? 'alp-node-pulse 2.5s ease-in-out infinite' : 'none',
-                        position:'relative',
-                      }}>
-                        {s.done && <span style={{ color:'#fff', fontSize:11, fontWeight:800, lineHeight:1 }}>✓</span>}
-                        {s.active && <span style={{ color:LP.stageActive, fontSize:9, fontWeight:800 }}>{s.pct}%</span>}
-                        {!s.done && !s.active && <span style={{ width:5, height:5, borderRadius:'50%', background:LP.stageText, display:'inline-block' }} />}
-                      </div>
-                      {/* Label */}
-                      <span style={{ fontSize:8.5, fontWeight: s.active ? 700 : 500, color: s.active ? LP.stageActive : s.done ? LP.stageDone : LP.stageText, letterSpacing:'0.06em', textTransform:'uppercase', whiteSpace:'nowrap' }}>{s.label}</span>
-                    </div>
-                    {/* Connector line */}
-                    {i < PIPELINE_STAGES.length - 1 && (
-                      <div style={{ height:2, flex:0.4, marginBottom:16, borderRadius:999, background: (PIPELINE_STAGES[i+1].done || PIPELINE_STAGES[i+1].active) ? `linear-gradient(90deg, ${LP.stageDone}, ${LP.stageActive})` : LP.progressTrack, transition:'background 0.4s' }} />
-                    )}
-                  </React.Fragment>
+            {/* Live badge */}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: LP.badgeBg,
+                border: `1px solid ${LP.badgeBorder}`,
+                borderRadius: 999,
+                padding: '4px 12px',
+                fontSize: 11,
+                color: LP.badgeColor,
+                marginBottom: 22,
+                animation: 'alp-fadeUp 0.6s 0.22s ease both',
+              }}
+            >
+              <LiveDot /> All systems nominal
+            </div>
+
+            {/* Headline */}
+            <div
+              style={{
+                fontSize: 38,
+                fontWeight: 900,
+                lineHeight: 1.12,
+                letterSpacing: '-1.5px',
+                color: LP.headline,
+                animation: 'alp-fadeUp 0.6s 0.3s ease both',
+              }}
+            >
+              <div>Mission</div>
+              <div>
+                <span
+                  style={{
+                    background: `linear-gradient(95deg, ${LP.accent1} 0%, ${LP.accent2} 50%, ${LP.accent3} 100%)`,
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}
+                >
+                  Control.
+                </span>
+              </div>
+              <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.5px', marginTop: 2 }}>Delivered.</div>
+            </div>
+
+            {/* Sub */}
+            <div
+              style={{
+                fontSize: 13,
+                color: LP.sub,
+                lineHeight: 1.75,
+                maxWidth: 270,
+                marginTop: 12,
+                animation: 'alp-fadeUp 0.6s 0.4s ease both',
+              }}
+            >
+              End-to-end visibility from intake to deployment — for teams that operate at scale.
+            </div>
+
+            {/* ── DELIVERY RING CLUSTER (SVG) ── */}
+            <div
+              style={{
+                marginTop: 28,
+                position: 'relative',
+                width: 156,
+                height: 156,
+                animation: 'alp-fadeUp 0.6s 0.5s ease both',
+              }}
+            >
+              <svg width="156" height="156" viewBox="0 0 156 156">
+                {/* Ring 1 — Projects (outermost) */}
+                <circle cx="78" cy="78" r="68" fill="none" stroke={LP.ringTrack} strokeWidth="7" />
+                <circle
+                  cx="78" cy="78" r="68"
+                  fill="none"
+                  stroke={LP.accent1}
+                  strokeWidth="7"
+                  strokeLinecap="round"
+                  strokeDasharray={`${2 * Math.PI * 68}`}
+                  strokeDashoffset={`${2 * Math.PI * 68 * (1 - 0.82)}`}
+                  transform="rotate(-90 78 78)"
+                  style={{ filter: `drop-shadow(0 0 5px ${LP.accent1})`, animation: 'alp-node-pulse 3.2s ease-in-out infinite' }}
+                />
+                {/* Ring 2 — On-time % */}
+                <circle cx="78" cy="78" r="54" fill="none" stroke={LP.ringTrack} strokeWidth="6" />
+                <circle
+                  cx="78" cy="78" r="54"
+                  fill="none"
+                  stroke={LP.accent3}
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  strokeDasharray={`${2 * Math.PI * 54}`}
+                  strokeDashoffset={`${2 * Math.PI * 54 * (1 - 0.96)}`}
+                  transform="rotate(-90 78 78)"
+                  style={{ filter: `drop-shadow(0 0 4px ${LP.accent3})`, animation: 'alp-node-pulse 2.8s 0.4s ease-in-out infinite' }}
+                />
+                {/* Ring 3 — Pipeline fill (innermost) */}
+                <circle cx="78" cy="78" r="40" fill="none" stroke={LP.ringTrack} strokeWidth="5" />
+                <circle
+                  cx="78" cy="78" r="40"
+                  fill="none"
+                  stroke={LP.accent2}
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeDasharray={`${2 * Math.PI * 40}`}
+                  strokeDashoffset={`${2 * Math.PI * 40 * (1 - 0.64)}`}
+                  transform="rotate(-90 78 78)"
+                  style={{ filter: `drop-shadow(0 0 4px ${LP.accent2})`, animation: 'alp-node-pulse 3.6s 0.8s ease-in-out infinite' }}
+                />
+                {/* Center label */}
+                <text x="78" y="72" textAnchor="middle" style={{ fill: LP.headline, fontSize: 18, fontWeight: 800, fontFamily: 'inherit' }}>96%</text>
+                <text x="78" y="88" textAnchor="middle" style={{ fill: LP.sub as string, fontSize: 9, fontFamily: 'inherit', letterSpacing: '0.06em' }}>ON-TIME</text>
+              </svg>
+
+              {/* Ring legend */}
+              <div
+                style={{
+                  position: 'absolute',
+                  right: -90,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                {[
+                  { color: LP.accent1, label: 'Projects', val: '82%' },
+                  { color: LP.accent3, label: 'On-time', val: '96%' },
+                  { color: LP.accent2, label: 'Pipeline', val: '64%' },
+                ].map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.color, boxShadow: `0 0 5px ${item.color}`, display: 'inline-block', flexShrink: 0 }} />
+                    <span style={{ fontSize: 10, color: LP.statLabel }}>{item.label}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: LP.statVal, marginLeft: 2 }}>{item.val}</span>
+                  </div>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* ── LIVE METRICS + PROJECT BOARD CARD ── */}
+          {/* ── DELIVERY PIPELINE CARD ── */}
           <div
             style={{
-              position:'relative', zIndex:2,
-              background: isDark ? 'rgba(6,182,212,0.04)' : LP.cardBg,
-              border: `1px solid ${LP.cardBorder}`,
-              borderRadius:16, padding:'18px 20px',
-              marginTop:28, backdropFilter:'blur(24px)',
-              boxShadow: isDark ? `0 4px 36px rgba(6,182,212,0.07)` : `0 4px 24px rgba(2,132,199,0.06)`,
-              animation:'alp-fadeUp 0.6s 0.65s ease both, alp-cardGlow 5s 2s ease-in-out infinite',
+              position: 'relative',
+              zIndex: 2,
+              background: LP.cardBg,
+              border: LP.cardBorder,
+              borderRadius: 16,
+              padding: '16px 18px',
+              backdropFilter: 'blur(20px)',
+              animation: 'alp-fadeUp 0.6s 0.62s ease both, alp-cardGlow 5s 1.5s ease-in-out infinite',
+              boxShadow: isDark ? '0 4px 32px rgba(6,182,212,0.07)' : '0 4px 24px rgba(6,182,212,0.06)',
+              marginTop: 12,
             }}
           >
-            {/* Card header */}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-              <span style={{ fontSize:9, letterSpacing:'0.15em', color:LP.statLabel, textTransform:'uppercase', fontWeight:600 }}>LIVE PROJECT BOARD</span>
-              <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:8.5, color:'#4ade80', background:'rgba(74,222,128,0.09)', border:'1px solid rgba(74,222,128,0.18)', borderRadius:999, padding:'2px 7px' }}>
-                <span style={{ width:4.5, height:4.5, borderRadius:'50%', background:'#4ade80', display:'inline-block', animation:'alp-pulse 2s infinite' }} /> LIVE
+            {/* Header row */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <span style={{ fontSize: 9, letterSpacing: '0.14em', color: LP.statLabel, textTransform: 'uppercase' }}>DELIVERY PIPELINE</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: 999, padding: '2px 7px' }}>
+                <LiveDot size={5} /> LIVE
               </span>
             </div>
-            {/* Stat pills row */}
-            <div style={{ display:'flex', gap:6, marginBottom:14 }}>
-              {[
-                { val:stat1, label:'Projects', color:LP.accent },
-                { val:stat2, label:'Avg ETA',  color:LP.accent2 },
-                { val:stat3, label:'On-time',  color:LP.accent3 },
-              ].map((s, i) => (
-                <div key={i} style={{ flex:1, background:LP.statRingBg, border:`1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(2,132,199,0.1)'}`, borderRadius:10, padding:'10px 6px', textAlign:'center' }}>
-                  <div style={{ fontSize:17, fontWeight:900, color:s.color, lineHeight:1, letterSpacing:'-0.5px' }}>{s.val}</div>
-                  <div style={{ fontSize:9, color:LP.statLabel, marginTop:3, letterSpacing:'0.04em' }}>{s.label}</div>
-                </div>
-              ))}
-            </div>
-            {/* Mini project board rows */}
-            <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
-              {BOARD_ROWS.map((row, i) => (
-                <div key={i} style={{ display:'flex', alignItems:'center', gap:10, background:LP.boardCardBg, border:`1px solid ${LP.boardCardBorder}`, borderRadius:9, padding:'8px 11px', animation:`alp-fadeUp 0.5s ${0.7 + i*0.1}s ease both` }}>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:10.5, fontWeight:600, color:LP.statVal, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', marginBottom:4 }}>{row.name}</div>
-                    <div style={{ height:3.5, borderRadius:999, background:LP.progressTrack, overflow:'hidden' }}>
-                      <div style={{ height:'100%', width:`${row.progress}%`, borderRadius:999, background:`linear-gradient(90deg, ${LP.accent}, ${LP.accent3})`, boxShadow:`0 0 6px ${LP.trackGlow}`, animation:'alp-shimmer 3s 1s linear infinite', backgroundSize:'200% auto' }} />
-                    </div>
+
+            {/* 4 Pipeline stages */}
+            {[
+              { stage: 'Intake',   pct: 100, count: '142 tasks',  color: LP.accent3, delay: 0   },
+              { stage: 'Build',    pct: 78,  count: '89 active',  color: LP.accent1, delay: 0.1 },
+              { stage: 'QA / UAT', pct: 55, count: '37 pending',  color: LP.accent2, delay: 0.2 },
+              { stage: 'Deploy',   pct: 32,  count: '12 queued',  color: LP.accent4, delay: 0.3 },
+            ].map((item, i) => (
+              <div key={i} style={{ marginBottom: i < 3 ? 10 : 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.color, display: 'inline-block', boxShadow: `0 0 5px ${item.color}80`, animation: 'alp-pulse 2s infinite', animationDelay: `${item.delay}s` }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: LP.statVal }}>{item.stage}</span>
                   </div>
-                  <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:2, flexShrink:0 }}>
-                    <span style={{ fontSize:9.5, fontWeight:700, color:LP.statVal }}>{row.progress}%</span>
-                    <span style={{ fontSize:8, color:row.statusColor, background:`${row.statusColor}18`, borderRadius:999, padding:'1px 6px', fontWeight:600 }}>{row.status}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 9, color: LP.statLabel }}>{item.count}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: item.color }}>{item.pct}%</span>
                   </div>
                 </div>
+                <div style={{ height: 5, borderRadius: 99, background: LP.ringTrack, overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      width: `${item.pct}%`,
+                      height: '100%',
+                      borderRadius: 99,
+                      background: `linear-gradient(90deg, ${item.color}cc, ${item.color})`,
+                      animation: `alp-data-float ${2.8 + i * 0.4}s ease-in-out infinite`,
+                      animationDelay: `${item.delay}s`,
+                      boxShadow: `0 0 6px ${item.color}60`,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+
+            {/* Sparkline footer */}
+            <div style={{ marginTop: 14, display: 'flex', gap: 2, alignItems: 'flex-end', height: 20 }}>
+              {[55,72,48,85,62,93,78,100,82,97,68,90].map((h, i) => (
+                <div
+                  key={i}
+                  style={{
+                    flex: 1,
+                    height: `${h}%`,
+                    borderRadius: 2,
+                    background: `linear-gradient(to top, ${LP.sparkTop}, ${LP.sparkBot})`,
+                    animation: `alp-data-float ${2.4 + (i % 3) * 0.45}s ease-in-out infinite`,
+                    animationDelay: `${i * 0.11}s`,
+                  }}
+                />
               ))}
             </div>
-            {/* Updated footer */}
-            <div style={{ marginTop:10, display:'flex', alignItems:'center', gap:5, fontSize:8.5, color:LP.statLabel }}>
-              <span style={{ width:5, height:5, borderRadius:'50%', background:'#4ade80', display:'inline-block', animation:'alp-pulse 2s infinite' }} />
-              Updated just now · {new Date().toLocaleDateString('en-US', { month:'short', day:'numeric' })}
+            <div style={{ marginTop: 7, display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: LP.statLabel }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', display: 'inline-block', animation: 'alp-pulse 2s infinite' }} />
+              Updated just now
             </div>
           </div>
 
           {/* ── FOOTER ── */}
-          <div style={{ position:'relative', zIndex:2, fontSize:10, color:LP.footerColor, display:'flex', alignItems:'center', gap:8, marginTop:24 }}>
-            <span style={{ display:'inline-block', width:6, height:6, borderRadius:'50%', background:LP.accent, boxShadow:`0 0 6px ${LP.accent}88` }} />
+          <div
+            style={{
+              position: 'relative',
+              zIndex: 2,
+              fontSize: 10,
+              color: LP.footerColor,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: LP.liveFooterDot,
+                boxShadow: `0 0 7px ${LP.liveFooterGlow}`,
+                animation: 'alp-pulse 2.4s infinite',
+              }}
+            />
             Secure · Enterprise-ready · Magnit Internal Use Only
           </div>
         </div>

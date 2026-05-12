@@ -11,6 +11,8 @@ import ArrowForwardRounded from '@mui/icons-material/ArrowForwardRounded'
 import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded'
 import AutorenewRounded from '@mui/icons-material/AutorenewRounded'
 import LockRounded from '@mui/icons-material/LockRounded'
+import BoltRounded from '@mui/icons-material/BoltRounded'
+import InsightsRounded from '@mui/icons-material/InsightsRounded'
 import Inventory2Rounded from '@mui/icons-material/Inventory2Rounded'
 import TimerRounded from '@mui/icons-material/TimerRounded'
 import TaskAltRounded from '@mui/icons-material/TaskAltRounded'
@@ -133,67 +135,67 @@ export const LoginPage: React.FC = () => {
 
   /* ── Left panel design tokens — reactive to theme ── */
   const LP = isDark ? {
-    bg: 'linear-gradient(155deg, #04090f 0%, #070e1c 40%, #080f20 100%)',
-    accent1: '#06b6d4',        // cyan
-    accent2: '#818cf8',        // indigo
-    accent3: '#34d399',        // emerald
-    accent4: '#f59e0b',        // amber
-    headline: '#e2eeff',
-    sub: 'rgba(180,210,255,0.5)',
-    eyebrow: 'rgba(99,210,255,0.65)',
-    badgeBg: 'rgba(6,182,212,0.12)',
-    badgeBorder: 'rgba(6,182,212,0.28)',
-    badgeColor: '#22d3ee',
-    cardBg: 'rgba(6,182,212,0.05)',
-    cardBorder: '1px solid rgba(6,182,212,0.14)',
-    gridColor: 'rgba(6,182,212,0.055)',
-    ringTrack: 'rgba(255,255,255,0.06)',
-    footerColor: 'rgba(200,230,255,0.22)',
-    liveFooterDot: '#22d3ee',
-    liveFooterGlow: 'rgba(6,182,212,0.6)',
-    sparkTop: 'rgba(6,182,212,0.7)',
-    sparkBot: 'rgba(52,211,153,0.4)',
-    statVal: '#e2eeff',
-    statLabel: 'rgba(180,210,255,0.48)',
-    statIcon: '#06b6d4' as string,
-    statBg: 'rgba(6,182,212,0.08)',
-    statBorder: '1px solid rgba(6,182,212,0.18)',
-    pipelineBg: 'rgba(255,255,255,0.04)',
-    pipelineBorder: '1px solid rgba(255,255,255,0.08)',
-    blob1: 'radial-gradient(circle, rgba(6,182,212,0.18) 0%, transparent 70%)',
-    blob2: 'radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)',
-    blob3: 'radial-gradient(circle, rgba(52,211,153,0.10) 0%, transparent 70%)',
+    bg: 'linear-gradient(145deg, #060b18 0%, #0a1628 45%, #0b1e3a 100%)',
+    headlineColor: '#f0f8ff',
+    subColor: 'rgba(180,210,255,0.55)',
+    badgeBg: 'rgba(14,165,233,0.12)',
+    badgeBorder: 'rgba(14,165,233,0.3)',
+    badgeColor: '#38bdf8',
+    footerColor: 'rgba(255,255,255,0.22)',
+    nodeLine: 'rgba(14,165,233,0.35)',
+    nodeGlow: '#0ea5e9',
+    statVal: '#f0f8ff',
+    statLabel: 'rgba(180,210,255,0.5)',
+    statIcon: '#fff' as string,
+    statBg: 'rgba(14,165,233,0.08)',
+    statBorder: '1px solid rgba(14,165,233,0.18)',
+    cardBg: 'rgba(255,255,255,0.035)',
+    cardBorder: '1px solid rgba(255,255,255,0.08)',
+    liveMetricsLabel: 'rgba(180,210,255,0.4)',
+    sparkTop: 'rgba(14,165,233,0.6)',
+    sparkBot: 'rgba(45,212,191,0.4)',
+    eyebrow: 'rgba(56,189,248,0.7)',
+    chipBg: 'rgba(255,255,255,0.05)',
+    chipBorder: '1px solid rgba(255,255,255,0.09)',
+    chipColor: 'rgba(200,230,255,0.65)',
+    chipIconColor: '#fff' as string,
+    blob1: 'radial-gradient(circle, rgba(14,165,233,0.18) 0%, transparent 70%)',
+    blob2: 'radial-gradient(circle, rgba(99,102,241,0.14) 0%, transparent 70%)',
+    blob3: 'radial-gradient(circle, rgba(13,148,136,0.12) 0%, transparent 70%)',
+    gridColor: 'rgba(99,179,237,0.06)',
+    liveFooterDot: 'rgba(14,165,233,0.4)',
+    liveFooterGlow: 'rgba(14,165,233,0.5)',
   } : {
-    bg: 'linear-gradient(155deg, #f0f7ff 0%, #e8f2fb 40%, #ddeefa 100%)',
-    accent1: '#0284c7',
-    accent2: '#6366f1',
-    accent3: '#059669',
-    accent4: '#d97706',
-    headline: '#0c1a2e',
-    sub: 'rgba(15,23,42,0.52)',
-    eyebrow: 'rgba(2,132,199,0.75)',
-    badgeBg: 'rgba(2,132,199,0.09)',
-    badgeBorder: 'rgba(2,132,199,0.22)',
+    bg: 'linear-gradient(145deg, #f0f7ff 0%, #e4eef9 45%, #daedfb 100%)',
+    headlineColor: '#0f172a',
+    subColor: 'rgba(15,23,42,0.55)',
+    badgeBg: 'rgba(14,165,233,0.09)',
+    badgeBorder: 'rgba(14,165,233,0.25)',
     badgeColor: '#0284c7',
-    cardBg: 'rgba(255,255,255,0.82)',
-    cardBorder: '1px solid rgba(6,182,212,0.16)',
-    gridColor: 'rgba(6,182,212,0.045)',
-    ringTrack: 'rgba(0,0,0,0.07)',
-    footerColor: 'rgba(15,23,42,0.32)',
-    liveFooterDot: '#0284c7',
-    liveFooterGlow: 'rgba(2,132,199,0.45)',
-    sparkTop: 'rgba(2,132,199,0.6)',
-    sparkBot: 'rgba(5,150,105,0.35)',
-    statVal: '#0c1a2e',
-    statLabel: 'rgba(15,23,42,0.48)',
+    footerColor: 'rgba(15,23,42,0.35)',
+    nodeLine: 'rgba(14,165,233,0.28)',
+    nodeGlow: '#0284c7',
+    statVal: '#0f172a',
+    statLabel: 'rgba(15,23,42,0.5)',
     statIcon: '#0284c7' as string,
-    statBg: 'rgba(2,132,199,0.07)',
-    statBorder: '1px solid rgba(2,132,199,0.15)',
-    pipelineBg: 'rgba(255,255,255,0.7)',
-    pipelineBorder: '1px solid rgba(6,182,212,0.14)',
-    blob1: 'radial-gradient(circle, rgba(6,182,212,0.13) 0%, transparent 70%)',
-    blob2: 'radial-gradient(circle, rgba(99,102,241,0.10) 0%, transparent 70%)',
-    blob3: 'radial-gradient(circle, rgba(52,211,153,0.08) 0%, transparent 70%)',
+    statBg: 'rgba(14,165,233,0.07)',
+    statBorder: '1px solid rgba(14,165,233,0.15)',
+    cardBg: 'rgba(255,255,255,0.75)',
+    cardBorder: '1px solid rgba(14,165,233,0.12)',
+    liveMetricsLabel: 'rgba(15,23,42,0.4)',
+    sparkTop: 'rgba(14,165,233,0.5)',
+    sparkBot: 'rgba(45,212,191,0.35)',
+    eyebrow: 'rgba(2,132,199,0.8)',
+    chipBg: 'rgba(14,165,233,0.06)',
+    chipBorder: '1px solid rgba(14,165,233,0.14)',
+    chipColor: 'rgba(15,23,42,0.65)',
+    chipIconColor: '#0284c7' as string,
+    blob1: 'radial-gradient(circle, rgba(14,165,233,0.12) 0%, transparent 70%)',
+    blob2: 'radial-gradient(circle, rgba(99,102,241,0.09) 0%, transparent 70%)',
+    blob3: 'radial-gradient(circle, rgba(13,148,136,0.08) 0%, transparent 70%)',
+    gridColor: 'rgba(14,165,233,0.05)',
+    liveFooterDot: 'rgba(14,165,233,0.5)',
+    liveFooterGlow: 'rgba(14,165,233,0.6)',
   }
 
   const [ssoEnabled, setSsoEnabled] = useState(false)
@@ -427,58 +429,112 @@ export const LoginPage: React.FC = () => {
           className="flex lg:hidden flex-col"
           style={{
             background: isDark
-              ? 'linear-gradient(160deg, #04090f 0%, #070e1c 60%, #080f20 100%)'
+              ? 'linear-gradient(160deg, #020c1b 0%, #041428 60%, #051a35 100%)'
               : 'linear-gradient(160deg, #e8f4fd 0%, #dbeafe 60%, #cfe9fb 100%)',
             position: 'relative',
             zIndex: 2,
             overflow: 'hidden',
           }}
         >
-          <GridOverlay size={28} color={LP.gridColor} />
-          <Blob w={200} h={200} color={LP.blob1} top={-60} left={-60} opacity={1} anim="alp-drift1 12s ease-in-out infinite" blur={70} />
-          <Blob w={150} h={150} color={LP.blob2} bottom={-40} right={-30} opacity={1} anim="alp-drift2 14s ease-in-out infinite" blur={60} />
+          {/* Glow blobs */}
+          <Blob w={220} h={220} color={LP.blob1} top={-70} left={-70} opacity={1} anim="alp-drift1 12s ease-in-out infinite" blur={70} />
+          <Blob w={170} h={170} color={LP.blob2} bottom={-40} right={-40} opacity={1} anim="alp-drift2 14s ease-in-out infinite" blur={70} />
+          <GridOverlay size={32} color={LP.gridColor} />
 
-          <div style={{ position: 'relative', zIndex: 2, padding: '28px 22px 0' }}>
-            {/* Eyebrow */}
-            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', color: LP.eyebrow, textTransform: 'uppercase', marginBottom: 8, animation: 'alp-fadeUp 0.5s 0.1s ease both' }}>
-              PROJECT DELIVERY TRACKER
+          <div style={{ position: 'relative', zIndex: 2, padding: '32px 24px 20px' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: LP.badgeBg,
+                border: `1px solid ${LP.badgeBorder}`,
+                borderRadius: 999,
+                padding: '3px 10px',
+                fontSize: 10,
+                color: LP.badgeColor,
+                marginBottom: 14,
+                animation: 'alp-fadeUp 0.5s 0.18s ease both',
+              }}
+            >
+              <LiveDot /> All systems operational
             </div>
-            {/* Badge */}
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: LP.badgeBg, border: `1px solid ${LP.badgeBorder}`, borderRadius: 999, padding: '3px 9px', fontSize: 10, color: LP.badgeColor, marginBottom: 10, animation: 'alp-fadeUp 0.5s 0.18s ease both' }}>
-              <LiveDot /> Systems nominal
+            <div
+              style={{
+                fontSize: 22,
+                fontWeight: 800,
+                color: LP.headlineColor,
+                marginBottom: 6,
+                lineHeight: 1.18,
+                animation: 'alp-fadeUp 0.5s 0.28s ease both',
+              }}
+            >
+              Data.{' '}
+              <span
+                style={{
+                  background: 'linear-gradient(90deg, #22d3ee, #2dd4bf)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+              >
+                Intelligence.
+              </span>{' '}
+              Delivered.
             </div>
-            {/* Headline */}
-            <div style={{ fontSize: 20, fontWeight: 900, color: LP.headline, lineHeight: 1.2, letterSpacing: '-0.5px', animation: 'alp-fadeUp 0.5s 0.26s ease both' }}>
-              Mission{' '}
-              <span style={{ background: `linear-gradient(90deg, ${LP.accent1}, ${LP.accent3})`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-                Control
-              </span>
+            <div
+              style={{
+                fontSize: 12,
+                color: LP.subColor,
+                lineHeight: 1.6,
+                animation: 'alp-fadeUp 0.5s 0.38s ease both',
+              }}
+            >
+              Real-time pipeline visibility for fast-moving teams.
             </div>
-            <div style={{ fontSize: 11, color: LP.sub, marginTop: 5, marginBottom: 14, lineHeight: 1.5, animation: 'alp-fadeUp 0.5s 0.34s ease both' }}>
-              Intake-to-delivery visibility for fast teams.
-            </div>
-
-            {/* Mini pipeline stages — horizontal scroll strip */}
-            <div style={{ display: 'flex', gap: 6, marginBottom: 0, animation: 'alp-fadeUp 0.5s 0.42s ease both', overflowX: 'auto', paddingBottom: 4 }}>
-              {[
-                { label: 'Intake', pct: 100, color: LP.accent3 },
-                { label: 'Build', pct: 78, color: LP.accent1 },
-                { label: 'QA', pct: 55, color: LP.accent2 },
-                { label: 'Deploy', pct: 32, color: LP.accent4 },
-              ].map((stage, i) => (
-                <div key={i} style={{ minWidth: 68, background: LP.pipelineBg, border: LP.pipelineBorder, borderRadius: 10, padding: '8px 10px', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
-                  <div style={{ fontSize: 9, color: LP.statLabel, letterSpacing: '0.06em', marginBottom: 4 }}>{stage.label}</div>
-                  <div style={{ height: 4, borderRadius: 99, background: LP.ringTrack, marginBottom: 4, overflow: 'hidden' }}>
-                    <div style={{ width: `${stage.pct}%`, height: '100%', borderRadius: 99, background: stage.color, animation: `alp-data-float ${2 + i * 0.4}s ease-in-out infinite`, animationDelay: `${i * 0.15}s` }} />
-                  </div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: LP.statVal }}>{stage.pct}<span style={{ fontSize: 9, color: LP.statLabel }}>%</span></div>
-                </div>
+            {/* Sparkline bar */}
+            <div
+              style={{
+                marginTop: 18,
+                marginBottom: 8,
+                display: 'flex',
+                gap: 2,
+                alignItems: 'flex-end',
+                height: 16,
+                width: '100%',
+                maxWidth: 220,
+                animation: 'alp-fadeUp 0.5s 0.48s ease both',
+              }}
+            >
+              {[40,65,50,80,60,90,75,100,85,95,70,88].map((h,i) => (
+                <div
+                  key={i}
+                  style={{
+                    flex: 1,
+                    height: `${h}%`,
+                    borderRadius: 2,
+                    background: `linear-gradient(to top, ${LP.sparkTop}, ${LP.sparkBot})`,
+                    animation: `alp-data-float ${2.5 + (i % 3) * 0.5}s ease-in-out infinite`,
+                    animationDelay: `${i * 0.12}s`,
+                  }}
+                />
               ))}
             </div>
           </div>
-
-          {/* Mobile stat strip */}
-          <div style={{ display: 'flex', gap: 8, padding: '14px 22px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(6,182,212,0.12)'}`, background: isDark ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.65)', zIndex: 2, position: 'relative', marginTop: 14 }}>
+          {/* Mobile stats strip */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              padding: '16px 24px',
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              background: isDark
+                ? 'rgba(0,0,0,0.15)'
+                : 'rgba(255,255,255,0.7)',
+              zIndex: 2,
+              position: 'relative',
+            }}
+          >
             <StatPill val={stat1} label="Projects" icon={<Inventory2Rounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
             <StatPill val={stat2} label="Avg ETA" icon={<TimerRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
             <StatPill val={stat3} label="On-time" icon={<TaskAltRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
@@ -492,90 +548,123 @@ export const LoginPage: React.FC = () => {
             flex: 1,
             minHeight: 560,
             position: 'relative',
-            background: LP.bg,
+            background: isDark
+              ? 'linear-gradient(150deg, #020c1b 0%, #041428 50%, #061930 100%)'
+              : 'linear-gradient(150deg, #e8f4fd 0%, #dbeafe 60%, #cfe9fb 100%)',
             padding: '48px 44px',
             transition: 'background 0.4s',
             overflow: 'hidden',
           }}
         >
-          {/* ── BG layers ── */}
-          <GridOverlay size={28} color={LP.gridColor} />
-          <Blob w={380} h={380} color={LP.blob1} top={-120} left={-120} opacity={1} anim="alp-drift1 15s ease-in-out infinite" blur={110} />
-          <Blob w={300} h={300} color={LP.blob2} bottom={-90} right={-90} opacity={1} anim="alp-drift2 17s ease-in-out infinite" blur={100} />
-          <Blob w={220} h={220} color={LP.blob3} top="38%" left="42%" opacity={1} anim="alp-drift3 12s ease-in-out infinite" blur={80} />
-
-          {/* ── Vertical ticker strip (right edge) ── */}
+          {/* BG layers */}
+          <GridOverlay size={32} color={LP.gridColor} />
+          <Blob w={350} h={350} color={LP.blob1} top={-100} left={-100} opacity={1} anim="alp-drift1 14s ease-in-out infinite" blur={100} />
+          <Blob w={280} h={280} color={LP.blob2} bottom={-80} right={-80} opacity={1} anim="alp-drift2 16s ease-in-out infinite" blur={90} />
+          <Blob w={200} h={200} color={LP.blob3} top="40%" left="45%" opacity={1} anim="alp-drift3 11s ease-in-out infinite" blur={70} />
+          {/* Scan line */}
           <div
             style={{
               position: 'absolute',
-              right: 18,
-              top: 60,
-              bottom: 60,
-              width: 2,
-              borderRadius: 99,
-              background: isDark ? 'rgba(6,182,212,0.09)' : 'rgba(6,182,212,0.12)',
-              pointerEvents: 'none',
-              zIndex: 1,
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '35%',
-                background: `linear-gradient(to bottom, transparent, ${LP.accent1}, transparent)`,
-                animation: 'alp-scan-line 4s linear infinite',
-                opacity: 0.7,
-              }}
-            />
-          </div>
-
-          {/* ── Horizontal scan line ── */}
-          <div
-            style={{
-              position: 'absolute',
-              left: 0, right: 0, top: 0,
-              height: 140,
-              background: `linear-gradient(to bottom, transparent, rgba(6,182,212,0.04) 50%, transparent)`,
-              animation: 'alp-scan-line 12s linear infinite',
+              left: 0,
+              right: 0,
+              top: 0,
+              height: 160,
+              background: 'linear-gradient(to bottom, transparent, rgba(6,182,212,0.05) 50%, transparent)',
+              animation: 'alp-scan-line 10s linear infinite',
               pointerEvents: 'none',
               zIndex: 1,
             }}
           />
-
-          {/* ── TOP SECTION ── */}
+          {/* Data flow SVG */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              zIndex: 1,
+            }}
+          >
+            <svg width="100%" height="100%" style={{ opacity: 0.6 }}>
+              {/* 5 horizontal dashed lines */}
+              {[100,165,230,295,360].map((y, i) => (
+                <line
+                  key={i}
+                  x1="2%"
+                  y1={y}
+                  x2="98%"
+                  y2={y}
+                  stroke={LP.nodeLine}
+                  strokeWidth="1"
+                  strokeDasharray="6 14"
+                  style={{
+                    animation: `alp-flow-dash ${3 + i}s linear infinite`,
+                    animationDelay: `${i * 0.3}s`,
+                  }}
+                />
+              ))}
+              {/* 12 node circles */}
+              {[
+                [50,100],[140,165],[90,230],[220,295],[170,165],[300,100],
+                [260,230],[340,360],[80,360],[200,100],[320,230],[150,295]
+              ].map(([cx,cy],i) => (
+                <circle
+                  key={i}
+                  cx={cx}
+                  cy={cy}
+                  r={3.5}
+                  fill={LP.nodeGlow}
+                  style={{
+                    animation: 'alp-node-pulse 2.8s ease-in-out infinite',
+                    animationDelay: `${i * 0.25}s`,
+                    transformOrigin: `${cx}px ${cy}px`,
+                  }}
+                />
+              ))}
+              {/* 4 data packets */}
+              {[0,1,2,3].map(i => (
+                <circle
+                  key={i}
+                  r={2}
+                  fill="#22d3ee"
+                  opacity={0.7}
+                  style={{
+                    animation: `alp-flow-dash ${2.5 + i * 0.7}s linear infinite`,
+                    animationDelay: `${i * 0.5}s`,
+                  }}
+                >
+                  <animate
+                    attributeName="cx"
+                    values="50;340"
+                    dur={`${2.5 + i * 0.7}s`}
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="cy"
+                    values="100;360"
+                    dur={`${2.5 + i * 0.7}s`}
+                    repeatCount="indefinite"
+                  />
+                </circle>
+              ))}
+            </svg>
+          </div>
+          {/* TOP SECTION */}
           <div style={{ position: 'relative', zIndex: 2 }}>
             {/* Eyebrow */}
             <div
               style={{
                 fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: '0.2em',
+                fontWeight: 600,
+                letterSpacing: '0.18em',
                 color: LP.eyebrow,
                 textTransform: 'uppercase',
-                marginBottom: 14,
-                animation: 'alp-fadeUp 0.6s 0.15s ease both',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 7,
+                marginBottom: 16,
+                animation: 'alp-fadeUp 0.6s 0.2s ease both',
               }}
             >
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: 18,
-                  height: 2,
-                  borderRadius: 99,
-                  background: `linear-gradient(90deg, ${LP.accent1}, ${LP.accent2})`,
-                }}
-              />
-              PROJECT DELIVERY TRACKER
+              DATA AS A SERVICE
             </div>
-
-            {/* Live badge */}
+            {/* Status badge */}
             <div
               style={{
                 display: 'inline-flex',
@@ -587,196 +676,191 @@ export const LoginPage: React.FC = () => {
                 padding: '4px 12px',
                 fontSize: 11,
                 color: LP.badgeColor,
-                marginBottom: 22,
-                animation: 'alp-fadeUp 0.6s 0.22s ease both',
+                marginBottom: 24,
+                animation: 'alp-fadeUp 0.6s 0.25s ease both',
               }}
             >
-              <LiveDot /> All systems nominal
+              <LiveDot /> All systems operational
             </div>
-
             {/* Headline */}
             <div
               style={{
-                fontSize: 38,
+                fontSize: 36,
                 fontWeight: 900,
-                lineHeight: 1.12,
-                letterSpacing: '-1.5px',
-                color: LP.headline,
-                animation: 'alp-fadeUp 0.6s 0.3s ease both',
+                lineHeight: 1.15,
+                letterSpacing: '-1px',
+                color: LP.headlineColor,
+                animation: 'alp-fadeUp 0.6s 0.32s ease both',
               }}
             >
-              <div>Mission</div>
+              <div>Data.</div>
               <div>
                 <span
                   style={{
-                    background: `linear-gradient(95deg, ${LP.accent1} 0%, ${LP.accent2} 50%, ${LP.accent3} 100%)`,
+                    background: 'linear-gradient(90deg, #22d3ee, #2dd4bf)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                     backgroundClip: 'text',
                   }}
                 >
-                  Control.
+                  Intelligence.
                 </span>
               </div>
-              <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.5px', marginTop: 2 }}>Delivered.</div>
+              <div>Delivered.</div>
             </div>
-
             {/* Sub */}
             <div
               style={{
                 fontSize: 13,
-                color: LP.sub,
+                color: LP.subColor,
                 lineHeight: 1.75,
-                maxWidth: 270,
-                marginTop: 12,
-                animation: 'alp-fadeUp 0.6s 0.4s ease both',
+                maxWidth: 280,
+                marginTop: 14,
+                animation: 'alp-fadeUp 0.6s 0.45s ease both',
               }}
             >
-              End-to-end visibility from intake to deployment — for teams that operate at scale.
+              Real-time pipeline visibility from intake to delivery — for teams that move fast.
             </div>
-
-            {/* ── DELIVERY RING CLUSTER (SVG) ── */}
+            {/* Feature chips */}
             <div
               style={{
-                marginTop: 28,
-                position: 'relative',
-                width: 156,
-                height: 156,
-                animation: 'alp-fadeUp 0.6s 0.5s ease both',
+                display: 'flex',
+                gap: 8,
+                marginTop: 24,
+                animation: 'alp-fadeUp 0.6s 0.55s ease both',
               }}
             >
-              <svg width="156" height="156" viewBox="0 0 156 156">
-                {/* Ring 1 — Projects (outermost) */}
-                <circle cx="78" cy="78" r="68" fill="none" stroke={LP.ringTrack} strokeWidth="7" />
-                <circle
-                  cx="78" cy="78" r="68"
-                  fill="none"
-                  stroke={LP.accent1}
-                  strokeWidth="7"
-                  strokeLinecap="round"
-                  strokeDasharray={`${2 * Math.PI * 68}`}
-                  strokeDashoffset={`${2 * Math.PI * 68 * (1 - 0.82)}`}
-                  transform="rotate(-90 78 78)"
-                  style={{ filter: `drop-shadow(0 0 5px ${LP.accent1})`, animation: 'alp-node-pulse 3.2s ease-in-out infinite' }}
-                />
-                {/* Ring 2 — On-time % */}
-                <circle cx="78" cy="78" r="54" fill="none" stroke={LP.ringTrack} strokeWidth="6" />
-                <circle
-                  cx="78" cy="78" r="54"
-                  fill="none"
-                  stroke={LP.accent3}
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                  strokeDasharray={`${2 * Math.PI * 54}`}
-                  strokeDashoffset={`${2 * Math.PI * 54 * (1 - 0.96)}`}
-                  transform="rotate(-90 78 78)"
-                  style={{ filter: `drop-shadow(0 0 4px ${LP.accent3})`, animation: 'alp-node-pulse 2.8s 0.4s ease-in-out infinite' }}
-                />
-                {/* Ring 3 — Pipeline fill (innermost) */}
-                <circle cx="78" cy="78" r="40" fill="none" stroke={LP.ringTrack} strokeWidth="5" />
-                <circle
-                  cx="78" cy="78" r="40"
-                  fill="none"
-                  stroke={LP.accent2}
-                  strokeWidth="5"
-                  strokeLinecap="round"
-                  strokeDasharray={`${2 * Math.PI * 40}`}
-                  strokeDashoffset={`${2 * Math.PI * 40 * (1 - 0.64)}`}
-                  transform="rotate(-90 78 78)"
-                  style={{ filter: `drop-shadow(0 0 4px ${LP.accent2})`, animation: 'alp-node-pulse 3.6s 0.8s ease-in-out infinite' }}
-                />
-                {/* Center label */}
-                <text x="78" y="72" textAnchor="middle" style={{ fill: LP.headline, fontSize: 18, fontWeight: 800, fontFamily: 'inherit' }}>96%</text>
-                <text x="78" y="88" textAnchor="middle" style={{ fill: LP.sub as string, fontSize: 9, fontFamily: 'inherit', letterSpacing: '0.06em' }}>ON-TIME</text>
-              </svg>
-
-              {/* Ring legend */}
-              <div
+              <span
                 style={{
-                  position: 'absolute',
-                  right: -90,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
+                  fontSize: 11,
+                  fontWeight: 500,
+                  padding: '4px 12px',
+                  borderRadius: 999,
+                  background: LP.chipBg,
+                  border: LP.chipBorder,
+                  color: LP.chipColor,
                   display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
+                  alignItems: 'center',
+                  gap: 6,
+                  letterSpacing: '0.02em',
+                  transition: 'background 0.35s, color 0.35s, border-color 0.35s',
                 }}
               >
-                {[
-                  { color: LP.accent1, label: 'Projects', val: '82%' },
-                  { color: LP.accent3, label: 'On-time', val: '96%' },
-                  { color: LP.accent2, label: 'Pipeline', val: '64%' },
-                ].map((item, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.color, boxShadow: `0 0 5px ${item.color}`, display: 'inline-block', flexShrink: 0 }} />
-                    <span style={{ fontSize: 10, color: LP.statLabel }}>{item.label}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: LP.statVal, marginLeft: 2 }}>{item.val}</span>
-                  </div>
-                ))}
-              </div>
+                <BoltRounded sx={{ color: LP.chipIconColor, fontSize: 14, verticalAlign: 'middle' }} /> Live tracking
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  padding: '4px 12px',
+                  borderRadius: 999,
+                  background: LP.chipBg,
+                  border: LP.chipBorder,
+                  color: LP.chipColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  letterSpacing: '0.02em',
+                  transition: 'background 0.35s, color 0.35s, border-color 0.35s',
+                }}
+              >
+                <LockRounded sx={{ color: LP.chipIconColor, fontSize: 14, verticalAlign: 'middle' }} /> Enterprise SSO
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  padding: '4px 12px',
+                  borderRadius: 999,
+                  background: LP.chipBg,
+                  border: LP.chipBorder,
+                  color: LP.chipColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  letterSpacing: '0.02em',
+                  transition: 'background 0.35s, color 0.35s, border-color 0.35s',
+                }}
+              >
+                <InsightsRounded sx={{ color: LP.chipIconColor, fontSize: 14, verticalAlign: 'middle' }} /> DaaS analytics
+              </span>
             </div>
           </div>
-
-          {/* ── DELIVERY PIPELINE CARD ── */}
+          {/* LIVE METRICS CARD */}
           <div
             style={{
               position: 'relative',
               zIndex: 2,
-              background: LP.cardBg,
-              border: LP.cardBorder,
+              background: isDark
+                ? 'rgba(6,182,212,0.05)'
+                : 'rgba(255,255,255,0.8)',
+              border: isDark
+                ? '1px solid rgba(6,182,212,0.15)'
+                : '1px solid rgba(6,182,212,0.18)',
               borderRadius: 16,
-              padding: '16px 18px',
+              padding: '18px 20px',
+              marginTop: 36,
               backdropFilter: 'blur(20px)',
-              animation: 'alp-fadeUp 0.6s 0.62s ease both, alp-cardGlow 5s 1.5s ease-in-out infinite',
-              boxShadow: isDark ? '0 4px 32px rgba(6,182,212,0.07)' : '0 4px 24px rgba(6,182,212,0.06)',
-              marginTop: 12,
+              animation:
+                'alp-fadeUp 0.6s 0.68s ease both, alp-cardGlow 4.5s 1.5s ease-in-out infinite',
+              boxShadow: isDark
+                ? '0 4px 32px rgba(6,182,212,0.08)'
+                : '0 4px 24px rgba(6,182,212,0.06)',
             }}
           >
             {/* Header row */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <span style={{ fontSize: 9, letterSpacing: '0.14em', color: LP.statLabel, textTransform: 'uppercase' }}>DELIVERY PIPELINE</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: 999, padding: '2px 7px' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 12,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 9,
+                  letterSpacing: '0.14em',
+                  color: LP.liveMetricsLabel,
+                  textTransform: 'uppercase',
+                  transition: 'color 0.35s',
+                }}
+              >
+                LIVE PLATFORM METRICS
+              </span>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 9,
+                  color: '#4ade80',
+                  background: 'rgba(74,222,128,0.1)',
+                  border: '1px solid rgba(74,222,128,0.2)',
+                  borderRadius: 999,
+                  padding: '2px 7px',
+                }}
+              >
                 <LiveDot size={5} /> LIVE
               </span>
             </div>
-
-            {/* 4 Pipeline stages */}
-            {[
-              { stage: 'Intake',   pct: 100, count: '142 tasks',  color: LP.accent3, delay: 0   },
-              { stage: 'Build',    pct: 78,  count: '89 active',  color: LP.accent1, delay: 0.1 },
-              { stage: 'QA / UAT', pct: 55, count: '37 pending',  color: LP.accent2, delay: 0.2 },
-              { stage: 'Deploy',   pct: 32,  count: '12 queued',  color: LP.accent4, delay: 0.3 },
-            ].map((item, i) => (
-              <div key={i} style={{ marginBottom: i < 3 ? 10 : 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: item.color, display: 'inline-block', boxShadow: `0 0 5px ${item.color}80`, animation: 'alp-pulse 2s infinite', animationDelay: `${item.delay}s` }} />
-                    <span style={{ fontSize: 11, fontWeight: 600, color: LP.statVal }}>{item.stage}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 9, color: LP.statLabel }}>{item.count}</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: item.color }}>{item.pct}%</span>
-                  </div>
-                </div>
-                <div style={{ height: 5, borderRadius: 99, background: LP.ringTrack, overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      width: `${item.pct}%`,
-                      height: '100%',
-                      borderRadius: 99,
-                      background: `linear-gradient(90deg, ${item.color}cc, ${item.color})`,
-                      animation: `alp-data-float ${2.8 + i * 0.4}s ease-in-out infinite`,
-                      animationDelay: `${item.delay}s`,
-                      boxShadow: `0 0 6px ${item.color}60`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-
-            {/* Sparkline footer */}
-            <div style={{ marginTop: 14, display: 'flex', gap: 2, alignItems: 'flex-end', height: 20 }}>
-              {[55,72,48,85,62,93,78,100,82,97,68,90].map((h, i) => (
+            {/* Stat pills */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <StatPill val={stat1} label="Projects" icon={<Inventory2Rounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+              <StatPill val={stat2} label="Avg ETA" icon={<TimerRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+              <StatPill val={stat3} label="On-time" icon={<TaskAltRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+            </div>
+            {/* Sparkline */}
+            <div
+              style={{
+                marginTop: 14,
+                display: 'flex',
+                gap: 2,
+                alignItems: 'flex-end',
+                height: 24,
+              }}
+            >
+              {[40,65,50,80,60,90,75,100,85,95,70,88].map((h,i) => (
                 <div
                   key={i}
                   style={{
@@ -784,19 +868,37 @@ export const LoginPage: React.FC = () => {
                     height: `${h}%`,
                     borderRadius: 2,
                     background: `linear-gradient(to top, ${LP.sparkTop}, ${LP.sparkBot})`,
-                    animation: `alp-data-float ${2.4 + (i % 3) * 0.45}s ease-in-out infinite`,
-                    animationDelay: `${i * 0.11}s`,
+                    animation: `alp-data-float ${2.5 + (i % 3) * 0.5}s ease-in-out infinite`,
+                    animationDelay: `${i * 0.12}s`,
                   }}
                 />
               ))}
             </div>
-            <div style={{ marginTop: 7, display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: LP.statLabel }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', display: 'inline-block', animation: 'alp-pulse 2s infinite' }} />
+            {/* Updated label */}
+            <div
+              style={{
+                marginTop: 8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 9,
+                color: LP.liveMetricsLabel,
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: '#4ade80',
+                  display: 'inline-block',
+                  animation: 'alp-pulse 2s infinite',
+                }}
+              />
               Updated just now
             </div>
           </div>
-
-          {/* ── FOOTER ── */}
+          {/* FOOTER */}
           <div
             style={{
               position: 'relative',
@@ -806,6 +908,7 @@ export const LoginPage: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               gap: 8,
+              marginTop: 32,
             }}
           >
             <span
@@ -815,8 +918,7 @@ export const LoginPage: React.FC = () => {
                 height: 6,
                 borderRadius: '50%',
                 background: LP.liveFooterDot,
-                boxShadow: `0 0 7px ${LP.liveFooterGlow}`,
-                animation: 'alp-pulse 2.4s infinite',
+                boxShadow: `0 0 6px ${LP.liveFooterGlow}`,
               }}
             />
             Secure · Enterprise-ready · Magnit Internal Use Only

@@ -3,8 +3,6 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLogo } from '../hooks/useLogo'
 import { useTheme } from '../contexts/ThemeContext'
 import { fetchAppSettings } from '../lib/data'
-import { useEntraSSO } from '../hooks/useEntraSSO'
-import { EntraIDSSOButton } from '../components/sso/EntraIDSSOButton'
 import LightModeRounded from '@mui/icons-material/LightModeRounded'
 import DarkModeRounded from '@mui/icons-material/DarkModeRounded'
 import VpnKeyRounded from '@mui/icons-material/VpnKeyRounded'
@@ -133,14 +131,6 @@ const StatPill = ({
 
 export const LoginPage: React.FC = () => {
   const { signIn, signInWithSSO } = useAuth()
-  const {
-    entraSettings,
-    settingsLoaded: entraSSOLoaded,
-    loading: entraLoading,
-    error: entraError,
-    clearError: clearEntraError,
-    triggerSignIn: triggerEntraSignIn,
-  } = useEntraSSO()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -282,14 +272,8 @@ export const LoginPage: React.FC = () => {
     }
   }
 
-  // Entra provider check — use Entra settings if configured, else fall back to legacy Okta path
-  const isEntraProvider    = entraSettings.provider === 'entra'
-  const effectiveSSOEnabled = isEntraProvider
-    ? (entraSettings.ssoEnabled && entraSSOLoaded)
-    : (ssoEnabled && settingsLoaded)
-  const showSSO     = effectiveSSOEnabled && !showPasswordFallback
-  const showPassword = !effectiveSSOEnabled || showPasswordFallback
-  const combinedError = error || entraError
+  const showSSO = ssoEnabled && settingsLoaded && !showPasswordFallback
+  const showPassword = !ssoEnabled || showPasswordFallback
 
   /* Right panel theme values */
   const rp = {
@@ -320,212 +304,671 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-6"
-      style={{ background: isDark ? '#0a0a12' : '#eef2f7', fontFamily: 'var(--font-sans, system-ui, sans-serif)', transition: 'background 0.35s', position: 'relative' }}
+      className="min-h-screen flex items-center justify-center"
+      style={{
+        background: isDark ? '#020817' : '#f0f4f8',
+        fontFamily: 'var(--font-sans, system-ui, sans-serif)',
+        transition: 'background 0.4s',
+        position: 'relative',
+        minHeight: '100vh',
+        width: '100vw',
+        overflow: 'hidden',
+      }}
     >
-      {/* ── Theme toggle ── */}
+      {/* Full-screen radial glow overlay */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          zIndex: 0,
+          background: isDark
+            ? 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(6,182,212,0.08) 0%, transparent 70%)'
+            : 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(6,182,212,0.06) 0%, transparent 70%)',
+        }}
+      />
+
+      {/* Theme toggle — fixed top-right */}
       <button
         onClick={toggleTheme}
         title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         style={{
-          position: 'fixed', top: 16, right: 16, zIndex: 100,
-          width: 36, height: 36, borderRadius: '50%',
-          border: isDark ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(0,0,0,0.10)',
-          background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)',
-          color: isDark ? '#94a3b8' : '#64748b',
-          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 16, transition: 'all 0.25s', backdropFilter: 'blur(8px)',
+          position: 'fixed',
+          top: 22,
+          right: 22,
+          zIndex: 100,
+          width: 72,
+          height: 32,
+          borderRadius: 999,
+          border: isDark
+            ? '1px solid rgba(6,182,212,0.25)'
+            : '1px solid rgba(0,0,0,0.12)',
+          background: isDark
+            ? 'rgba(6,182,212,0.12)'
+            : 'rgba(0,0,0,0.06)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: 0,
+          cursor: 'pointer',
+          transition: 'background 0.3s, border-color 0.3s',
+          boxShadow: isDark
+            ? '0 2px 12px rgba(6,182,212,0.08)'
+            : '0 2px 8px rgba(0,0,0,0.04)',
+          overflow: 'hidden',
         }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)' }}
-        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }}
       >
-        {isDark ? <LightModeRounded sx={{ fontSize: 18 }} /> : <DarkModeRounded sx={{ fontSize: 18 }} />}
+        <span
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: isDark ? '#22d3ee' : '#0891b2',
+            opacity: isDark ? 0.5 : 1,
+            fontSize: 18,
+            transition: 'color 0.3s, opacity 0.3s',
+          }}
+        >
+          <LightModeRounded />
+        </span>
+        <span
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            background: isDark
+              ? '#22d3ee'
+              : '#0891b2',
+            position: 'absolute',
+            left: isDark ? 38 : 6,
+            top: 2,
+            transition: 'left 0.3s, background 0.3s',
+            boxShadow: isDark
+              ? '0 0 0 2px rgba(6,182,212,0.15)'
+              : '0 0 0 2px rgba(8,145,178,0.12)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {isDark ? (
+            <DarkModeRounded sx={{ color: '#fff', fontSize: 18 }} />
+          ) : (
+            <LightModeRounded sx={{ color: '#fff', fontSize: 18 }} />
+          )}
+        </span>
+        <span
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: isDark ? '#22d3ee' : '#0891b2',
+            opacity: isDark ? 1 : 0.5,
+            fontSize: 18,
+            transition: 'color 0.3s, opacity 0.3s',
+          }}
+        >
+          <DarkModeRounded />
+        </span>
       </button>
+
+      {/* Main card */}
       <div
         className="flex flex-col lg:flex-row"
         style={{
-          width: '100%', maxWidth: 900,
-          borderRadius: 16, overflow: 'hidden',
-          boxShadow: isDark ? '0 8px 60px rgba(0,0,0,0.55)' : '0 8px 40px rgba(0,0,0,0.12)',
-          border: isDark ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(0,0,0,0.08)',
+          width: '100%',
+          maxWidth: 1000,
+          borderRadius: 20,
+          overflow: 'hidden',
+          boxShadow: isDark
+            ? '0 25px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(6,182,212,0.1)'
+            : '0 20px 60px rgba(0,0,0,0.1), 0 0 0 1px rgba(6,182,212,0.12)',
+          position: 'relative',
+          zIndex: 1,
         }}
       >
+        {/* MOBILE BANNER */}
+        <div
+          className="flex lg:hidden flex-col"
+          style={{
+            background: isDark
+              ? 'linear-gradient(160deg, #020c1b 0%, #041428 60%, #051a35 100%)'
+              : 'linear-gradient(160deg, #e8f4fd 0%, #dbeafe 60%, #cfe9fb 100%)',
+            position: 'relative',
+            zIndex: 2,
+            overflow: 'hidden',
+          }}
+        >
+          {/* Glow blobs */}
+          <Blob w={220} h={220} color={LP.blob1} top={-70} left={-70} opacity={1} anim="alp-drift1 12s ease-in-out infinite" blur={70} />
+          <Blob w={170} h={170} color={LP.blob2} bottom={-40} right={-40} opacity={1} anim="alp-drift2 14s ease-in-out infinite" blur={70} />
+          <GridOverlay size={32} color={LP.gridColor} />
 
-        {/* ══════════════════════════════
-            MOBILE BANNER (< lg)
-        ══════════════════════════════ */}
-        <div className="flex lg:hidden flex-col" style={{ position: 'relative', background: LP.bg, overflow: 'hidden', transition: 'background 0.35s' }}>
-          {/* Blobs */}
-          <Blob w={200} h={200} color={LP.blob1} top={-60} left={-60} opacity={1} anim="alp-drift1 10s ease-in-out infinite" blur={60} />
-          <Blob w={160} h={160} color={LP.blob2} bottom={-30} right={-30} opacity={1} anim="alp-drift2 12s ease-in-out infinite" blur={60} />
-          <GridOverlay size={28} color={LP.gridColor} />
-
-          <div style={{ position: 'relative', zIndex: 2, padding: '28px 24px 18px' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: LP.badgeBg, border: `1px solid ${LP.badgeBorder}`, borderRadius: 999, padding: '3px 10px', fontSize: 10, color: LP.badgeColor, marginBottom: 12, animation: 'alp-fadeUp 0.5s 0.2s ease both' }}>
+          <div style={{ position: 'relative', zIndex: 2, padding: '32px 24px 20px' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: LP.badgeBg,
+                border: `1px solid ${LP.badgeBorder}`,
+                borderRadius: 999,
+                padding: '3px 10px',
+                fontSize: 10,
+                color: LP.badgeColor,
+                marginBottom: 14,
+                animation: 'alp-fadeUp 0.5s 0.18s ease both',
+              }}
+            >
               <LiveDot /> All systems operational
             </div>
-            <div style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.3, color: LP.headlineColor, marginBottom: 6, animation: 'alp-fadeUp 0.5s 0.35s ease both' }}>
+            <div
+              style={{
+                fontSize: 22,
+                fontWeight: 800,
+                color: LP.headlineColor,
+                marginBottom: 6,
+                lineHeight: 1.18,
+                animation: 'alp-fadeUp 0.5s 0.28s ease both',
+              }}
+            >
               Data.{' '}
-              <span style={GRAD_TEXT}>Intelligence.</span>{' '}
+              <span
+                style={{
+                  background: 'linear-gradient(90deg, #22d3ee, #2dd4bf)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+              >
+                Intelligence.
+              </span>{' '}
               Delivered.
             </div>
-            <div style={{ fontSize: 11, color: LP.subColor, lineHeight: 1.5, animation: 'alp-fadeUp 0.5s 0.5s ease both' }}>
+            <div
+              style={{
+                fontSize: 12,
+                color: LP.subColor,
+                lineHeight: 1.6,
+                animation: 'alp-fadeUp 0.5s 0.38s ease both',
+              }}
+            >
               Real-time pipeline visibility for fast-moving teams.
             </div>
+            {/* Sparkline bar */}
+            <div
+              style={{
+                marginTop: 18,
+                marginBottom: 8,
+                display: 'flex',
+                gap: 2,
+                alignItems: 'flex-end',
+                height: 16,
+                width: '100%',
+                maxWidth: 220,
+                animation: 'alp-fadeUp 0.5s 0.48s ease both',
+              }}
+            >
+              {[40,65,50,80,60,90,75,100,85,95,70,88].map((h,i) => (
+                <div
+                  key={i}
+                  style={{
+                    flex: 1,
+                    height: `${h}%`,
+                    borderRadius: 2,
+                    background: `linear-gradient(to top, ${LP.sparkTop}, ${LP.sparkBot})`,
+                    animation: `alp-data-float ${2.5 + (i % 3) * 0.5}s ease-in-out infinite`,
+                    animationDelay: `${i * 0.12}s`,
+                  }}
+                />
+              ))}
+            </div>
           </div>
-
           {/* Mobile stats strip */}
-          <div style={{ display: 'flex', borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', position: 'relative', zIndex: 2, animation: 'alp-fadeIn 0.5s 0.6s ease both', gap: 8, padding: '0 8px' }}>
-            <StatPill val={stat1} label="Projects tracked" icon={<Inventory2Rounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
-            <StatPill val={stat2} label="Avg ETA delta" icon={<TimerRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
-            <StatPill val={stat3} label="On-time rate" icon={<TaskAltRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              padding: '16px 24px',
+              borderTop: '1px solid rgba(255,255,255,0.06)',
+              background: isDark
+                ? 'rgba(0,0,0,0.15)'
+                : 'rgba(255,255,255,0.7)',
+              zIndex: 2,
+              position: 'relative',
+            }}
+          >
+            <StatPill val={stat1} label="Projects" icon={<Inventory2Rounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+            <StatPill val={stat2} label="Avg ETA" icon={<TimerRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+            <StatPill val={stat3} label="On-time" icon={<TaskAltRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
           </div>
         </div>
 
-        {/* ══════════════════════════════
-            DESKTOP LEFT PANEL
-        ══════════════════════════════ */}
-        <div className="hidden lg:flex flex-col justify-between flex-1 overflow-hidden"
-          style={{ position:'relative', background: LP.bg, padding:'40px 36px', transition: 'background 0.35s' }}>
-
-          {/* === BACKGROUND LAYER === */}
-          {/* Ambient blobs — keep alp-drift1/2/3 keyframes */}
-          <Blob w={300} h={300} color={LP.blob1} top={-80} left={-80} opacity={1} anim="alp-drift1 12s ease-in-out infinite" blur={80} />
-          <Blob w={240} h={240} color={LP.blob2} bottom={-60} right={-60} opacity={1} anim="alp-drift2 14s ease-in-out infinite" blur={80} />
-          <Blob w={180} h={180} color={LP.blob3} top="45%" left="50%" opacity={1} anim="alp-drift3 10s ease-in-out infinite" blur={60} />
-          <GridOverlay size={28} color={LP.gridColor} />
-
-          {/* === SCAN LINE (DaaS feel) === */}
-          <div style={{ position:'absolute', inset:0, overflow:'hidden', pointerEvents:'none', zIndex:1 }}>
-            <div style={{ position:'absolute', left:0, right:0, height:120,
-              background:'linear-gradient(to bottom, transparent 0%, rgba(14,165,233,0.04) 50%, transparent 100%)',
-              animation:'alp-scan-line 8s linear infinite' }} />
-          </div>
-
-          {/* === DATA FLOW SVG === */}
-          {/* Centered between top section and stats card */}
-          <div style={{ position:'absolute', inset:0, zIndex:1, pointerEvents:'none' }}>
-            <svg width="100%" height="100%" style={{ opacity:0.55 }}>
-              {/* Three horizontal dashed lines suggesting data pipeline */}
-              {[140, 200, 260].map((y, i) => (
-                <line key={i} x1="-20" y1={y} x2="120%" y2={y}
-                  stroke={LP.nodeLine} strokeWidth="1"
-                  strokeDasharray="4 10"
-                  style={{ animation: `alp-flow-dash ${3 + i * 0.8}s linear infinite`, animationDelay: `${i * 0.4}s` }} />
+        {/* DESKTOP LEFT PANEL */}
+        <div
+          className="hidden lg:flex flex-col justify-between"
+          style={{
+            flex: 1,
+            minHeight: 560,
+            position: 'relative',
+            background: isDark
+              ? 'linear-gradient(150deg, #020c1b 0%, #041428 50%, #061930 100%)'
+              : 'linear-gradient(150deg, #e8f4fd 0%, #dbeafe 60%, #cfe9fb 100%)',
+            padding: '48px 44px',
+            transition: 'background 0.4s',
+            overflow: 'hidden',
+          }}
+        >
+          {/* BG layers */}
+          <GridOverlay size={32} color={LP.gridColor} />
+          <Blob w={350} h={350} color={LP.blob1} top={-100} left={-100} opacity={1} anim="alp-drift1 14s ease-in-out infinite" blur={100} />
+          <Blob w={280} h={280} color={LP.blob2} bottom={-80} right={-80} opacity={1} anim="alp-drift2 16s ease-in-out infinite" blur={90} />
+          <Blob w={200} h={200} color={LP.blob3} top="40%" left="45%" opacity={1} anim="alp-drift3 11s ease-in-out infinite" blur={70} />
+          {/* Scan line */}
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: 0,
+              height: 160,
+              background: 'linear-gradient(to bottom, transparent, rgba(6,182,212,0.05) 50%, transparent)',
+              animation: 'alp-scan-line 10s linear infinite',
+              pointerEvents: 'none',
+              zIndex: 1,
+            }}
+          />
+          {/* Data flow SVG */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              zIndex: 1,
+            }}
+          >
+            <svg width="100%" height="100%" style={{ opacity: 0.6 }}>
+              {/* 5 horizontal dashed lines */}
+              {[100,165,230,295,360].map((y, i) => (
+                <line
+                  key={i}
+                  x1="2%"
+                  y1={y}
+                  x2="98%"
+                  y2={y}
+                  stroke={LP.nodeLine}
+                  strokeWidth="1"
+                  strokeDasharray="6 14"
+                  style={{
+                    animation: `alp-flow-dash ${3 + i}s linear infinite`,
+                    animationDelay: `${i * 0.3}s`,
+                  }}
+                />
               ))}
-              {/* Node dots at intersections */}
-              {[[60,140],[160,200],[100,260],[220,140],[280,200]].map(([cx,cy],i) => (
-                <circle key={i} cx={cx} cy={cy} r={3}
+              {/* 12 node circles */}
+              {[
+                [50,100],[140,165],[90,230],[220,295],[170,165],[300,100],
+                [260,230],[340,360],[80,360],[200,100],[320,230],[150,295]
+              ].map(([cx,cy],i) => (
+                <circle
+                  key={i}
+                  cx={cx}
+                  cy={cy}
+                  r={3.5}
                   fill={LP.nodeGlow}
-                  style={{ animation: `alp-node-pulse 2.5s ease-in-out infinite`, animationDelay: `${i * 0.35}s`, transformOrigin:`${cx}px ${cy}px` }} />
+                  style={{
+                    animation: 'alp-node-pulse 2.8s ease-in-out infinite',
+                    animationDelay: `${i * 0.25}s`,
+                    transformOrigin: `${cx}px ${cy}px`,
+                  }}
+                />
+              ))}
+              {/* 4 data packets */}
+              {[0,1,2,3].map(i => (
+                <circle
+                  key={i}
+                  r={2}
+                  fill="#22d3ee"
+                  opacity={0.7}
+                  style={{
+                    animation: `alp-flow-dash ${2.5 + i * 0.7}s linear infinite`,
+                    animationDelay: `${i * 0.5}s`,
+                  }}
+                >
+                  <animate
+                    attributeName="cx"
+                    values="50;340"
+                    dur={`${2.5 + i * 0.7}s`}
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="cy"
+                    values="100;360"
+                    dur={`${2.5 + i * 0.7}s`}
+                    repeatCount="indefinite"
+                  />
+                </circle>
               ))}
             </svg>
           </div>
-
-          {/* === TOP SECTION === */}
-          <div style={{ position:'relative', zIndex:2 }}>
+          {/* TOP SECTION */}
+          <div style={{ position: 'relative', zIndex: 2 }}>
+            {/* Eyebrow */}
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: '0.18em',
+                color: LP.eyebrow,
+                textTransform: 'uppercase',
+                marginBottom: 16,
+                animation: 'alp-fadeUp 0.6s 0.2s ease both',
+              }}
+            >
+              DATA AS A SERVICE
+            </div>
             {/* Status badge */}
-            <div style={{ display:'inline-flex', alignItems:'center', gap:6,
-              background: LP.badgeBg, border:`1px solid ${LP.badgeBorder}`,
-              borderRadius:999, padding:'4px 12px', fontSize:11, color: LP.badgeColor,
-              marginBottom:28, animation:'alp-fadeUp 0.6s 0.2s ease both' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: LP.badgeBg,
+                border: `1px solid ${LP.badgeBorder}`,
+                borderRadius: 999,
+                padding: '4px 12px',
+                fontSize: 11,
+                color: LP.badgeColor,
+                marginBottom: 24,
+                animation: 'alp-fadeUp 0.6s 0.25s ease both',
+              }}
+            >
               <LiveDot /> All systems operational
             </div>
-
-            {/* Eyebrow label */}
-            <div style={{ fontSize:10, fontWeight:600, letterSpacing:'0.14em', textTransform:'uppercase',
-              color:LP.eyebrow, marginBottom:10, animation:'alp-fadeUp 0.6s 0.28s ease both' }}>
-              Data as a Service
+            {/* Headline */}
+            <div
+              style={{
+                fontSize: 36,
+                fontWeight: 900,
+                lineHeight: 1.15,
+                letterSpacing: '-1px',
+                color: LP.headlineColor,
+                animation: 'alp-fadeUp 0.6s 0.32s ease both',
+              }}
+            >
+              <div>Data.</div>
+              <div>
+                <span
+                  style={{
+                    background: 'linear-gradient(90deg, #22d3ee, #2dd4bf)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}
+                >
+                  Intelligence.
+                </span>
+              </div>
+              <div>Delivered.</div>
             </div>
-
-            {/* Headline — 3-line stacked */}
-            <div style={{ fontSize:28, fontWeight:800, lineHeight:1.2, color: LP.headlineColor, transition: 'color 0.35s',
-              marginBottom:14, animation:'alp-fadeUp 0.6s 0.35s ease both', letterSpacing:'-0.5px' }}>
-              Data.{' '}
-              <span style={{ background:'linear-gradient(90deg, #38bdf8, #2dd4bf)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent', backgroundClip:'text' }}>Intelligence.</span>{' '}
-              Delivered.
-            </div>
-
-            {/* Sub headline */}
-            <div style={{ fontSize:12, color: LP.subColor, lineHeight:1.7, maxWidth:270,
-              animation:'alp-fadeUp 0.6s 0.48s ease both' }}>
+            {/* Sub */}
+            <div
+              style={{
+                fontSize: 13,
+                color: LP.subColor,
+                lineHeight: 1.75,
+                maxWidth: 280,
+                marginTop: 14,
+                animation: 'alp-fadeUp 0.6s 0.45s ease both',
+              }}
+            >
               Real-time pipeline visibility from intake to delivery — for teams that move fast.
             </div>
-
-            {/* Feature chips row — 3 small pills */}
-            <div style={{ display:'flex', gap:6, marginTop:20, flexWrap:'wrap', animation:'alp-fadeUp 0.6s 0.58s ease both' }}>
-              {[
-                { icon: <BoltRounded sx={{ color: LP.chipIconColor, fontSize: 12, verticalAlign: 'middle' }} />, label: 'Live tracking' },
-                { icon: <LockRounded sx={{ color: LP.chipIconColor, fontSize: 12, verticalAlign: 'middle' }} />, label: 'Enterprise SSO' },
-                { icon: <InsightsRounded sx={{ color: LP.chipIconColor, fontSize: 12, verticalAlign: 'middle' }} />, label: 'DaaS analytics' }
-              ].map((item,i) => (
-                <span key={i} style={{ fontSize:10, fontWeight:500,
-                  padding:'3px 9px', borderRadius:999,
-                  background:LP.chipBg, border:LP.chipBorder,
-                  color:LP.chipColor, transition: 'background 0.35s, color 0.35s, border-color 0.35s', letterSpacing:'0.02em' }}>
-                  <>{item.icon} {item.label}</>
-                </span>
-              ))}
+            {/* Feature chips */}
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                marginTop: 24,
+                animation: 'alp-fadeUp 0.6s 0.55s ease both',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  padding: '4px 12px',
+                  borderRadius: 999,
+                  background: LP.chipBg,
+                  border: LP.chipBorder,
+                  color: LP.chipColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  letterSpacing: '0.02em',
+                  transition: 'background 0.35s, color 0.35s, border-color 0.35s',
+                }}
+              >
+                <BoltRounded sx={{ color: LP.chipIconColor, fontSize: 14, verticalAlign: 'middle' }} /> Live tracking
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  padding: '4px 12px',
+                  borderRadius: 999,
+                  background: LP.chipBg,
+                  border: LP.chipBorder,
+                  color: LP.chipColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  letterSpacing: '0.02em',
+                  transition: 'background 0.35s, color 0.35s, border-color 0.35s',
+                }}
+              >
+                <LockRounded sx={{ color: LP.chipIconColor, fontSize: 14, verticalAlign: 'middle' }} /> Enterprise SSO
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  padding: '4px 12px',
+                  borderRadius: 999,
+                  background: LP.chipBg,
+                  border: LP.chipBorder,
+                  color: LP.chipColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  letterSpacing: '0.02em',
+                  transition: 'background 0.35s, color 0.35s, border-color 0.35s',
+                }}
+              >
+                <InsightsRounded sx={{ color: LP.chipIconColor, fontSize: 14, verticalAlign: 'middle' }} /> DaaS analytics
+              </span>
             </div>
           </div>
-
-          {/* === STATS CARD (redesigned) === */}
-          <div style={{ position:'relative', zIndex:2,
-            background:LP.cardBg, border:LP.cardBorder,
-            borderRadius:14, padding:'16px 18px', backdropFilter:'blur(16px)',
-            animation:'alp-fadeUp 0.6s 0.7s ease both, alp-cardGlow 4s 1.5s ease-in-out infinite' }}>
-            {/* Card header */}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-              <span style={{ fontSize:10, color:LP.liveMetricsLabel, textTransform:'uppercase', transition:'color 0.35s', letterSpacing:'0.1em' }}>Live platform metrics</span>
-              <span style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:9,
-                color:'#4ade80', background:'rgba(74,222,128,0.1)', border:'1px solid rgba(74,222,128,0.2)',
-                borderRadius:999, padding:'2px 7px' }}>
+          {/* LIVE METRICS CARD */}
+          <div
+            style={{
+              position: 'relative',
+              zIndex: 2,
+              background: isDark
+                ? 'rgba(6,182,212,0.05)'
+                : 'rgba(255,255,255,0.8)',
+              border: isDark
+                ? '1px solid rgba(6,182,212,0.15)'
+                : '1px solid rgba(6,182,212,0.18)',
+              borderRadius: 16,
+              padding: '18px 20px',
+              marginTop: 36,
+              backdropFilter: 'blur(20px)',
+              animation:
+                'alp-fadeUp 0.6s 0.68s ease both, alp-cardGlow 4.5s 1.5s ease-in-out infinite',
+              boxShadow: isDark
+                ? '0 4px 32px rgba(6,182,212,0.08)'
+                : '0 4px 24px rgba(6,182,212,0.06)',
+            }}
+          >
+            {/* Header row */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 12,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 9,
+                  letterSpacing: '0.14em',
+                  color: LP.liveMetricsLabel,
+                  textTransform: 'uppercase',
+                  transition: 'color 0.35s',
+                }}
+              >
+                LIVE PLATFORM METRICS
+              </span>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 9,
+                  color: '#4ade80',
+                  background: 'rgba(74,222,128,0.1)',
+                  border: '1px solid rgba(74,222,128,0.2)',
+                  borderRadius: 999,
+                  padding: '2px 7px',
+                }}
+              >
                 <LiveDot size={5} /> LIVE
               </span>
             </div>
-            {/* Three stat pills */}
-            <div style={{ display:'flex', gap:8 }}>
-              <StatPill val={stat1} label="Projects tracked" icon={<Inventory2Rounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
-              <StatPill val={stat2} label="Avg ETA delta" icon={<TimerRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
-              <StatPill val={stat3} label="On-time rate" icon={<TaskAltRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+            {/* Stat pills */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <StatPill val={stat1} label="Projects" icon={<Inventory2Rounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+              <StatPill val={stat2} label="Avg ETA" icon={<TimerRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+              <StatPill val={stat3} label="On-time" icon={<TaskAltRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
             </div>
-            {/* Mini sparkline bar visual (purely decorative) */}
-            <div style={{ marginTop:14, display:'flex', gap:2, alignItems:'flex-end', height:20 }}>
+            {/* Sparkline */}
+            <div
+              style={{
+                marginTop: 14,
+                display: 'flex',
+                gap: 2,
+                alignItems: 'flex-end',
+                height: 24,
+              }}
+            >
               {[40,65,50,80,60,90,75,100,85,95,70,88].map((h,i) => (
-                <div key={i} style={{ flex:1, height:`${h}%`, borderRadius:2,
-                  background:`linear-gradient(to top, ${LP.sparkTop}, ${LP.sparkBot})`,
-                  animation:`alp-data-float ${2.5 + (i % 3) * 0.5}s ease-in-out infinite`,
-                  animationDelay:`${i * 0.12}s` }} />
+                <div
+                  key={i}
+                  style={{
+                    flex: 1,
+                    height: `${h}%`,
+                    borderRadius: 2,
+                    background: `linear-gradient(to top, ${LP.sparkTop}, ${LP.sparkBot})`,
+                    animation: `alp-data-float ${2.5 + (i % 3) * 0.5}s ease-in-out infinite`,
+                    animationDelay: `${i * 0.12}s`,
+                  }}
+                />
               ))}
             </div>
+            {/* Updated label */}
+            <div
+              style={{
+                marginTop: 8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 9,
+                color: LP.liveMetricsLabel,
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: '#4ade80',
+                  display: 'inline-block',
+                  animation: 'alp-pulse 2s infinite',
+                }}
+              />
+              Updated just now
+            </div>
           </div>
-
-          {/* === FOOTER === */}
-          <div style={{ position:'relative', zIndex:2, fontSize:10, color: LP.footerColor,
-            animation:'alp-fadeIn 0.8s 1s ease both', display:'flex', alignItems:'center', gap:6 }}>
-            <span style={{ display:'inline-block', width:6, height:6, borderRadius:'50%',
-              background:LP.liveFooterDot, boxShadow:`0 0 6px ${LP.liveFooterGlow}` }} />
+          {/* FOOTER */}
+          <div
+            style={{
+              position: 'relative',
+              zIndex: 2,
+              fontSize: 10,
+              color: LP.footerColor,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginTop: 32,
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: LP.liveFooterDot,
+                boxShadow: `0 0 6px ${LP.liveFooterGlow}`,
+              }}
+            />
             Secure · Enterprise-ready · Magnit Internal Use Only
           </div>
         </div>
 
-        {/* ══════════════════════════════
-            RIGHT PANEL (login form)
-        ══════════════════════════════ */}
+        {/* RIGHT PANEL (login form) */}
         <div
           className="flex flex-col justify-center w-full lg:w-auto"
           style={{
-            background: rp.bg,
-            padding: '40px 40px 48px',
-            flex: '0 0 380px',
+            flex: '0 0 400px',
+            background: isDark ? '#0d1117' : '#ffffff',
             position: 'relative',
-            transition: 'background 0.35s',
+            padding: '44px 44px 52px',
+            transition: 'background 0.4s',
+            minWidth: 0,
           }}
         >
           {/* Ambient glows */}
-          <div style={{ position: 'absolute', top: -80, right: -80, width: 240, height: 240, background: `radial-gradient(circle, ${rp.glow1} 0%, transparent 70%)`, pointerEvents: 'none', animation: 'alp-drift1 10s ease-in-out infinite' }} />
-          <div style={{ position: 'absolute', bottom: -60, left: -60, width: 200, height: 200, background: `radial-gradient(circle, ${rp.glow2} 0%, transparent 70%)`, pointerEvents: 'none', animation: 'alp-drift2 12s ease-in-out infinite' }} />
-
+          <div
+            style={{
+              position: 'absolute',
+              top: -80,
+              right: -80,
+              width: 220,
+              height: 220,
+              background: `radial-gradient(circle, ${rp.glow1} 0%, transparent 70%)`,
+              pointerEvents: 'none',
+              animation: 'alp-drift1 10s ease-in-out infinite',
+              zIndex: 1,
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              bottom: -60,
+              left: -60,
+              width: 180,
+              height: 180,
+              background: `radial-gradient(circle, ${rp.glow2} 0%, transparent 70%)`,
+              pointerEvents: 'none',
+              animation: 'alp-drift2 12s ease-in-out infinite',
+              zIndex: 1,
+            }}
+          />
           <div style={{ position: 'relative', zIndex: 2 }}>
             {/* Logo */}
             {logoUrl && (
@@ -541,61 +984,108 @@ export const LoginPage: React.FC = () => {
               </div>
             )}
 
-            {/* Heading */}
-            <div style={{ marginBottom: logoUrl ? 0 : 28, animation: 'alp-fadeUp 0.5s 0.2s ease both' }}>
-              <p style={{ fontSize: 11, fontWeight: 500, color: rp.footer, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, transition: 'color 0.35s' }}>
-                Delivery Tracker
-              </p>
-              <h1 style={{ fontSize: 22, fontWeight: 700, color: rp.title, marginBottom: 6, transition: 'color 0.35s' }}>
+            {/* Heading block */}
+            <div
+              style={{
+                marginBottom: logoUrl ? 20 : 32,
+                animation: 'alp-fadeUp 0.5s 0.2s ease both',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: '0.14em',
+                  color: rp.footer,
+                  textTransform: 'uppercase',
+                  marginBottom: 10,
+                  transition: 'color 0.35s',
+                }}
+              >
+                DELIVERY TRACKER
+              </div>
+              <h1
+                style={{
+                  fontSize: 26,
+                  fontWeight: 800,
+                  color: rp.title,
+                  marginBottom: 6,
+                  letterSpacing: '-0.5px',
+                  transition: 'color 0.35s',
+                }}
+              >
                 Welcome back
               </h1>
-              <p style={{ fontSize: 14, color: rp.sub, marginBottom: 28, transition: 'color 0.35s' }}>
+              <p
+                style={{
+                  fontSize: 14,
+                  color: rp.sub,
+                  marginBottom: 28,
+                  transition: 'color 0.35s',
+                }}
+              >
                 Sign in to your account to continue
               </p>
             </div>
 
-            {/* ── SSO Mode ── */}
+            {/* SSO MODE */}
             {showSSO && (
               <div className="space-y-4">
-                {isEntraProvider ? (
-                  <EntraIDSSOButton
-                    variant="primary"
-                    loading={entraLoading}
-                    onClick={() => { clearEntraError(); triggerEntraSignIn() }}
-                    style={{ animation: 'alp-fadeUp 0.5s 0.3s ease both' }}
-                  />
-                ) : (
-                  /* Legacy Okta SAML path */
-                  <button type="button" style={btnStyle} disabled={loading} onClick={handleSSOSignIn}>
-                    {loading ? <AutorenewRounded sx={{ fontSize: 17 }} className="animate-spin" /> : <VpnKeyRounded sx={{ fontSize: 17 }} />}
-                    {loading ? 'Redirecting…' : 'Sign in with SSO'}
-                  </button>
-                )}
-                {combinedError && (
+                <button type="button" style={btnStyle} disabled={loading} onClick={handleSSOSignIn}>
+                  {loading ? <AutorenewRounded sx={{ fontSize: 17 }} className="animate-spin" /> : <VpnKeyRounded sx={{ fontSize: 17 }} />}
+                  {loading ? 'Redirecting to Okta…' : 'Sign in with Okta SSO'}
+                </button>
+                {error && (
                   <div className="alert alert-error py-2">
-                    <ErrorOutlineRounded sx={{ fontSize: 18 }} /><span className="text-sm">{combinedError}</span>
+                    <ErrorOutlineRounded sx={{ fontSize: 18 }} /><span className="text-sm">{error}</span>
                   </div>
                 )}
                 <div className="text-center">
-                  <button type="button" style={{ fontSize: 12, color: rp.footer, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, transition: 'color 0.35s' }}
-                    onClick={() => { setShowPasswordFallback(true); setError(null); clearEntraError() }}>
+                  <button
+                    type="button"
+                    style={{
+                      fontSize: 12,
+                      color: rp.footer,
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      textUnderlineOffset: 2,
+                      transition: 'color 0.35s',
+                    }}
+                    onClick={() => {
+                      setShowPasswordFallback(true);
+                      setError(null);
+                    }}
+                  >
                     Sign in with email &amp; password instead
                   </button>
                 </div>
               </div>
             )}
 
-            {/* ── Password Mode ── */}
+            {/* PASSWORD MODE */}
             {showPassword && (
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                <div style={{ marginBottom: 16, animation: 'alp-fadeUp 0.5s 0.35s ease both' }}>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: rp.label, marginBottom: 6, letterSpacing: '0.02em', transition: 'color 0.35s' }}>
+                {/* EMAIL FIELD */}
+                <div style={{ marginBottom: 18, animation: 'alp-fadeUp 0.5s 0.35s ease both' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: rp.label,
+                      marginBottom: 6,
+                      letterSpacing: '0.02em',
+                      transition: 'color 0.35s',
+                    }}
+                  >
                     Work email
                   </label>
                   <input
                     type="email"
                     className="input input-bordered w-full"
-                    style={{ height: 40, fontSize: 14 }}
+                    style={{ height: 42, fontSize: 14 }}
                     placeholder="you@magnitglobal.com"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
@@ -603,39 +1093,61 @@ export const LoginPage: React.FC = () => {
                     autoFocus
                   />
                 </div>
-
+                {/* PASSWORD FIELD */}
                 <div style={{ marginBottom: 8, animation: 'alp-fadeUp 0.5s 0.45s ease both' }}>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: rp.label, marginBottom: 6, letterSpacing: '0.02em', transition: 'color 0.35s' }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: rp.label,
+                      marginBottom: 6,
+                      letterSpacing: '0.02em',
+                      transition: 'color 0.35s',
+                    }}
+                  >
                     Password
                   </label>
                   <input
                     type="password"
                     className="input input-bordered w-full"
-                    style={{ height: 40, fontSize: 14 }}
+                    style={{ height: 42, fontSize: 14 }}
                     placeholder="••••••••"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     required
                   />
                 </div>
-
+                {/* ERROR */}
                 {error && (
                   <div className="alert alert-error py-2 mt-2">
                     <ErrorOutlineRounded sx={{ fontSize: 18 }} /><span className="text-sm">{error}</span>
                   </div>
                 )}
-
-                <button type="submit" style={{ ...btnStyle, marginTop: 16 }} disabled={loading}>
+                {/* SUBMIT BUTTON */}
+                <button type="submit" style={{ ...btnStyle, marginTop: 18 }} disabled={loading}>
                   {loading ? <AutorenewRounded sx={{ fontSize: 17 }} className="animate-spin" /> : null}
                   {loading ? 'Signing in...' : 'Sign in'}
                   {!loading && <ArrowForwardRounded sx={{ fontSize: 17 }} />}
                 </button>
-
-                {/* Forgot password */}
+                {/* FORGOT PASSWORD */}
                 {!forgotSent ? (
                   <div style={{ textAlign: 'center', marginTop: 12, animation: 'alp-fadeUp 0.5s 0.65s ease both' }}>
-                    <button type="button" onClick={handleForgotPassword} disabled={forgotLoading}
-                      style={{ fontSize: 12, color: rp.forgot, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, transition: 'color 0.35s' }}>
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      disabled={forgotLoading}
+                      style={{
+                        fontSize: 12,
+                        color: rp.forgot,
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                        textUnderlineOffset: 2,
+                        transition: 'color 0.35s',
+                      }}
+                    >
                       {forgotLoading ? 'Sending…' : 'Forgot password?'}
                     </button>
                     {forgotError && <p className="text-xs text-error mt-1">{forgotError}</p>}
@@ -645,51 +1157,96 @@ export const LoginPage: React.FC = () => {
                     <span className="text-sm">✓ Password reset email sent — check your inbox.</span>
                   </div>
                 )}
-
-                {/* SSO alternate — shown in password mode */}
-                {!effectiveSSOEnabled && (
+                {/* SSO DIVIDER + BUTTON (when !ssoEnabled) */}
+                {!ssoEnabled && (
                   <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0', animation: 'alp-fadeUp 0.5s 0.7s ease both' }}>
                       <div style={{ flex: 1, height: 1, background: rp.divLine, transition: 'background 0.35s' }} />
                       <span style={{ fontSize: 11, color: rp.divText, transition: 'color 0.35s' }}>or continue with</span>
                       <div style={{ flex: 1, height: 1, background: rp.divLine, transition: 'background 0.35s' }} />
                     </div>
-                    {isEntraProvider ? (
-                      <EntraIDSSOButton
-                        variant="outline"
-                        loading={entraLoading}
-                        onClick={() => { clearEntraError(); triggerEntraSignIn() }}
-                        style={{ animation: 'alp-fadeUp 0.5s 0.75s ease both' }}
-                      />
-                    ) : (
-                      <button type="button" onClick={handleSSOSignIn}
-                        style={{ width: '100%', padding: '9px', background: 'transparent', border: `1px solid ${rp.ssoBorder}`, borderRadius: 8, color: rp.ssoColor, fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, animation: 'alp-fadeUp 0.5s 0.75s ease both', transition: 'border-color 0.2s, color 0.35s' }}>
-                        <VpnKeyRounded sx={{ fontSize: 17 }} />
-                        Sign in with SSO
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={handleSSOSignIn}
+                      style={{
+                        width: '100%',
+                        padding: '9px',
+                        background: 'transparent',
+                        border: `1px solid ${rp.ssoBorder}`,
+                        borderRadius: 8,
+                        color: rp.ssoColor,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 8,
+                        animation: 'alp-fadeUp 0.5s 0.75s ease both',
+                        transition: 'border-color 0.2s, color 0.35s',
+                      }}
+                    >
+                      <VpnKeyRounded sx={{ fontSize: 17 }} />
+                      Sign in with Okta SSO
+                    </button>
                   </>
                 )}
-
-                {/* Back to SSO */}
+                {/* BACK TO SSO (when ssoEnabled && showPasswordFallback) */}
                 {ssoEnabled && showPasswordFallback && (
                   <div style={{ textAlign: 'center', marginTop: 16 }}>
-                    <button type="button" onClick={() => { setShowPasswordFallback(false); setError(null) }}
-                      style={{ fontSize: 12, color: rp.footer, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, transition: 'color 0.35s' }}>
-                      <ArrowBackRounded sx={{ fontSize: 14 }} /> Back to Microsoft sign-in
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPasswordFallback(false);
+                        setError(null);
+                      }}
+                      style={{
+                        fontSize: 12,
+                        color: rp.footer,
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                        textUnderlineOffset: 2,
+                        transition: 'color 0.35s',
+                      }}
+                    >
+                      <ArrowBackRounded sx={{ fontSize: 14 }} /> Back to Okta SSO login
                     </button>
                   </div>
                 )}
               </form>
             )}
-
-            <p style={{ fontSize: 12, color: rp.footer, textAlign: 'center', marginTop: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'color 0.35s', animation: 'alp-fadeIn 0.6s 1s ease both' }}>
+            {/* FOOTER */}
+            <p
+              style={{
+                fontSize: 12,
+                color: rp.footer,
+                textAlign: 'center',
+                marginTop: 24,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                transition: 'color 0.35s',
+                animation: 'alp-fadeIn 0.6s 1s ease both',
+              }}
+            >
               <LockRounded sx={{ fontSize: 14, opacity: 0.7 }} /> Protected by enterprise-grade security
             </p>
           </div>
         </div>
-
       </div>
+      {/* Responsive padding for mobile right panel */}
+      <style>
+        {`
+          @media (max-width: 640px) {
+            .flex.lg\\:flex-row > .flex-col.justify-center.w-full.lg\\:w-auto {
+              padding: 32px 24px 40px !important;
+            }
+          }
+        `}
+      </style>
     </div>
   )
 }

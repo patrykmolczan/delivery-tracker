@@ -8,35 +8,37 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 /**
+ * Lock bypass shared by both clients.
+ * Prevents navigator.locks from ever being acquired — eliminates the
+ * Web Locks deadlock that manifests after ~3–4 minutes idle when the
+ * realtime WebSocket reconnects and tries to call getSession() while
+ * the main client is also mid-operation.
+ */
+const lockBypass = <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> => fn()
+
+/**
  * Main Supabase client — used for all DB queries, auth, and API calls.
- *
- * navigator.locks bypass is kept as a safety net, but the real fix is
- * supabaseRealtime (below): NotificationBell uses that client for its
- * channel subscription so it never holds the Web Lock that would block
- * the main client's getSession() inside .from().insert().
  */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    lock: <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>): Promise<R> => fn(),
+    lock: lockBypass,
   },
 })
 
 /**
  * Realtime-only Supabase client — used exclusively by NotificationBell.
  *
- * autoRefreshToken: false  → never calls navigator.locks.request()
- *                            so the realtime subscription cannot deadlock
- *                            the main client's auth operations.
+ * autoRefreshToken: false  → never schedules proactive token refreshes.
  * detectSessionInUrl: false → no URL parsing on creation.
- *
- * The subscription will use the current stored session. If the session
- * expires after a long idle, the subscription may eventually need to
- * reconnect — that is acceptable behaviour for a notification bell.
+ * lock: lockBypass         → also bypasses navigator.locks so reconnect
+ *                            attempts after idle cannot deadlock or
+ *                            corrupt shared localStorage session data.
  */
 export const supabaseRealtime = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: false,
     detectSessionInUrl: false,
+    lock: lockBypass,
   },
 })
 

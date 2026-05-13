@@ -13,9 +13,6 @@ import AutorenewRounded from '@mui/icons-material/AutorenewRounded'
 import LockRounded from '@mui/icons-material/LockRounded'
 import BoltRounded from '@mui/icons-material/BoltRounded'
 import InsightsRounded from '@mui/icons-material/InsightsRounded'
-import Inventory2Rounded from '@mui/icons-material/Inventory2Rounded'
-import TimerRounded from '@mui/icons-material/TimerRounded'
-import TaskAltRounded from '@mui/icons-material/TaskAltRounded'
 
 /* ── Keyframes injected once ── */
 const AURORA_KF_ID = 'aurora-login-kf'
@@ -90,38 +87,6 @@ const Blob = ({ w, h, color, top, left, bottom, right, opacity, anim, blur = 70 
     animation: anim,
     pointerEvents: 'none',
   }} />
-)
-
-const StatPill = ({
-  val, label, icon,
-  valColor = '#f0f8ff',
-  labelColor = 'rgba(180,210,255,0.5)',
-  bg = 'rgba(14,165,233,0.08)',
-  border = '1px solid rgba(14,165,233,0.18)',
-}: {
-  val: string; label: string; icon?: React.ReactNode;
-  valColor?: string; labelColor?: string; bg?: string; border?: string;
-}) => (
-  <div style={{
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 2,
-    background: bg,
-    border: border,
-    borderRadius: 8,
-    padding: '10px 12px',
-    minWidth: 64,
-    flex: 1,
-    textAlign: 'center',
-    transition: 'background 0.35s, border-color 0.35s',
-  }}>
-    {icon && (
-      <span style={{ fontSize: 14, marginBottom: 2, lineHeight: 1 }}>{icon}</span>
-    )}
-    <div style={{ fontSize: 15, fontWeight: 700, color: valColor, lineHeight: 1.1, transition: 'color 0.35s' }}>{val}</div>
-    <div style={{ fontSize: 9, color: labelColor, marginTop: 1, transition: 'color 0.35s' }}>{label}</div>
-  </div>
 )
 
 export const LoginPage: React.FC = () => {
@@ -213,9 +178,6 @@ export const LoginPage: React.FC = () => {
 
   useInjectAuroraKeyframes()
 
-  const stat1 = useCountUp(14.3, 'K', 1, 900, 1200)
-  const stat2 = useCountUp(4.2, 'd', 1, 900, 1200)
-  const stat3 = useCountUp(96, '%', 0, 900, 1200)
 
   useEffect(() => {
     fetchAppSettings()

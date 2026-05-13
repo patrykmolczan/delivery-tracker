@@ -23,6 +23,7 @@ import {
   Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon
 } from 'lucide-react'
 import { useTheme } from './contexts/ThemeContext'
+import { supabaseRealtime } from './lib/supabase'
 import { NotificationBell } from './components/NotificationBell'
 import { NotificationInbox } from './pages/NotificationInbox'
 import { EntraCallbackPage } from './pages/EntraCallbackPage'
@@ -103,6 +104,17 @@ const Dashboard: React.FC = () => {
     }, 12000)
     return () => clearTimeout(timer)
   }, [loading])
+
+  // Real-time: auto-refresh project table when a new project is inserted
+  useEffect(() => {
+    const channel = supabaseRealtime
+      .channel('projects-insert-watch')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'projects' }, () => {
+        loadData(true)
+      })
+      .subscribe()
+    return () => { supabaseRealtime.removeChannel(channel) }
+  }, [])
 
   const filtered = useMemo(() => filterProjects(projects, filters), [projects, filters])
   const sorted = useMemo(() => sortProjects(filtered, sort), [filtered, sort])

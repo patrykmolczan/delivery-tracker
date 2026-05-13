@@ -39,23 +39,6 @@ function useInjectAuroraKeyframes() {
   }, [])
 }
 
-  const [value, setValue] = useState('0' + suffix)
-  useEffect(() => {
-    const t = setTimeout(() => {
-      const t0 = performance.now()
-      function step(now: number) {
-        const p = Math.min((now - t0) / duration, 1)
-        const ease = 1 - Math.pow(1 - p, 3)
-        const v = target * ease
-        setValue(decimals > 0 ? v.toFixed(1) + suffix : Math.round(v) + suffix)
-        if (p < 1) requestAnimationFrame(step)
-      }
-      requestAnimationFrame(step)
-    }, delay)
-    return () => clearTimeout(t)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  return value
-}
 
 /* ── Shared design tokens (moved inside component for theme reactivity) ── */
 

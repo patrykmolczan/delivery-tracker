@@ -2036,18 +2036,12 @@ export async function submitForReReview(
       author_role: 'user',
       action_type: 'resubmit',
       message: 'Project submitted for re-review.',
-      status_change_to_id: 3,   // Under Review
-      status_change_to_name: 'Under Review',
+      status_change_to_id: null,
+      status_change_to_name: null,
       notify_requester: false,
     })
   if (e1) throw e1
-
-  // Change status to Under Review
-  const { error: e2 } = await supabase
-    .from('projects')
-    .update({ status_id: 3 })
-    .eq('id', projectId)
-  if (e2) throw e2
+  // Status intentionally NOT changed — project stays On Hold until admin approves
 
   // Notify admins (non-blocking)
   try {

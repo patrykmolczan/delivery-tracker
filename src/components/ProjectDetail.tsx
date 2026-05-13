@@ -1966,17 +1966,13 @@ export const ProjectDetail: React.FC<{
                   author_role: 'user',
                   action_type: 'resubmit',
                   message: 'Project submitted for re-review.',
-                  status_change_to_id: 3,
-                  status_change_to_name: 'Under Review',
+                  status_change_to_id: null,
+                  status_change_to_name: null,
                   notify_requester: false,
                   created_at: new Date().toISOString(),
                 }
                 setFeedbackEntries(prev => [...prev, resubmitEntry])
-                const updated = { ...localProject, status: 'Under Review', status_id: 3 }
-                setLocalProject(updated)
-                setSelectedStatusId(3)
-                setSelectedStatusName('Under Review')
-                onStatusUpdated?.(updated)
+                // Status stays On Hold — admin must press Approve & Resume
               }}
             />
           </div>

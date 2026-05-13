@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import ChangePasswordModal from './components/ChangePasswordModal'
 import { LoginPage } from './pages/LoginPage'
 import { NewProjectPage } from './pages/NewProjectPage'
 import { ImportPage } from './pages/ImportPage'
@@ -19,7 +20,7 @@ import {
 import { useLogo } from './hooks/useLogo'
 import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode, LookupItem } from './types'
 import {
-  LayoutDashboard, Table2, RefreshCw, LogOut, Truck, Loader2,
+  LayoutDashboard, Table2, RefreshCw, LogOut, Lock, Truck, Loader2,
   Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon
 } from 'lucide-react'
 import { useTheme } from './contexts/ThemeContext'
@@ -42,6 +43,8 @@ const DASHBOARD_TABLE_ROWS = 25
 
 const Dashboard: React.FC = () => {
   const { user, profile, isAdmin, isSuperAdmin, signOut } = useAuth()
+  const [showChangePassword, setShowChangePassword] = useState(false)
+  const isSSOUser = !!(user?.user_metadata?.sso_provider)
   const { logoUrl } = useLogo()
   const { isDark, toggleTheme } = useTheme()
   const [projects, setProjects] = useState<Project[]>([])
@@ -280,8 +283,21 @@ const Dashboard: React.FC = () => {
               <LogOut size={12} /> Sign out
             </button>
           </div>
+          <button
+            className={`btn btn-ghost btn-xs gap-1.5 w-full mt-1 ${isSSOUser ? 'opacity-40 cursor-not-allowed text-base-content/30' : 'text-base-content/60'}`}
+            onClick={() => !isSSOUser && setShowChangePassword(true)}
+            disabled={isSSOUser}
+            title={isSSOUser ? 'Password is managed by your SSO provider' : undefined}
+          >
+            <Lock size={12} /> Change password
+            {isSSOUser && <span className="ml-auto text-xs">SSO</span>}
+          </button>
         </div>
       </aside>
+
+      {showChangePassword && (
+        <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
+      )}
 
       {/* Main content area */}
       <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">

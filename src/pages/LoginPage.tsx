@@ -497,52 +497,92 @@ export const LoginPage: React.FC = () => {
             >
               End-to-end project tracking and delivery platform — from intake to completion.
             </div>
-            {/* Sparkline bar */}
-            <div
-              style={{
-                marginTop: 18,
-                marginBottom: 8,
-                display: 'flex',
-                gap: 2,
-                alignItems: 'flex-end',
-                height: 16,
-                width: '100%',
-                maxWidth: 220,
-                animation: 'alp-fadeUp 0.5s 0.48s ease both',
-              }}
-            >
-              {[40,65,50,80,60,90,75,100,85,95,70,88].map((h,i) => (
-                <div
-                  key={i}
-                  style={{
-                    flex: 1,
-                    height: `${h}%`,
-                    borderRadius: 2,
-                    background: `linear-gradient(to top, ${LP.sparkTop}, ${LP.sparkBot})`,
-                    animation: `alp-data-float ${2.5 + (i % 3) * 0.5}s ease-in-out infinite`,
-                    animationDelay: `${i * 0.12}s`,
-                  }}
-                />
-              ))}
-            </div>
           </div>
-          {/* Mobile stats strip */}
+
+          {/* Mobile process flow strip */}
           <div
             style={{
               display: 'flex',
-              gap: 8,
-              padding: '16px 24px',
-              borderTop: '1px solid rgba(255,255,255,0.06)',
-              background: isDark
-                ? 'rgba(0,0,0,0.15)'
-                : 'rgba(255,255,255,0.7)',
+              alignItems: 'center',
+              gap: 0,
+              padding: '14px 20px 18px',
+              borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+              background: isDark ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.6)',
               zIndex: 2,
               position: 'relative',
             }}
           >
-            <StatPill val={stat1} label="Projects" icon={<Inventory2Rounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
-            <StatPill val={stat2} label="Avg ETA" icon={<TimerRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
-            <StatPill val={stat3} label="On-time" icon={<TaskAltRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
+            {[
+              { label: 'Requested', step: 0, icon: (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+              )},
+              { label: 'Analysis', step: 1, icon: (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
+                </svg>
+              )},
+              { label: 'Delivery', step: 2, icon: (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                </svg>
+              )},
+            ].map(({ label, step, icon }, idx) => {
+              const isActive = flowStep === step;
+              const isDone = flowStep > step;
+              const nodeColor = isActive
+                ? '#22d3ee'
+                : isDone
+                ? '#2dd4bf'
+                : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.18)');
+              return (
+                <React.Fragment key={step}>
+                  {idx > 0 && (
+                    <div style={{ flex: 1, height: 1, position: 'relative', overflow: 'hidden', background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}>
+                      <div style={{
+                        position: 'absolute', left: 0, top: 0, height: '100%',
+                        width: isDone ? '100%' : isActive ? '50%' : '0%',
+                        background: 'linear-gradient(90deg, #22d3ee, #2dd4bf)',
+                        transition: 'width 0.6s ease',
+                      }} />
+                      {isActive && (
+                        <div style={{
+                          position: 'absolute', top: '50%', transform: 'translateY(-50%)',
+                          width: 5, height: 5, borderRadius: '50%',
+                          background: '#22d3ee',
+                          boxShadow: '0 0 6px #22d3ee',
+                          animation: 'alp-travel 1.1s linear infinite',
+                        }} />
+                      )}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 64 }}>
+                    <div style={{
+                      width: 30, height: 30, borderRadius: '50%',
+                      border: `1.5px solid ${nodeColor}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: nodeColor,
+                      background: isActive
+                        ? (isDark ? 'rgba(34,211,238,0.12)' : 'rgba(34,211,238,0.1)')
+                        : 'transparent',
+                      boxShadow: isActive ? `0 0 10px rgba(34,211,238,0.35)` : 'none',
+                      transition: 'all 0.4s ease',
+                    }}>
+                      {icon}
+                    </div>
+                    <span style={{
+                      fontSize: 9,
+                      fontWeight: isActive ? 700 : 500,
+                      color: isActive ? LP.headlineColor : LP.subColor,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      transition: 'color 0.3s',
+                    }}>{label}</span>
+                  </div>
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
 

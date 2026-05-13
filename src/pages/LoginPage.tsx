@@ -39,7 +39,6 @@ function useInjectAuroraKeyframes() {
   }, [])
 }
 
-function useCountUp(target: number, suffix: string, decimals: number, delay: number, duration: number) {
   const [value, setValue] = useState('0' + suffix)
   useEffect(() => {
     const t = setTimeout(() => {

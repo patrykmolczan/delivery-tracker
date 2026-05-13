@@ -112,6 +112,12 @@ const Dashboard: React.FC = () => {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'projects' }, () => {
         loadData(true)
       })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'projects' }, () => {
+        loadData(true)
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'projects' }, () => {
+        loadData(true)
+      })
       .subscribe()
     return () => { supabaseRealtime.removeChannel(channel) }
   }, [])

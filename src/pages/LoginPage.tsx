@@ -205,6 +205,11 @@ export const LoginPage: React.FC = () => {
   const [forgotSent, setForgotSent] = useState(false)
   const [forgotLoading, setForgotLoading] = useState(false)
   const [forgotError, setForgotError] = useState<string | null>(null)
+  const [flowStep, setFlowStep] = useState(0)
+  useEffect(() => {
+    const ft = setInterval(() => setFlowStep(s => (s + 1) % 3), 2200)
+    return () => clearInterval(ft)
+  }, [])
 
   useInjectAuroraKeyframes()
 
@@ -490,7 +495,7 @@ export const LoginPage: React.FC = () => {
                 animation: 'alp-fadeUp 0.5s 0.38s ease both',
               }}
             >
-              Real-time pipeline visibility for fast-moving teams.
+              End-to-end project tracking and delivery platform — from intake to completion.
             </div>
             {/* Sparkline bar */}
             <div
@@ -719,7 +724,7 @@ export const LoginPage: React.FC = () => {
                 animation: 'alp-fadeUp 0.6s 0.45s ease both',
               }}
             >
-              Real-time pipeline visibility from intake to delivery — for teams that move fast.
+              End-to-end project tracking and delivery platform — from intake to completion.
             </div>
             {/* Feature chips */}
             <div
@@ -786,119 +791,128 @@ export const LoginPage: React.FC = () => {
               </span>
             </div>
           </div>
-          {/* LIVE METRICS CARD */}
+          {/* PROCESS FLOW CARD */}
           <div
             style={{
               position: 'relative',
               zIndex: 2,
-              background: isDark
-                ? 'rgba(6,182,212,0.05)'
-                : 'rgba(255,255,255,0.8)',
-              border: isDark
-                ? '1px solid rgba(6,182,212,0.15)'
-                : '1px solid rgba(6,182,212,0.18)',
+              background: isDark ? 'rgba(6,182,212,0.05)' : 'rgba(255,255,255,0.8)',
+              border: isDark ? '1px solid rgba(6,182,212,0.15)' : '1px solid rgba(6,182,212,0.18)',
               borderRadius: 16,
-              padding: '18px 20px',
+              padding: '20px 20px 18px',
               marginTop: 36,
               backdropFilter: 'blur(20px)',
-              animation:
-                'alp-fadeUp 0.6s 0.68s ease both, alp-cardGlow 4.5s 1.5s ease-in-out infinite',
-              boxShadow: isDark
-                ? '0 4px 32px rgba(6,182,212,0.08)'
-                : '0 4px 24px rgba(6,182,212,0.06)',
+              animation: 'alp-fadeUp 0.6s 0.68s ease both, alp-cardGlow 4.5s 1.5s ease-in-out infinite',
+              boxShadow: isDark ? '0 4px 32px rgba(6,182,212,0.08)' : '0 4px 24px rgba(6,182,212,0.06)',
             }}
           >
-            {/* Header row */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: 12,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 9,
-                  letterSpacing: '0.14em',
-                  color: LP.liveMetricsLabel,
-                  textTransform: 'uppercase',
-                  transition: 'color 0.35s',
-                }}
-              >
-                LIVE PLATFORM METRICS
+            {/* Card header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
+              <span style={{ fontSize: 9, letterSpacing: '0.14em', color: LP.liveMetricsLabel, textTransform: 'uppercase' as const, transition: 'color 0.35s' }}>
+                DELIVERY PIPELINE
               </span>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  fontSize: 9,
-                  color: '#4ade80',
-                  background: 'rgba(74,222,128,0.1)',
-                  border: '1px solid rgba(74,222,128,0.2)',
-                  borderRadius: 999,
-                  padding: '2px 7px',
-                }}
-              >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#4ade80', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: 999, padding: '2px 7px' }}>
                 <LiveDot size={5} /> LIVE
               </span>
             </div>
-            {/* Stat pills */}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <StatPill val={stat1} label="Projects" icon={<Inventory2Rounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
-              <StatPill val={stat2} label="Avg ETA" icon={<TimerRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
-              <StatPill val={stat3} label="On-time" icon={<TaskAltRounded sx={{ fontSize: 13, color: LP.statIcon }} />} valColor={LP.statVal} labelColor={LP.statLabel} bg={LP.statBg} border={LP.statBorder} />
-            </div>
-            {/* Sparkline */}
-            <div
-              style={{
-                marginTop: 14,
-                display: 'flex',
-                gap: 2,
-                alignItems: 'flex-end',
-                height: 24,
-              }}
-            >
-              {[40,65,50,80,60,90,75,100,85,95,70,88].map((h,i) => (
-                <div
-                  key={i}
-                  style={{
-                    flex: 1,
-                    height: `${h}%`,
-                    borderRadius: 2,
-                    background: `linear-gradient(to top, ${LP.sparkTop}, ${LP.sparkBot})`,
-                    animation: `alp-data-float ${2.5 + (i % 3) * 0.5}s ease-in-out infinite`,
-                    animationDelay: `${i * 0.12}s`,
-                  }}
-                />
+            {/* Flow nodes row */}
+            <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+              {([
+                { label: 'Requested', color: '#22d3ee', glow: 'rgba(34,211,238,0.3)', icon: (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" width={18} height={18}>
+                    <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+                    <rect x="9" y="3" width="6" height="4" rx="1"/>
+                    <line x1="9" y1="12" x2="15" y2="12"/>
+                    <line x1="9" y1="16" x2="13" y2="16"/>
+                  </svg>
+                )},
+                { label: 'Analysis', color: '#818cf8', glow: 'rgba(129,140,248,0.3)', icon: (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" width={18} height={18}>
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="M21 21l-4.35-4.35"/>
+                    <line x1="11" y1="8" x2="11" y2="14"/>
+                    <line x1="8" y1="11" x2="14" y2="11"/>
+                  </svg>
+                )},
+                { label: 'Delivery', color: '#34d399', glow: 'rgba(52,211,153,0.3)', icon: (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" width={18} height={18}>
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                  </svg>
+                )},
+              ] as Array<{ label: string; color: string; glow: string; icon: React.ReactNode }>).map((node, i) => (
+                <React.Fragment key={i}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flex: '0 0 auto' }}>
+                    <div style={{
+                      width: 46,
+                      height: 46,
+                      borderRadius: 13,
+                      border: `1.5px solid ${flowStep >= i ? node.color : (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)')}`,
+                      background: flowStep >= i
+                        ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.9)')
+                        : (isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'),
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: flowStep >= i ? node.color : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'),
+                      transition: 'all 0.7s ease',
+                      boxShadow: flowStep === i ? `0 0 18px ${node.glow}` : 'none',
+                      animation: flowStep === i ? 'alp-node-pulse 2s ease-in-out infinite' : 'none',
+                    }}>
+                      {node.icon}
+                    </div>
+                    <div style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      letterSpacing: '0.03em',
+                      color: flowStep >= i
+                        ? (isDark ? '#e2e8f0' : '#1e293b')
+                        : (isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'),
+                      transition: 'color 0.7s',
+                      whiteSpace: 'nowrap' as const,
+                    }}>
+                      {node.label}
+                    </div>
+                    <div style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: '50%',
+                      background: flowStep === i ? node.color : 'transparent',
+                      boxShadow: flowStep === i ? `0 0 7px ${node.color}` : 'none',
+                      transition: 'all 0.5s',
+                      animation: flowStep === i ? 'alp-pulse 1.2s infinite' : 'none',
+                    }} />
+                  </div>
+                  {i < 2 && (
+                    <div style={{ flex: 1, position: 'relative', height: 2, margin: '22px 8px 0' }}>
+                      <div style={{ position: 'absolute', inset: 0, borderRadius: 1, background: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)' }} />
+                      <div style={{
+                        position: 'absolute', top: 0, left: 0, bottom: 0,
+                        width: flowStep > i ? '100%' : '0%',
+                        borderRadius: 1,
+                        background: i === 0 ? 'linear-gradient(to right,#22d3ee,#818cf8)' : 'linear-gradient(to right,#818cf8,#34d399)',
+                        transition: 'width 0.9s ease',
+                      }} />
+                      {flowStep === i && (
+                        <div style={{
+                          position: 'absolute', top: '50%', marginTop: -3,
+                          width: 6, height: 6, borderRadius: '50%',
+                          background: i === 0 ? '#818cf8' : '#34d399',
+                          boxShadow: `0 0 10px ${i === 0 ? '#818cf8' : '#34d399'}`,
+                          animation: 'alp-travel 1.4s linear infinite',
+                        }} />
+                      )}
+                    </div>
+                  )}
+                </React.Fragment>
               ))}
             </div>
-            {/* Updated label */}
-            <div
-              style={{
-                marginTop: 8,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 9,
-                color: LP.liveMetricsLabel,
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: '#4ade80',
-                  display: 'inline-block',
-                  animation: 'alp-pulse 2s infinite',
-                }}
-              />
-              Updated just now
+            {/* Status line */}
+            <div style={{ marginTop: 16, fontSize: 10, color: LP.liveMetricsLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', display: 'inline-block', animation: 'alp-pulse 2s infinite' }} />
+              {(['Intake received — queued for analysis', 'AI analysis in progress…', 'Delivery complete ✓'] as const)[flowStep]}
             </div>
           </div>
-          {/* FOOTER */}
+                    {/* FOOTER */}
           <div
             style={{
               position: 'relative',
@@ -1252,6 +1266,10 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     const style = document.createElement('style')
     style.id = 'alp-daas-kf'
     style.textContent = `
+@keyframes alp-travel {
+  0%   { left: 0%; }
+  100% { left: calc(100% - 6px); }
+}
 @keyframes alp-node-pulse {
   0%,100% { transform: scale(1); opacity: 0.6; }
   50% { transform: scale(1.15); opacity: 1; }

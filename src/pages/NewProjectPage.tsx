@@ -292,7 +292,8 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   if (touched.date_received && !form.date_received) errors.date_received = 'Required'
   if (touched.status_id && !form.status_id) errors.status_id = 'Required'
 
-  const isValid = (isAdmin ? !!form.project_owner : true) && !!form.client_name && !!form.date_received && !!form.status_id
+  // Non-admins always get 'Under Review' auto-set — don't gate the button on status_id for them
+  const isValid = (isAdmin ? !!form.project_owner && !!form.status_id : true) && !!form.client_name && !!form.date_received
 
   // ── Template parse state ─────────────────────────────────────────────────────
   const [isParsing, setIsParsing] = useState(false)
@@ -451,6 +452,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('[SUBMIT] handleSubmit fired, isValid=', isValid)
     if (!isValid) return
     // Re-validate session — context user can go stale after 2+ min idle
     const { data: { session: freshSession } } = await supabase.auth.getSession()
@@ -459,10 +461,16 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
       setError('Your session has expired. Please refresh the page.')
       return
     }
+    // For non-admins, ensure status_id is resolved at submit time (defensive)
+    let resolvedForm = form
+    if (!isAdmin && !form.status_id && lookups) {
+      const underReview = lookups.statuses.find(s => s.name === 'Under Review')
+      if (underReview) resolvedForm = { ...form, status_id: underReview.id }
+    }
     setSaving(true)
     setError(null)
     setUploadProgress(null)
-    console.log('[SUBMIT] handleSubmit fired — calling createProject...')
+    console.log('[SUBMIT] session OK — calling createProject...')
 
     try {
 
@@ -470,7 +478,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
       let savedProject: Project
 
       if (editProject) {
-        await updateProject(editProject.id, form)
+        await updateProject(editProject.id, resolvedForm)
         savedProject = { ...editProject, ...form } as any
         // Upload any newly staged files
         if (stagedFiles.length > 0) {
@@ -480,7 +488,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
           }
         }
       } else {
-        savedProject = await createProject(form, activeUser.id, eta)
+        savedProject = await createProject(resolvedForm, activeUser.id, eta)
         // Upload staged files now that we have a project ID
         if (stagedFiles.length > 0) {
           for (let i = 0; i < stagedFiles.length; i++) {

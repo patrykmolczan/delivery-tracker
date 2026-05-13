@@ -450,7 +450,14 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!isValid || !user) return
+    if (!isValid) return
+    // Re-validate session — context user can go stale after 2+ min idle
+    const { data: { session: freshSession } } = await supabase.auth.getSession()
+    const activeUser = freshSession?.user ?? user
+    if (!activeUser) {
+      setError('Your session has expired. Please refresh the page.')
+      return
+    }
     setSaving(true)
     setError(null)
     setUploadProgress(null)
@@ -468,16 +475,16 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
         if (stagedFiles.length > 0) {
           for (let i = 0; i < stagedFiles.length; i++) {
             setUploadProgress(`Uploading file ${i + 1} of ${stagedFiles.length}…`)
-            await uploadProjectFile(editProject.id, stagedFiles[i], user.id)
+            await uploadProjectFile(editProject.id, stagedFiles[i], activeUser.id)
           }
         }
       } else {
-        savedProject = await createProject(form, user.id, eta)
+        savedProject = await createProject(form, activeUser.id, eta)
         // Upload staged files now that we have a project ID
         if (stagedFiles.length > 0) {
           for (let i = 0; i < stagedFiles.length; i++) {
             setUploadProgress(`Uploading file ${i + 1} of ${stagedFiles.length}…`)
-            await uploadProjectFile(savedProject.id, stagedFiles[i], user.id)
+            await uploadProjectFile(savedProject.id, stagedFiles[i], activeUser.id)
           }
         }
       }

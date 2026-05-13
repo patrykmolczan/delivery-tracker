@@ -44,6 +44,7 @@ const DASHBOARD_TABLE_ROWS = 25
 const Dashboard: React.FC = () => {
   const { user, profile, isAdmin, isSuperAdmin, signOut } = useAuth()
   const [showChangePassword, setShowChangePassword] = useState(false)
+  const isSSOUser = !!(user?.user_metadata?.sso_provider)
   const { logoUrl } = useLogo()
   const { isDark, toggleTheme } = useTheme()
   const [projects, setProjects] = useState<Project[]>([])
@@ -283,10 +284,13 @@ const Dashboard: React.FC = () => {
             </button>
           </div>
           <button
-            className="btn btn-ghost btn-xs gap-1.5 w-full mt-1 text-base-content/60"
-            onClick={() => setShowChangePassword(true)}
+            className={`btn btn-ghost btn-xs gap-1.5 w-full mt-1 ${isSSOUser ? 'opacity-40 cursor-not-allowed text-base-content/30' : 'text-base-content/60'}`}
+            onClick={() => !isSSOUser && setShowChangePassword(true)}
+            disabled={isSSOUser}
+            title={isSSOUser ? 'Password is managed by your SSO provider' : undefined}
           >
             <Lock size={12} /> Change password
+            {isSSOUser && <span className="ml-auto text-xs">SSO</span>}
           </button>
         </div>
       </aside>

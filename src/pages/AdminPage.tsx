@@ -8,7 +8,7 @@ import {
 import { supabase, getAuthHeaders } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  fetchAnalysts, fetchAllAnalysts, createAnalyst, updateAnalyst, deactivateAnalyst, reactivateAnalyst,
+  fetchAllAnalysts, createAnalyst, updateAnalyst, deactivateAnalyst, reactivateAnalyst,
   fetchClientTypesAdmin, createClientType, updateClientType, deactivateClientType,
   fetchProjectTypes, createProjectType, updateProjectType, deactivateProjectType,
   fetchNotificationSettings, updateNotificationSetting,

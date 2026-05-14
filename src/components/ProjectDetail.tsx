@@ -31,6 +31,7 @@ import {
 } from '../lib/data'
 import type { LookupItem } from '../types'
 import { useAuth } from '../contexts/AuthContext'
+import { supabaseRealtime } from '../lib/supabase'
 import {
   fetchNotificationSettings,
   updateProjectNotificationsEnabled,
@@ -65,6 +66,16 @@ function sanitizeNoteHtml(html: string): string {
   } catch {
     return ''
   }
+}
+
+/** Prevents infinite spinners — rejects if the DB call does not resolve in 10 s */
+function withLoadTimeout<T>(p: Promise<T>): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('load_timeout')), 10_000)
+    ),
+  ])
 }
 
 interface FieldProps {
@@ -144,7 +155,7 @@ export const ProjectDetail: React.FC<{
   onDelete?: () => void
   defaultTab?: 'details' | 'history' | 'files' | 'delivery' | 'review' | 'chat'
 }> = ({ project, onClose, onEdit, onStatusUpdated, onDelete, defaultTab }) => {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, signOut } = useAuth()
   const [tab, setTab] = useState<'details' | 'history' | 'files' | 'delivery' | 'review' | 'chat'>(defaultTab ?? 'details')
   const [chatUnreadCount, setChatUnreadCount] = useState(0)
   const [statuses, setStatuses] = useState<LookupItem[]>([])
@@ -248,6 +259,13 @@ export const ProjectDetail: React.FC<{
     fetchLookups().then(l => setStatuses(l.statuses)).catch(() => {})
   }, [])
 
+  // Session guard — if session expired when panel opens, redirect immediately
+  useEffect(() => {
+    supabaseRealtime.auth.getSession().then(({ data: { session } }) => {
+      if (!session) signOut()
+    }).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     fetchNotificationSettings().then((settings: any[]) => {
       const map: Record<string, boolean> = {}
@@ -266,29 +284,35 @@ export const ProjectDetail: React.FC<{
 
   const loadHistory = async () => {
     setHistoryLoading(true)
-    const entries = await fetchProjectHistory(localProject.id)
-    setHistory(entries)
-    setHistoryLoading(false)
+    try {
+      const entries = await withLoadTimeout(fetchProjectHistory(localProject.id))
+      setHistory(entries)
+    } catch { /* timeout, expired session, or network error */ }
+    finally { setHistoryLoading(false) }
   }
 
   const loadFiles = async () => {
     setFilesLoading(true)
-    const list = await fetchProjectFiles(localProject.id)
-    setFiles(list)
-    setFilesLoading(false)
+    try {
+      const list = await withLoadTimeout(fetchProjectFiles(localProject.id))
+      setFiles(list)
+    } catch { /* timeout or error */ }
+    finally { setFilesLoading(false) }
   }
 
   const loadDeliveryFiles = async () => {
     setDeliveryLoading(true)
-    const list = await fetchDeliveryFiles(localProject.id)
-    setDeliveryFiles(list)
-    setDeliveryLoading(false)
+    try {
+      const list = await withLoadTimeout(fetchDeliveryFiles(localProject.id))
+      setDeliveryFiles(list)
+    } catch { /* timeout or error */ }
+    finally { setDeliveryLoading(false) }
   }
 
   const loadDeliveryNotes = async () => {
     setNotesLoading(true)
     try {
-      const notes = await fetchDeliveryNotes(localProject.id)
+      const notes = await withLoadTimeout(fetchDeliveryNotes(localProject.id))
       setDeliveryNotes(notes)
     } catch (err) {
       console.error('Failed to load delivery notes:', err)
@@ -303,7 +327,7 @@ export const ProjectDetail: React.FC<{
     if (tab === 'delivery') { loadDeliveryFiles(); loadDeliveryNotes() }
     if (tab === 'review') {
       setFeedbackLoading(true)
-      fetchProjectFeedback(localProject.id).then(({ entries, items }) => {
+      withLoadTimeout(fetchProjectFeedback(localProject.id)).then(({ entries, items }) => {
         setFeedbackEntries(entries)
         setFeedbackItems(items)
         setUnresolvedCount(items.filter(i => !i.is_resolved).length)

@@ -47,7 +47,7 @@ export const ProjectChat: React.FC<Props> = ({
   projectOwnerId,
   onUnreadCountChange,
 }) => {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, signOut } = useAuth()
   const [messages, setMessages] = useState<ProjectMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [input, setInput] = useState('')
@@ -62,6 +62,9 @@ export const ProjectChat: React.FC<Props> = ({
 
   const load = useCallback(async () => {
     try {
+      // Session guard — redirect immediately on expired session, no infinite spinner
+      const { data: { session } } = await supabaseRealtime.auth.getSession()
+      if (!session) { signOut(); return }
       const msgs = await fetchMessages(projectId)
       setMessages(msgs)
       if (user?.id) {

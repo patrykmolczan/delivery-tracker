@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabaseRealtime as supabase } from './supabase'
 
 export interface ProjectMessage {
   id: string

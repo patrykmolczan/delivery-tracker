@@ -111,12 +111,12 @@ const Dashboard: React.FC = () => {
     return () => clearTimeout(timer)
   }, [loading])
 
-  // Periodic session expiry check — every 2 min, sign out if access token is expired.
+  // Periodic session expiry check — every 30 s, sign out if access token is expired.
   // Uses getSession() (approved method) — never refreshSession() — navigator.locks safe.
   useEffect(() => {
-    const CHECK_INTERVAL = 2 * 60 * 1000 // 2 minutes
+    const CHECK_INTERVAL = 30 * 1000 // 30 seconds
     const id = setInterval(async () => {
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session } } = await supabaseRealtime.auth.getSession()
       const nowSec = Math.floor(Date.now() / 1000)
       if (!session || (session.expires_at && session.expires_at < nowSec)) {
         signOut()

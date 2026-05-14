@@ -127,7 +127,7 @@ interface Props {
 }
 
 export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel }) => {
-  const { user, profile, isAdmin } = useAuth()
+  const { user, profile, isAdmin, signOut } = useAuth()
   const [form, setForm] = useState<ProjectFormData>(EMPTY_FORM)
   const [lookups, setLookups] = useState<{ statuses: LookupItem[]; clientTypes: LookupItem[]; industries: LookupItem[]; countries: LookupItem[] } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -456,7 +456,14 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     if (!isValid) return
     // Re-validate session — context user can go stale after 2+ min idle
     const { data: { session: freshSession } } = await supabase.auth.getSession()
-    const activeUser = freshSession?.user ?? user
+    // InfoSec: check token expiry before attempting submit
+    const nowSec = Math.floor(Date.now() / 1000)
+    if (!freshSession || (freshSession.expires_at && freshSession.expires_at < nowSec)) {
+      setError('Your session has expired. Signing you out…')
+      setTimeout(() => signOut(), 1500)
+      return
+    }
+    const activeUser = freshSession.user ?? user
     if (!activeUser) {
       setError('Your session has expired. Please refresh the page.')
       return

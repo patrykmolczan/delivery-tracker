@@ -648,7 +648,7 @@ export const AdminPage: React.FC = () => {
     } catch (err: any) { setAnalystError(err.message || 'Failed to remove analyst') }
   }
 
-  const handleReactivateAnalyst = async (item: typeof analysts[0]) => {
+  const handleReactivateAnalyst = async (item: Analyst) => {
     try {
       await reactivateAnalyst(item.id)
       setAnalysts(prev => prev.map(a => a.id === item.id ? { ...a, is_active: true } : a).sort((a, b) => a.name.localeCompare(b.name)))

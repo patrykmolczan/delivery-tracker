@@ -133,6 +133,10 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [showQualityWarning, setShowQualityWarning] = useState(false)
+  const [showNoTemplateWarning, setShowNoTemplateWarning] = useState(false)
+  const pendingFormRef = useRef<ProjectFormData | null>(null)
+  const pendingUserRef = useRef<any>(null)
   const [touched, setTouched] = useState<Record<string, boolean>>({})
 
   // Analysts list
@@ -450,38 +454,16 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
 
   // ── Submit ────────────────────────────────────────────────────────────────────
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log('[SUBMIT] handleSubmit fired, isValid=', isValid)
-    if (!isValid) return
-    // Re-validate session — context user can go stale after 2+ min idle
-    const { data: { session: freshSession } } = await supabase.auth.getSession()
-    // InfoSec: check token expiry before attempting submit
-    const nowSec = Math.floor(Date.now() / 1000)
-    if (!freshSession || (freshSession.expires_at && freshSession.expires_at < nowSec)) {
-      setError('Your session has expired. Signing you out…')
-      setTimeout(() => signOut(), 1500)
-      return
-    }
-    const activeUser = freshSession.user ?? user
-    if (!activeUser) {
-      setError('Your session has expired. Please refresh the page.')
-      return
-    }
-    // For non-admins, ensure status_id is resolved at submit time (defensive)
-    let resolvedForm = form
-    if (!isAdmin && !form.status_id && lookups) {
-      const underReview = lookups.statuses.find(s => s.name === 'Under Review')
-      if (underReview) resolvedForm = { ...form, status_id: underReview.id }
-    }
+  // ── Core submit logic (called directly or via modal proceed button) ──────────
+  const doSubmit = async (resolvedForm: ProjectFormData, activeUser: any) => {
+    setShowQualityWarning(false)
+    setShowNoTemplateWarning(false)
     setSaving(true)
     setError(null)
     setUploadProgress(null)
     console.log('[SUBMIT] session OK — calling createProject...')
 
     try {
-
-
       let savedProject: Project
 
       if (editProject) {
@@ -515,6 +497,46 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    console.log('[SUBMIT] handleSubmit fired, isValid=', isValid)
+    if (!isValid) return
+    // Re-validate session — context user can go stale after 2+ min idle
+    const { data: { session: freshSession } } = await supabase.auth.getSession()
+    // InfoSec: check token expiry before attempting submit
+    const nowSec = Math.floor(Date.now() / 1000)
+    if (!freshSession || (freshSession.expires_at && freshSession.expires_at < nowSec)) {
+      setError('Your session has expired. Signing you out…')
+      setTimeout(() => signOut(), 1500)
+      return
+    }
+    const activeUser = freshSession.user ?? user
+    if (!activeUser) {
+      setError('Your session has expired. Please refresh the page.')
+      return
+    }
+    // For non-admins, ensure status_id is resolved at submit time (defensive)
+    let resolvedForm = form
+    if (!isAdmin && !form.status_id && lookups) {
+      const underReview = lookups.statuses.find(s => s.name === 'Under Review')
+      if (underReview) resolvedForm = { ...form, status_id: underReview.id }
+    }
+    // Store for modal proceed buttons
+    pendingFormRef.current = resolvedForm
+    pendingUserRef.current = activeUser
+    // Template gate — new projects only
+    if (!editProject && !templateFile) {
+      setShowNoTemplateWarning(true)
+      return
+    }
+    // Quality gate — new projects only, only when template was analysed
+    if (!editProject && qualityResult && qualityResult.score < PASSING_QUALITY_SCORE) {
+      setShowQualityWarning(true)
+      return
+    }
+    await doSubmit(resolvedForm, activeUser)
   }
 
   // ── Loading states ────────────────────────────────────────────────────────────
@@ -1274,6 +1296,72 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
               : editProject ? 'Update Project' : 'Create Project'}
           </button>
         </div>
+
+      {/* ── No Template Warning Modal ───────────────────────────────────── */}
+      {showNoTemplateWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-base-100 rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-start gap-3 mb-4">
+              <AlertCircle size={22} className="text-warning shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-bold text-base-content text-lg">Template Required</h3>
+                <p className="text-sm text-base-content/70 mt-1">
+                  No template file has been uploaded. Projects submitted without a template may be placed on hold or rejected by an admin.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowNoTemplateWarning(false)}
+              >
+                Upload Template
+              </button>
+              <button
+                type="button"
+                className="btn btn-warning btn-sm"
+                onClick={() => { if (pendingFormRef.current && pendingUserRef.current) doSubmit(pendingFormRef.current, pendingUserRef.current) }}
+              >
+                Accept & Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Low Quality Score Warning Modal ──────────────────────────────── */}
+      {showQualityWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-base-100 rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-start gap-3 mb-4">
+              <AlertCircle size={22} className="text-warning shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-bold text-base-content text-lg">Low Quality Score</h3>
+                <p className="text-sm text-base-content/70 mt-1">
+                  Your template scored <span className="font-semibold text-warning">{qualityResult?.score ?? 0}</span> out of 100 (passing: {PASSING_QUALITY_SCORE}). Projects with a low quality score may be placed on hold or rejected by an admin.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowQualityWarning(false)}
+              >
+                Fix Issues
+              </button>
+              <button
+                type="button"
+                className="btn btn-warning btn-sm"
+                onClick={() => { if (pendingFormRef.current && pendingUserRef.current) doSubmit(pendingFormRef.current, pendingUserRef.current) }}
+              >
+                Accept & Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       </form>
     </div>

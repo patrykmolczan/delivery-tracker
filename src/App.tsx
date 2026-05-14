@@ -78,7 +78,7 @@ const Dashboard: React.FC = () => {
       // Compute stats in-memory from already-loaded projects
       const sc = fetchStatusCounts(proj)
       // Fetch inactive analyst names to exclude from Workload by Owner chart
-      const { data: inactiveAnalystRows } = await supabase.from('analysts').select('name').eq('is_active', false)
+      const { data: inactiveAnalystRows } = await supabaseRealtime.from('analysts').select('name').eq('is_active', false)
       const inactiveAnalystNames = new Set<string>((inactiveAnalystRows || []).map((r: any) => r.name))
       const oc = fetchOwnerCounts(proj, inactiveAnalystNames)
       // Re-compute filter options with real owners

@@ -287,6 +287,13 @@ export async function createProject(
 }
 
 export async function updateProject(id: string, form: ProjectFormData): Promise<void> {
+  // Capture current assignment state before the update so we can detect changes
+  const { data: current } = await supabase
+    .from('projects')
+    .select('project_owner, analyst, created_by, notifications_enabled, client_name')
+    .eq('id', id)
+    .single()
+
   const updateData: any = {
     project_owner: sanitizeText(form.project_owner) ?? form.project_owner,
     analyst: sanitizeText(form.analyst),
@@ -316,6 +323,38 @@ export async function updateProject(id: string, form: ProjectFormData): Promise<
 
   // Sync task items (full replace by id)
   await syncProjectTasks(id, form.project_tasks)
+
+  // ── Assignment change notifications ─────────────────────────────────────────
+  // Fire in-app notifications to the project creator when owner/analyst changes,
+  // but only if the project has notifications enabled.
+  if (current && current.notifications_enabled !== false && current.created_by) {
+    const newOwner = (sanitizeText(form.project_owner) ?? form.project_owner)?.trim() || null
+    const newAnalyst = sanitizeText(form.analyst)?.trim() || null
+    const projectName = current.client_name || id
+
+    if (newOwner && newOwner !== (current.project_owner?.trim() || null)) {
+      await createNotification({
+        userId: current.created_by,
+        type: 'assignment_changed',
+        title: 'Project Owner Assigned',
+        body: `${newOwner} has been assigned as Project Owner on your project.`,
+        projectId: id,
+        projectName,
+      })
+    }
+
+    const oldAnalyst = current.analyst?.trim() || null
+    if (newAnalyst !== oldAnalyst && newAnalyst) {
+      await createNotification({
+        userId: current.created_by,
+        type: 'assignment_changed',
+        title: 'Analyst Assigned',
+        body: `${newAnalyst} has been assigned as Analyst on your project.`,
+        projectId: id,
+        projectName,
+      })
+    }
+  }
 }
 
 
@@ -2206,3 +2245,4 @@ export async function deleteTextPreset(id: string): Promise<void> {
     .eq('id', id)
   if (error) throw new Error(`Failed to delete preset: ${error.message}`)
 }
+

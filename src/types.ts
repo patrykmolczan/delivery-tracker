@@ -224,6 +224,7 @@ export type NotificationType =
   | 'status_change'
   | 'checklist_resolved'
   | 'client_name_approved'
+  | 'assignment_changed'
 
 export interface AppNotification {
   id: string
@@ -236,3 +237,4 @@ export interface AppNotification {
   is_read: boolean
   created_at: string
 }
+

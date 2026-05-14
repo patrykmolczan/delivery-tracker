@@ -34,6 +34,7 @@ function getNotifMeta(type: string): NotifMeta {
     eta_update:       { icon: '🕐', colorClass: 'text-accent',  label: 'ETA Updated' },
     project_created:  { icon: '🆕', colorClass: 'text-success', label: 'New Project' },
     status_change:    { icon: '📊', colorClass: 'text-base-content', label: 'Status Change' },
+    assignment_changed: { icon: '👤', colorClass: 'text-secondary', label: 'Assignment' },
   }
   return map[type] ?? { icon: '🔔', colorClass: 'text-base-content', label: 'Notification' }
 }
@@ -44,6 +45,7 @@ function getNotifTab(type: string): string | undefined {
   if (reviewTypes.includes(type)) return 'review'
   if (type === 'eta_update') return 'details'
   if (type === 'status_change') return 'details'
+  if (type === 'assignment_changed') return 'details'
   return undefined
 }
 
@@ -255,3 +257,4 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
     </div>
   )
 }
+

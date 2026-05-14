@@ -24,7 +24,7 @@ import {
   Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon
 } from 'lucide-react'
 import { useTheme } from './contexts/ThemeContext'
-import { supabaseRealtime } from './lib/supabase'
+import { supabase, supabaseRealtime } from './lib/supabase'
 import { NotificationBell } from './components/NotificationBell'
 import { NotificationInbox } from './pages/NotificationInbox'
 import { EntraCallbackPage } from './pages/EntraCallbackPage'
@@ -107,6 +107,20 @@ const Dashboard: React.FC = () => {
     }, 12000)
     return () => clearTimeout(timer)
   }, [loading])
+
+  // Periodic session expiry check — every 2 min, sign out if access token is expired.
+  // Uses getSession() (approved method) — never refreshSession() — navigator.locks safe.
+  useEffect(() => {
+    const CHECK_INTERVAL = 2 * 60 * 1000 // 2 minutes
+    const id = setInterval(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      const nowSec = Math.floor(Date.now() / 1000)
+      if (!session || (session.expires_at && session.expires_at < nowSec)) {
+        signOut()
+      }
+    }, CHECK_INTERVAL)
+    return () => clearInterval(id)
+  }, [])
 
   // Real-time: auto-refresh project table when a new project is inserted
   useEffect(() => {

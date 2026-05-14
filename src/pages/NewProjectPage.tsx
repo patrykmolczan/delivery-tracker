@@ -4,7 +4,6 @@ import {
   Globe, ListTodo, Paperclip, Zap, Download, FileText,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabase'
 import {
   fetchLookups, createProject, updateProject, fetchProjects,
   buildLookupMaps, buildPredictionStats, predictDeliveryTime,
@@ -127,7 +126,7 @@ interface Props {
 }
 
 export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel }) => {
-  const { user, profile, isAdmin, signOut } = useAuth()
+  const { user, profile, isAdmin } = useAuth()
   const [form, setForm] = useState<ProjectFormData>(EMPTY_FORM)
   const [lookups, setLookups] = useState<{ statuses: LookupItem[]; clientTypes: LookupItem[]; industries: LookupItem[]; countries: LookupItem[] } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -503,16 +502,8 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     e.preventDefault()
     console.log('[SUBMIT] handleSubmit fired, isValid=', isValid)
     if (!isValid) return
-    // Re-validate session — context user can go stale after 2+ min idle
-    const { data: { session: freshSession } } = await supabase.auth.getSession()
-    // InfoSec: check token expiry before attempting submit
-    const nowSec = Math.floor(Date.now() / 1000)
-    if (!freshSession || (freshSession.expires_at && freshSession.expires_at < nowSec)) {
-      setError('Your session has expired. Signing you out…')
-      setTimeout(() => signOut(), 1500)
-      return
-    }
-    const activeUser = freshSession.user ?? user
+    // Use context user — App.tsx keeps session fresh via 2-min interval getSession() check
+    const activeUser = user
     if (!activeUser) {
       setError('Your session has expired. Please refresh the page.')
       return

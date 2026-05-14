@@ -24,7 +24,7 @@ import {
   Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon
 } from 'lucide-react'
 import { useTheme } from './contexts/ThemeContext'
-import { supabase, supabaseRealtime } from './lib/supabase'
+import { supabaseRealtime } from './lib/supabase'
 import { NotificationBell } from './components/NotificationBell'
 import { NotificationInbox } from './pages/NotificationInbox'
 import { EntraCallbackPage } from './pages/EntraCallbackPage'

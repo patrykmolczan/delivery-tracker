@@ -8,7 +8,7 @@ import {
 import { supabase, getAuthHeaders } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import {
-  fetchAnalysts, createAnalyst, updateAnalyst, deactivateAnalyst,
+  fetchAnalysts, fetchAllAnalysts, createAnalyst, updateAnalyst, deactivateAnalyst, reactivateAnalyst,
   fetchClientTypesAdmin, createClientType, updateClientType, deactivateClientType,
   fetchProjectTypes, createProjectType, updateProjectType, deactivateProjectType,
   fetchNotificationSettings, updateNotificationSetting,
@@ -393,7 +393,7 @@ export const AdminPage: React.FC = () => {
     fetchUsers()
     // Analysts
     setAnalystLoading(true)
-    fetchAnalysts().then(list => { setAnalysts(list); setAnalystLoading(false) }).catch(e => { setAnalystError(e.message); setAnalystLoading(false) })
+    fetchAllAnalysts().then(list => { setAnalysts(list); setAnalystLoading(false) }).catch(e => { setAnalystError(e.message); setAnalystLoading(false) })
     fetchAllClients().then(list => { setClients(list); setClientsLoading(false) }).catch(e => { setClientsError(e.message); setClientsLoading(false) })
     fetchClientRequests().then(list => { setClientRequests(list); setRequestsLoading(false) }).catch(() => { setRequestsLoading(false) })
     // Client types
@@ -640,12 +640,20 @@ export const AdminPage: React.FC = () => {
   }
 
   const handleRemoveAnalyst = async (item: ListItem) => {
-    if (!window.confirm(`Remove analyst "${item.name}"? They won't appear in new project forms.`)) return
+    if (!window.confirm(`Mark analyst "${item.name}" as Inactive? They won't appear in project forms or the Workload chart.`)) return
     try {
       await deactivateAnalyst(item.id)
       setAnalysts(prev => prev.filter(a => a.id !== item.id))
       showSuccess(`Analyst "${item.name}" removed.`)
     } catch (err: any) { setAnalystError(err.message || 'Failed to remove analyst') }
+  }
+
+  const handleReactivateAnalyst = async (item: typeof analysts[0]) => {
+    try {
+      await reactivateAnalyst(item.id)
+      setAnalysts(prev => prev.map(a => a.id === item.id ? { ...a, is_active: true } : a).sort((a, b) => a.name.localeCompare(b.name)))
+      showSuccess(`Analyst "${item.name}" reactivated!`)
+    } catch (err: any) { setAnalystError(err.message || 'Failed to reactivate analyst') }
   }
 
   // ── Client Type handlers ───────────────────────────────────────────────────
@@ -1242,7 +1250,7 @@ export const AdminPage: React.FC = () => {
           title="Analysts"
           subtitle="Names that appear in the Analyst dropdown when creating or editing projects."
           icon={<Users size={18} className="text-primary" />}
-          items={analysts}
+          items={analysts.filter(a => a.is_active)}
           loading={analystLoading}
           error={analystError}
           onClearError={() => setAnalystError(null)}
@@ -1277,6 +1285,35 @@ export const AdminPage: React.FC = () => {
           templateItems={projectTypes}
         />
       </div>
+
+      {/* ── Inactive Analysts ───────────────────────────────────────────────── */}
+      {analysts.filter(a => !a.is_active).length > 0 && (
+        <div className="card bg-base-200 border border-base-300">
+          <div className="card-body">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="card-title text-base flex items-center gap-2 text-base-content/50">
+                <UserX size={18} /> Inactive Analysts
+              </h3>
+              <span className="badge badge-ghost badge-sm">{analysts.filter(a => !a.is_active).length}</span>
+            </div>
+            <p className="text-xs text-base-content/40 mb-3">Hidden from project forms and the Workload chart. Click Activate to restore.</p>
+            <div className="space-y-1.5">
+              {analysts.filter(a => !a.is_active).map(a => (
+                <div key={a.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-base-100/50 border border-base-300 rounded-lg opacity-60">
+                  <span className="text-sm text-base-content/60">{a.name}</span>
+                  <button
+                    className="btn btn-ghost btn-xs gap-1 text-success/70 hover:text-success hover:bg-success/10"
+                    onClick={() => handleReactivateAnalyst(a)}
+                    title="Reactivate analyst"
+                  >
+                    <UserCheck size={11} /> Activate
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Users Table */}
       <div className="card bg-base-200 border border-base-300">

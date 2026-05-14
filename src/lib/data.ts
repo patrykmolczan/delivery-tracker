@@ -608,10 +608,11 @@ export function fetchStatusCounts(projects: Project[]): StatusCount[] {
     .sort((a, b) => b.count - a.count)
 }
 
-export function fetchOwnerCounts(projects: Project[]): OwnerCount[] {
+export function fetchOwnerCounts(projects: Project[], excludeOwners: Set<string> = new Set()): OwnerCount[] {
   const map: Record<string, OwnerCount> = {}
   projects.forEach(p => {
     if (!p.project_owner) return
+    if (excludeOwners.has(p.project_owner)) return
     if (!map[p.project_owner]) {
       map[p.project_owner] = { project_owner: p.project_owner, count: 0, completed: 0, active: 0 }
     }
@@ -1021,6 +1022,15 @@ export async function fetchAnalysts(): Promise<Analyst[]> {
   return (data || []) as Analyst[]
 }
 
+export async function fetchAllAnalysts(): Promise<Analyst[]> {
+  const { data, error } = await supabase
+    .from('analysts')
+    .select('*')
+    .order('name')
+  if (error) throw error
+  return (data || []) as Analyst[]
+}
+
 export async function createAnalyst(name: string): Promise<Analyst> {
   const { data, error } = await supabase
     .from('analysts')
@@ -1035,6 +1045,14 @@ export async function deactivateAnalyst(id: number): Promise<void> {
   const { error } = await supabase
     .from('analysts')
     .update({ is_active: false })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function reactivateAnalyst(id: number): Promise<void> {
+  const { error } = await supabase
+    .from('analysts')
+    .update({ is_active: true })
     .eq('id', id)
   if (error) throw error
 }

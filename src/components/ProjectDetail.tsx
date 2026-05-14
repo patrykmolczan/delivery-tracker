@@ -38,6 +38,7 @@ import {
 } from '../lib/data'
 import { sendNotification } from '../lib/notifications'
 import { DeleteProjectModal } from './DeleteProjectModal'
+import { ProjectChat } from './ProjectChat'
 import { ProjectFeedbackModal } from './ProjectFeedbackModal'
 import type { FeedbackActionType } from './ProjectFeedbackModal'
 import { FeedbackThread } from './FeedbackThread'
@@ -141,10 +142,11 @@ export const ProjectDetail: React.FC<{
   onEdit?: () => void
   onStatusUpdated?: (updatedProject: Project) => void
   onDelete?: () => void
-  defaultTab?: 'details' | 'history' | 'files' | 'delivery' | 'review'
+  defaultTab?: 'details' | 'history' | 'files' | 'delivery' | 'review' | 'chat'
 }> = ({ project, onClose, onEdit, onStatusUpdated, onDelete, defaultTab }) => {
   const { user, isAdmin } = useAuth()
-  const [tab, setTab] = useState<'details' | 'history' | 'files' | 'delivery' | 'review'>(defaultTab ?? 'details')
+  const [tab, setTab] = useState<'details' | 'history' | 'files' | 'delivery' | 'review' | 'chat'>(defaultTab ?? 'details')
+  const [chatUnreadCount, setChatUnreadCount] = useState(0)
   const [statuses, setStatuses] = useState<LookupItem[]>([])
   const [selectedStatusId, setSelectedStatusId] = useState<number | null>(project.status_id ?? null)
   const [selectedStatusName, setSelectedStatusName] = useState<string>(project.status)
@@ -800,6 +802,16 @@ export const ProjectDetail: React.FC<{
           Review
           {unresolvedCount > 0 && (
             <span className="badge badge-xs badge-error ml-0.5">{unresolvedCount}</span>
+          )}
+        </button>
+        <button
+          className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1 transition-colors relative ${tab === 'chat' ? 'border-b-2 border-primary text-primary' : 'text-base-content/50 hover:text-base-content'}`}
+          onClick={() => setTab('chat')}
+        >
+          <MessageSquare size={13} />
+          Chat
+          {chatUnreadCount > 0 && (
+            <span className="badge badge-xs badge-primary ml-0.5">{chatUnreadCount}</span>
           )}
         </button>
       </div>
@@ -1978,6 +1990,16 @@ export const ProjectDetail: React.FC<{
             />
           </div>
         </div>
+      )}
+
+      {/* Chat Tab */}
+      {tab === 'chat' && (
+        <ProjectChat
+          projectId={localProject.id}
+          projectName={localProject.project_owner || localProject.client_name || ''}
+          projectOwnerId={localProject.created_by ?? null}
+          onUnreadCountChange={setChatUnreadCount}
+        />
       )}
 
       {/* ── Modals ────────────────────────────────────────────────────────── */}

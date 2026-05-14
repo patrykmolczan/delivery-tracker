@@ -225,6 +225,7 @@ export type NotificationType =
   | 'checklist_resolved'
   | 'client_name_approved'
   | 'assignment_changed'
+  | 'chat_message'
 
 export interface AppNotification {
   id: string

@@ -35,6 +35,7 @@ function getNotifMeta(type: string): NotifMeta {
     project_created:  { icon: '🆕', colorClass: 'text-success', label: 'New Project' },
     status_change:    { icon: '📊', colorClass: 'text-base-content', label: 'Status Change' },
     assignment_changed: { icon: '👤', colorClass: 'text-secondary', label: 'Assignment' },
+    chat_message:       { icon: '💬', colorClass: 'text-primary',   label: 'Chat Message' },
   }
   return map[type] ?? { icon: '🔔', colorClass: 'text-base-content', label: 'Notification' }
 }
@@ -46,6 +47,7 @@ function getNotifTab(type: string): string | undefined {
   if (type === 'eta_update') return 'details'
   if (type === 'status_change') return 'details'
   if (type === 'assignment_changed') return 'details'
+  if (type === 'chat_message') return 'chat'
   return undefined
 }
 

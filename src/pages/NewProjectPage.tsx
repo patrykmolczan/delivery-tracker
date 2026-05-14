@@ -1299,67 +1299,85 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
 
       {/* ── No Template Warning Modal ───────────────────────────────────── */}
       {showNoTemplateWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-base-100 rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
-            <div className="flex items-start gap-3 mb-4">
-              <AlertCircle size={22} className="text-warning shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-bold text-base-content text-lg">Template Required</h3>
-                <p className="text-sm text-base-content/70 mt-1">
-                  No template file has been uploaded. Projects submitted without a template may be placed on hold or rejected by an admin.
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
+        <div className="modal modal-open" style={{zIndex: 9999}}>
+          <div className="modal-box max-w-md">
+            <h3 className="font-bold text-lg flex items-center gap-2">
+              <span className="text-warning text-xl">⚠️</span>
+              Submit without a template?
+            </h3>
+            <p className="py-4 text-sm text-base-content/80">
+              No template file has been uploaded. Projects submitted without a template may be placed on hold or rejected.
+            </p>
+            <p className="text-sm text-base-content/80 font-medium">Submitting without a template may result in:</p>
+            <ul className="list-disc list-inside text-sm text-base-content/70 mt-2 space-y-1">
+              <li>Project processing delays</li>
+              <li>Requests for rework or clarification from the review team</li>
+              <li>Project rejection due to missing data</li>
+            </ul>
+            <p className="text-sm font-semibold text-warning mt-4">
+              By proceeding, you acknowledge and accept these risks.
+            </p>
+            <div className="modal-action mt-4">
               <button
                 type="button"
-                className="btn btn-ghost btn-sm"
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 font-medium text-sm transition-colors"
                 onClick={() => setShowNoTemplateWarning(false)}
               >
                 Upload Template
               </button>
               <button
                 type="button"
-                className="btn btn-warning btn-sm"
-                onClick={() => { if (pendingFormRef.current && pendingUserRef.current) doSubmit(pendingFormRef.current, pendingUserRef.current) }}
+                className="btn btn-warning gap-2"
+                onClick={() => { if (pendingFormRef.current && pendingUserRef.current) { setShowNoTemplateWarning(false); doSubmit(pendingFormRef.current, pendingUserRef.current) } }}
               >
-                Accept & Continue
+                I understand — submit anyway
               </button>
             </div>
           </div>
+          <div className="modal-backdrop bg-black/40" onClick={() => setShowNoTemplateWarning(false)} />
         </div>
       )}
 
       {/* ── Low Quality Score Warning Modal ──────────────────────────────── */}
       {showQualityWarning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-base-100 rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
-            <div className="flex items-start gap-3 mb-4">
-              <AlertCircle size={22} className="text-warning shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-bold text-base-content text-lg">Low Quality Score</h3>
-                <p className="text-sm text-base-content/70 mt-1">
-                  Your template scored <span className="font-semibold text-warning">{qualityResult?.overallScore ?? 0}</span> out of 100 (passing: {PASSING_QUALITY_SCORE}). Projects with a low quality score may be placed on hold or rejected by an admin.
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
+        <div className="modal modal-open" style={{zIndex: 9999}}>
+          <div className="modal-box max-w-md">
+            <h3 className="font-bold text-lg flex items-center gap-2">
+              <span className="text-warning text-xl">⚠️</span>
+              Submit with quality issues?
+            </h3>
+            <p className="py-4 text-sm text-base-content/80">
+              Your template quality score is{' '}
+              <strong className="text-warning">{qualityResult?.overallScore ?? 0}/{PASSING_QUALITY_SCORE}</strong>,
+              which is below the required passing threshold.
+            </p>
+            <p className="text-sm text-base-content/80 font-medium">Submitting with unresolved issues may result in:</p>
+            <ul className="list-disc list-inside text-sm text-base-content/70 mt-2 space-y-1">
+              <li>Project processing delays</li>
+              <li>Requests for rework or clarification from the review team</li>
+              <li>Project rejection due to unresolved data issues</li>
+            </ul>
+            <p className="text-sm font-semibold text-warning mt-4">
+              By proceeding, you acknowledge and accept these risks.
+            </p>
+            <div className="modal-action mt-4">
               <button
                 type="button"
-                className="btn btn-ghost btn-sm"
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 font-medium text-sm transition-colors"
                 onClick={() => setShowQualityWarning(false)}
               >
-                Fix Issues
+                Cancel — fix issues first
               </button>
               <button
                 type="button"
-                className="btn btn-warning btn-sm"
-                onClick={() => { if (pendingFormRef.current && pendingUserRef.current) doSubmit(pendingFormRef.current, pendingUserRef.current) }}
+                className="btn btn-warning gap-2"
+                onClick={() => { if (pendingFormRef.current && pendingUserRef.current) { setShowQualityWarning(false); doSubmit(pendingFormRef.current, pendingUserRef.current) } }}
               >
-                Accept & Continue
+                I understand — submit anyway
               </button>
             </div>
           </div>
+          <div className="modal-backdrop bg-black/40" onClick={() => setShowQualityWarning(false)} />
         </div>
       )}
 

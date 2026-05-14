@@ -911,7 +911,8 @@ export interface PredictionStats {
 }
 
 export function buildPredictionStats(projects: Project[]): PredictionStats {
-  const completed = projects.filter(p => p.status === 'Completed' && p.days_to_complete && p.days_to_complete > 0)
+  const MAX_DAYS = 365  // cap: projects > 1 year are treated as data errors
+  const completed = projects.filter(p => p.status === 'Completed' && p.days_to_complete && p.days_to_complete > 0 && p.days_to_complete <= MAX_DAYS)
   const days = completed.map(p => p.days_to_complete as number).sort((a, b) => a - b)
 
   const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0
@@ -930,7 +931,8 @@ export function buildPredictionStats(projects: Project[]): PredictionStats {
     })
     const result: Record<string, { avg: number; count: number }> = {}
     Object.entries(map).forEach(([k, v]) => {
-      result[k] = { avg: median(v), count: v.length }  // median: outlier-resistant
+      const sorted_v = [...v].sort((a, b) => a - b)
+      result[k] = { avg: median(sorted_v), count: sorted_v.length }  // median: outlier-resistant
     })
     return result
   }
@@ -945,7 +947,7 @@ export function buildPredictionStats(projects: Project[]): PredictionStats {
   ]
   ranges.forEach(r => {
     const group = completed.filter(p => p.job_count != null && p.job_count >= r.min && p.job_count <= r.max)
-    const vals = group.map(p => p.days_to_complete as number)
+    const vals = group.map(p => p.days_to_complete as number).sort((a, b) => a - b)
     byJobRange[r.label] = { avg: median(vals), count: vals.length }  // median: outlier-resistant
   })
 

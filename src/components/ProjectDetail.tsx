@@ -1617,7 +1617,7 @@ export const ProjectDetail: React.FC<{
                             {/* Note body */}
                             <div
                               className="prose prose-sm max-w-none text-sm text-base-content/80 leading-relaxed
-                                [&_p]:mb-3 [&_p:empty]:min-h-[1em]
+                                [&_p]:my-0 [&_p:empty]:min-h-[1em]
                                 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5
                                 [&_li]:my-0.5 [&_hr]:border-base-300 [&_hr]:my-2
                                 [&_strong]:font-semibold [&_em]:italic [&_s]:line-through [&_u]:underline"

@@ -532,7 +532,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
       return
     }
     // Quality gate — new projects only, only when template was analysed
-    if (!editProject && qualityResult && qualityResult.score < PASSING_QUALITY_SCORE) {
+    if (!editProject && qualityResult && qualityResult.overallScore < PASSING_QUALITY_SCORE) {
       setShowQualityWarning(true)
       return
     }
@@ -1339,7 +1339,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
               <div>
                 <h3 className="font-bold text-base-content text-lg">Low Quality Score</h3>
                 <p className="text-sm text-base-content/70 mt-1">
-                  Your template scored <span className="font-semibold text-warning">{qualityResult?.score ?? 0}</span> out of 100 (passing: {PASSING_QUALITY_SCORE}). Projects with a low quality score may be placed on hold or rejected by an admin.
+                  Your template scored <span className="font-semibold text-warning">{qualityResult?.overallScore ?? 0}</span> out of 100 (passing: {PASSING_QUALITY_SCORE}). Projects with a low quality score may be placed on hold or rejected by an admin.
                 </p>
               </div>
             </div>

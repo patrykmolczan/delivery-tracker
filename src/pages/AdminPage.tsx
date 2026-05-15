@@ -5,7 +5,7 @@ import {
   Loader2, RefreshCw, Users, Plus, Trash2, Tag, Layers, Upload, Download,
   Search, ChevronLeft, ChevronRight, UserX, UserCheck, Bell, Mail, Image,
 } from 'lucide-react'
-import { supabase, getAuthHeaders } from '../lib/supabase'
+import { supabase, supabaseRealtime, getAuthHeaders } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import {
   fetchAllAnalysts, createAnalyst, updateAnalyst, deactivateAnalyst, reactivateAnalyst,
@@ -384,7 +384,7 @@ export const AdminPage: React.FC = () => {
 
   const fetchUsers = async () => {
     setLoading(true)
-    const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
+    const { data, error } = await supabaseRealtime.from('profiles').select('*').order('created_at', { ascending: false })
     if (!error) setUsers(data as UserProfile[])
     setLoading(false)
   }
@@ -415,7 +415,7 @@ export const AdminPage: React.FC = () => {
     //
     // getSession() reads from cache and only refreshes if the token is actually
     // expired — it does not fight the auto-refresh loop for the lock.
-    supabase.auth.getSession().then(() => {
+    supabaseRealtime.auth.getSession().then(() => {
       loadAll()
       fetchAppSettings().then(s => {
         setCurrentLogoUrl(s.logo_url || null)

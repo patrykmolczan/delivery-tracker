@@ -1,5 +1,7 @@
 import { supabase, getAuthHeaders } from './supabase'
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+
 export interface NotificationSetting {
   id: string
   setting_key: string
@@ -61,7 +63,7 @@ export async function sendNotification(payload: {
   // Fire-and-forget: don't block UI on email errors
   try {
     const headers = await getAuthHeaders()
-    const res = await fetch('/api/send-notification', {
+    const res = await fetch(`${API_BASE}/api/send-notification`, {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),

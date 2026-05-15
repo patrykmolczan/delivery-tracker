@@ -1,0 +1,291 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Delivery Tracker — Serverless API
+  Lambda functions + API Gateway HTTP API (replaces Vercel serverless functions)
+
+Parameters:
+  SupabaseUrl:
+    Type: String
+    Description: Supabase project URL (e.g. https://xxx.supabase.co)
+  SupabaseAnonKey:
+    Type: String
+    NoEcho: true
+    Description: Supabase anonymous/publishable key
+  SupabaseServiceRoleKey:
+    Type: String
+    NoEcho: true
+    Description: Supabase service role key (admin — keep secret)
+  OpenAIKey:
+    Type: String
+    NoEcho: true
+    Description: OpenAI API key
+  ResendApiKey:
+    Type: String
+    NoEcho: true
+    Description: Resend email API key
+  AppUrl:
+    Type: String
+    Description: Frontend Amplify URL (e.g. https://main.xxx.amplifyapp.com)
+  NotificationSecret:
+    Type: String
+    NoEcho: true
+    Default: rate-limit-salt
+    Description: Secret salt for rate limit IP hashing
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Architectures: [x86_64]
+    MemorySize: 256
+    Timeout: 29
+    CodeUri: ../
+    Environment:
+      Variables:
+        VITE_SUPABASE_URL: !Ref SupabaseUrl
+        VITE_SUPABASE_ANON_KEY: !Ref SupabaseAnonKey
+        SUPABASE_SERVICE_ROLE_KEY: !Ref SupabaseServiceRoleKey
+        VITE_OPENAI_API_KEY: !Ref OpenAIKey
+        RESEND_API_KEY: !Ref ResendApiKey
+        VITE_APP_URL: !Ref AppUrl
+        NOTIFICATION_SECRET: !Ref NotificationSecret
+        NODE_ENV: production
+
+Resources:
+
+  # ── API Gateway (HTTP API v2 — simpler + cheaper than REST API) ─────────────
+  DeliveryTrackerApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        MaxAge: 86400
+
+  # ── AI Chat ─────────────────────────────────────────────────────────────────
+  ChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: aws/functions/chat.handler
+      Description: AI Insights chat proxy (GPT-4.1)
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DeliveryTrackerApi
+            Path: /api/chat
+            Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [aws/functions/chat.ts]
+        External: ['@aws-sdk/*']
+        Minify: true
+        Target: es2022
+
+  # ── Email Notifications ──────────────────────────────────────────────────────
+  SendNotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: aws/functions/send-notification.handler
+      Description: Project email notification sender
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DeliveryTrackerApi
+            Path: /api/send-notification
+            Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [aws/functions/send-notification.ts]
+        External: ['@aws-sdk/*']
+        Minify: true
+        Target: es2022
+
+  # ── Password Reset ───────────────────────────────────────────────────────────
+  ForgotPasswordFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: aws/functions/forgot-password.handler
+      Description: Password reset email with hashed-token link
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DeliveryTrackerApi
+            Path: /api/forgot-password
+            Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [aws/functions/forgot-password.ts]
+        External: ['@aws-sdk/*']
+        Minify: true
+        Target: es2022
+
+  # ── Template Analysis ────────────────────────────────────────────────────────
+  AnalyzeTemplateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: aws/functions/analyze-template.handler
+      Description: Pay Intel template quality analysis (GPT-4.1)
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DeliveryTrackerApi
+            Path: /api/analyze-template
+            Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [aws/functions/analyze-template.ts]
+        External: ['@aws-sdk/*']
+        Minify: true
+        Target: es2022
+
+  # ── Description Generator ────────────────────────────────────────────────────
+  GenerateDescriptionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: aws/functions/generate-descriptions.handler
+      Description: AI job description generator (GPT-4.1)
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DeliveryTrackerApi
+            Path: /api/generate-descriptions
+            Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [aws/functions/generate-descriptions.ts]
+        External: ['@aws-sdk/*']
+        Minify: true
+        Target: es2022
+
+  # ── Welcome Email ────────────────────────────────────────────────────────────
+  SendWelcomeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: aws/functions/send-welcome.handler
+      Description: New user welcome email
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DeliveryTrackerApi
+            Path: /api/send-welcome
+            Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [aws/functions/send-welcome.ts]
+        External: ['@aws-sdk/*']
+        Minify: true
+        Target: es2022
+
+  # ── Microsoft Entra SSO ──────────────────────────────────────────────────────
+  EntraLoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: aws/functions/entra-login.handler
+      Description: Microsoft Entra SSO — login initiation (PKCE)
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DeliveryTrackerApi
+            Path: /api/entra-login
+            Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [aws/functions/entra-login.ts]
+        External: ['@aws-sdk/*']
+        Minify: true
+        Target: es2022
+
+  EntraCallbackFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: aws/functions/entra-callback.handler
+      Description: Microsoft Entra SSO — OAuth callback + token exchange
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DeliveryTrackerApi
+            Path: /api/entra/callback
+            Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [aws/functions/entra-callback.ts]
+        External: ['@aws-sdk/*']
+        Minify: true
+        Target: es2022
+
+  EntraSaveSettingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: aws/functions/entra-save-settings.handler
+      Description: Microsoft Entra SSO — admin settings management
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DeliveryTrackerApi
+            Path: /api/entra-save-settings
+            Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [aws/functions/entra-save-settings.ts]
+        External: ['@aws-sdk/*']
+        Minify: true
+        Target: es2022
+
+  EntraTestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: aws/functions/entra-test.handler
+      Description: Microsoft Entra SSO — connection test
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DeliveryTrackerApi
+            Path: /api/entra-test
+            Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [aws/functions/entra-test.ts]
+        External: ['@aws-sdk/*']
+        Minify: true
+        Target: es2022
+
+Outputs:
+  ApiGatewayUrl:
+    Description: >
+      API Gateway endpoint URL.
+      Set this as VITE_API_BASE_URL in your Amplify environment variables.
+    Value: !Sub 'https://${DeliveryTrackerApi}.execute-api.${AWS::Region}.amazonaws.com'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiUrl'
+
+  ApiGatewayId:
+    Description: API Gateway HTTP API ID
+    Value: !Ref DeliveryTrackerApi

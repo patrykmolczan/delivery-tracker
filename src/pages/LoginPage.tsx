@@ -14,6 +14,8 @@ import LockRounded from '@mui/icons-material/LockRounded'
 import BoltRounded from '@mui/icons-material/BoltRounded'
 import InsightsRounded from '@mui/icons-material/InsightsRounded'
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+
 /* ── Keyframes injected once ── */
 const AURORA_KF_ID = 'aurora-login-kf'
 const AURORA_CSS = `
@@ -195,7 +197,7 @@ export const LoginPage: React.FC = () => {
     setForgotLoading(true)
     setForgotError(null)
     try {
-      const res = await fetch('/api/forgot-password', {
+      const res = await fetch(`${API_BASE}/api/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),

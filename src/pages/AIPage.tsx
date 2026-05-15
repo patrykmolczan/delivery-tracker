@@ -3,6 +3,8 @@ import { Send, Bot, User, Sparkles, TrendingUp, Clock, BarChart2, RefreshCw } fr
 import type { Project, AIChatMessage } from '../types'
 import { getAuthHeaders } from '../lib/supabase'
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+
 interface Props {
   projects: Project[]
 }
@@ -444,7 +446,7 @@ export const AIPage: React.FC<Props> = ({ projects }) => {
 
     try {
       const chatHeaders = await getAuthHeaders()
-      const resp = await fetch('/api/chat', {
+      const resp = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: chatHeaders,
         body: JSON.stringify({

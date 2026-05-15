@@ -20,6 +20,8 @@ import type { Analyst, ClientType, ProjectType, Client, ClientRequest } from '..
 import type { UserProfile } from '../types'
 import { AdminEntraSSO } from '../components/sso/AdminEntraSSO'
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+
 // ─── Reusable inline-editable list section ────────────────────────────────────
 
 interface ListItem { id: number; name: string }
@@ -556,7 +558,7 @@ export const AdminPage: React.FC = () => {
       if (resetErr) throw new Error(resetErr.message)
 
       // Send welcome email
-      const res = await fetch('/api/send-welcome', {
+      const res = await fetch(`${API_BASE}/api/send-welcome`, {
         method: 'POST',
         headers: await getAuthHeaders(),
         body: JSON.stringify({ to: userEmail, full_name: userFullName, temp_password: tempPassword }),

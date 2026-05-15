@@ -10,6 +10,8 @@
 import * as XLSX from 'xlsx'
 import { getAuthHeaders } from './supabase'
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface JobRowInfo {
@@ -100,7 +102,7 @@ export async function generateDescriptions(titles: string[]): Promise<Record<str
   const unique = [...new Set(titles)]
 
   const headers = await getAuthHeaders()
-  const resp = await fetch('/api/generate-descriptions', {
+  const resp = await fetch(`${API_BASE}/api/generate-descriptions`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ titles: unique }),

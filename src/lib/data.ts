@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase, supabaseRealtime } from './supabase'
 
 // ─── Input sanitization (XSS defense-in-depth) ───────────────────────────────
 // Strips HTML tags from user-supplied text before persisting to the database.
@@ -132,7 +132,7 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
 // ⚠️  DO NOT replace Promise.all with a for-loop, while-loop, or reduce
 // ⚠️  DO NOT call rpc('get_projects_all') once without .range() pagination
 // ⚠️  DO NOT hardcode a row count — use get_projects_count() RPC
-// ⚠️  DO NOT use supabase.from('projects').select() — bypasses RPC scope
+// ⚠️  DO NOT use supabaseRealtime.from('projects').select() — bypasses RPC scope
 // ⚠️  DO NOT "refactor", "simplify", or "optimize" without reading
 //     /agent/uploads/prompt_History.docx (the original working fix is there)
 //
@@ -176,10 +176,10 @@ export async function fetchLookups(): Promise<{
 }> {
   const [{ data: statuses }, { data: clientTypes }, { data: industries }, { data: countries }] =
     await Promise.all([
-      supabase.from('project_statuses').select('id, name').eq('is_active', true).order('display_order'),
-      supabase.from('client_types').select('id, name').eq('is_active', true).order('name'),
-      supabase.from('industries').select('id, name').eq('is_active', true).order('name'),
-      supabase.from('countries').select('id, name').eq('is_active', true).order('name'),
+      supabaseRealtime.from('project_statuses').select('id, name').eq('is_active', true).order('display_order'),
+      supabaseRealtime.from('client_types').select('id, name').eq('is_active', true).order('name'),
+      supabaseRealtime.from('industries').select('id, name').eq('is_active', true).order('name'),
+      supabaseRealtime.from('countries').select('id, name').eq('is_active', true).order('name'),
     ])
 
   return {
@@ -219,7 +219,7 @@ export async function createProject(
     ai_eta_breakdown: eta?.breakdown ?? null,
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('projects')
     .insert(insertData)
     .select(`
@@ -288,7 +288,7 @@ export async function createProject(
 
 export async function updateProject(id: string, form: ProjectFormData): Promise<void> {
   // Capture current assignment state before the update so we can detect changes
-  const { data: current } = await supabase
+  const { data: current } = await supabaseRealtime
     .from('projects')
     .select('project_owner, analyst, created_by, notifications_enabled, client_name')
     .eq('id', id)
@@ -315,7 +315,7 @@ export async function updateProject(id: string, form: ProjectFormData): Promise<
     updated_at: new Date().toISOString(),
   }
 
-  const { error } = await supabase.from('projects').update(updateData).eq('id', id)
+  const { error } = await supabaseRealtime.from('projects').update(updateData).eq('id', id)
   if (error) throw error
 
   // Sync multi-country entries (full replace)
@@ -383,14 +383,14 @@ export async function updateProjectStatus(
     updateData.date_delivered = dateDelivered
   }
 
-  const { error } = await supabase.from('projects').update(updateData).eq('id', id)
+  const { error } = await supabaseRealtime.from('projects').update(updateData).eq('id', id)
   if (error) throw error
   return { date_delivered: dateDelivered, days_to_complete: daysToComplete }
 }
 
 export async function bulkUpdateProjectStatus(ids: string[], statusId: number): Promise<void> {
   if (ids.length === 0) return
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('projects')
     .update({ status_id: statusId, updated_at: new Date().toISOString() })
     .in('id', ids)
@@ -400,7 +400,7 @@ export async function bulkUpdateProjectStatus(ids: string[], statusId: number): 
 // ─── Project Countries ─────────────────────────────────────────────────────────
 
 export async function fetchProjectCountries(projectId: string): Promise<ProjectCountry[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('project_countries')
     .select('*, countries(name)')
     .eq('project_id', projectId)
@@ -424,7 +424,7 @@ export async function fetchProjectCountries(projectId: string): Promise<ProjectC
 // Bulk-fetch ALL project_countries at once → Map<projectId, countryName[]>
 // Used by ProjectTable to show multi-country hover popover without touching fetchProjects.
 export async function fetchAllProjectCountries(): Promise<Map<string, string[]>> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('project_countries')
     .select('project_id, countries(name)')
     .order('sort_order')
@@ -451,7 +451,7 @@ export async function syncProjectCountries(
   entries: ProjectCountryInput[]
 ): Promise<void> {
   // Delete all existing and re-insert (simplest correct approach)
-  await supabase.from('project_countries').delete().eq('project_id', projectId)
+  await supabaseRealtime.from('project_countries').delete().eq('project_id', projectId)
 
   if (entries.length === 0) return
 
@@ -462,14 +462,14 @@ export async function syncProjectCountries(
     sort_order: i,
   }))
 
-  const { error } = await supabase.from('project_countries').insert(rows)
+  const { error } = await supabaseRealtime.from('project_countries').insert(rows)
   if (error) throw new Error(`Failed to save countries: ${error.message}`)
 }
 
 // ─── Project Tasks ─────────────────────────────────────────────────────────────
 
 export async function fetchProjectTasks(projectId: string): Promise<ProjectTask[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('project_tasks')
     .select('*')
     .eq('project_id', projectId)
@@ -489,7 +489,7 @@ export async function syncProjectTasks(
   userId?: string
 ): Promise<void> {
   // Get existing task IDs
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseRealtime
     .from('project_tasks')
     .select('id')
     .eq('project_id', projectId)
@@ -500,7 +500,7 @@ export async function syncProjectTasks(
   // Delete tasks that were removed
   const toDelete = [...existingIds].filter(id => !incomingIds.has(id))
   if (toDelete.length > 0) {
-    await supabase.from('project_tasks').delete().in('id', toDelete)
+    await supabaseRealtime.from('project_tasks').delete().in('id', toDelete)
   }
 
   // Upsert all incoming tasks
@@ -508,12 +508,12 @@ export async function syncProjectTasks(
     const task = tasks[i]
     if (task.id && existingIds.has(task.id)) {
       // Update existing
-      await supabase.from('project_tasks')
+      await supabaseRealtime.from('project_tasks')
         .update({ title: task.title, description: task.description, sort_order: i, updated_at: new Date().toISOString() })
         .eq('id', task.id)
     } else {
       // Insert new
-      await supabase.from('project_tasks').insert({
+      await supabaseRealtime.from('project_tasks').insert({
         project_id: projectId,
         title: task.title,
         description: task.description || null,
@@ -540,7 +540,7 @@ export interface AuditEntry {
 }
 
 export async function fetchProjectHistory(projectId: string): Promise<AuditEntry[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('audit_log')
     .select('*, profiles!user_id(full_name)')
     .eq('project_id', projectId)
@@ -586,7 +586,7 @@ export async function importProjectsBatch(
       created_by: userId,
     }))
 
-    const { error } = await supabase.from('projects').insert(batch)
+    const { error } = await supabaseRealtime.from('projects').insert(batch)
     if (error) {
       errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`)
     } else {
@@ -627,11 +627,11 @@ export function fetchOwnerCounts(projects: Project[], excludeOwners: Set<string>
 export async function fetchFilterOptions(projects: Project[]) {
   const [{ data: clientTypes }, { data: industries }, { data: countries }, { data: statuses }, { data: analystRows }] =
     await Promise.all([
-      supabase.from('client_types').select('name').eq('is_active', true).order('name'),
-      supabase.from('industries').select('name').eq('is_active', true).order('name'),
-      supabase.from('countries').select('name').eq('is_active', true).order('name'),
-      supabase.from('project_statuses').select('name').eq('is_active', true).order('display_order'),
-      supabase.from('analysts').select('name').eq('is_active', true).order('name'),
+      supabaseRealtime.from('client_types').select('name').eq('is_active', true).order('name'),
+      supabaseRealtime.from('industries').select('name').eq('is_active', true).order('name'),
+      supabaseRealtime.from('countries').select('name').eq('is_active', true).order('name'),
+      supabaseRealtime.from('project_statuses').select('name').eq('is_active', true).order('display_order'),
+      supabaseRealtime.from('analysts').select('name').eq('is_active', true).order('name'),
     ])
 
   const owners = [...new Set(projects.map(p => p.project_owner).filter(Boolean))].sort() as string[]
@@ -773,7 +773,7 @@ export function formatFileSize(bytes: number): string {
 }
 
 export async function fetchProjectFiles(projectId: string): Promise<ProjectFile[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('project_files')
     .select('*, profiles!uploaded_by(full_name, email)')
     .eq('project_id', projectId)
@@ -843,7 +843,7 @@ export async function uploadProjectFile(
     throw new Error(`Upload failed: ${errText}`)
   }
 
-  const { data, error: dbError } = await supabase
+  const { data, error: dbError } = await supabaseRealtime
     .from('project_files')
     .insert({
       project_id: projectId,
@@ -882,7 +882,7 @@ export async function deleteProjectFile(
   storagePath: string,
   _userId: string
 ): Promise<void> {
-  const { error: dbError } = await supabase
+  const { error: dbError } = await supabaseRealtime
     .from('project_files')
     .delete()
     .eq('id', fileId)
@@ -1015,7 +1015,7 @@ export interface Analyst {
 }
 
 export async function fetchAnalysts(): Promise<Analyst[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('analysts')
     .select('*')
     .eq('is_active', true)
@@ -1025,7 +1025,7 @@ export async function fetchAnalysts(): Promise<Analyst[]> {
 }
 
 export async function fetchAllAnalysts(): Promise<Analyst[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('analysts')
     .select('*')
     .order('name')
@@ -1034,7 +1034,7 @@ export async function fetchAllAnalysts(): Promise<Analyst[]> {
 }
 
 export async function createAnalyst(name: string): Promise<Analyst> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('analysts')
     .insert({ name: name.trim() })
     .select()
@@ -1044,7 +1044,7 @@ export async function createAnalyst(name: string): Promise<Analyst> {
 }
 
 export async function deactivateAnalyst(id: number): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('analysts')
     .update({ is_active: false })
     .eq('id', id)
@@ -1052,7 +1052,7 @@ export async function deactivateAnalyst(id: number): Promise<void> {
 }
 
 export async function reactivateAnalyst(id: number): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('analysts')
     .update({ is_active: true })
     .eq('id', id)
@@ -1068,7 +1068,7 @@ export interface ClientType {
 }
 
 export async function fetchClientTypesAdmin(): Promise<ClientType[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('client_types')
     .select('*')
     .eq('is_active', true)
@@ -1078,7 +1078,7 @@ export async function fetchClientTypesAdmin(): Promise<ClientType[]> {
 }
 
 export async function createClientType(name: string): Promise<ClientType> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('client_types')
     .insert({ name: name.trim() })
     .select()
@@ -1088,7 +1088,7 @@ export async function createClientType(name: string): Promise<ClientType> {
 }
 
 export async function updateClientType(id: number, name: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('client_types')
     .update({ name: name.trim() })
     .eq('id', id)
@@ -1096,7 +1096,7 @@ export async function updateClientType(id: number, name: string): Promise<void> 
 }
 
 export async function deactivateClientType(id: number): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('client_types')
     .update({ is_active: false })
     .eq('id', id)
@@ -1106,7 +1106,7 @@ export async function deactivateClientType(id: number): Promise<void> {
 // ─── Analyst edit (rename) ────────────────────────────────────────────────────
 
 export async function updateAnalyst(id: number, name: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('analysts')
     .update({ name: name.trim() })
     .eq('id', id)
@@ -1125,7 +1125,7 @@ export interface ProjectType {
 }
 
 export async function fetchProjectTypes(): Promise<ProjectType[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('project_types')
     .select('*')
     .eq('is_active', true)
@@ -1167,7 +1167,7 @@ export async function createProjectType(
     templateLabel = templateFile.name
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('project_types')
     .insert({ name: name.trim(), template_url: templateUrl, template_label: templateLabel })
     .select()
@@ -1209,7 +1209,7 @@ export async function updateProjectType(
     updates.template_label = templateFile.name
   }
 
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('project_types')
     .update(updates)
     .eq('id', id)
@@ -1217,7 +1217,7 @@ export async function updateProjectType(
 }
 
 export async function deactivateProjectType(id: number): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('project_types')
     .update({ is_active: false })
     .eq('id', id)
@@ -1257,7 +1257,7 @@ export interface DeliveryFileDownload {
 }
 
 export async function fetchDeliveryFiles(projectId: string): Promise<DeliveryFile[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('project_delivery_files')
     .select('*, profiles!uploaded_by(full_name, email)')
     .eq('project_id', projectId)
@@ -1272,7 +1272,7 @@ export async function fetchDeliveryFiles(projectId: string): Promise<DeliveryFil
   const ids = (data || []).map((r: any) => r.id)
   let countMap: Record<string, number> = {}
   if (ids.length > 0) {
-    const { data: dlData } = await supabase
+    const { data: dlData } = await supabaseRealtime
       .from('delivery_file_downloads')
       .select('file_id')
       .in('file_id', ids)
@@ -1341,7 +1341,7 @@ export async function uploadDeliveryFile(
     throw new Error(`Upload failed: ${errText}`)
   }
 
-  const { data, error: dbError } = await supabase
+  const { data, error: dbError } = await supabaseRealtime
     .from('project_delivery_files')
     .insert({
       project_id: projectId,
@@ -1381,7 +1381,7 @@ export async function updateDeliveryFile(
   fileId: string,
   updates: { file_name?: string; description?: string }
 ): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('project_delivery_files')
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', fileId)
@@ -1392,7 +1392,7 @@ export async function deleteDeliveryFile(
   fileId: string,
   storagePath: string
 ): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('project_delivery_files')
     .delete()
     .eq('id', fileId)
@@ -1415,7 +1415,7 @@ export async function trackDeliveryDownload(
   userEmail: string | null,
   userName: string | null
 ): Promise<void> {
-  await supabase.from('delivery_file_downloads').insert({
+  await supabaseRealtime.from('delivery_file_downloads').insert({
     file_id: fileId,
     project_id: projectId,
     downloaded_by: userId,
@@ -1425,7 +1425,7 @@ export async function trackDeliveryDownload(
 }
 
 export async function fetchDeliveryFileDownloads(fileId: string): Promise<DeliveryFileDownload[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('delivery_file_downloads')
     .select('*')
     .eq('file_id', fileId)
@@ -1437,28 +1437,28 @@ export async function fetchDeliveryFileDownloads(fileId: string): Promise<Delive
 
 // ── Notification Settings ────────────────────────────────────────────────────
 export async function fetchNotificationSettings() {
-  const { data } = await supabase.from('notification_settings').select('*').order('label')
+  const { data } = await supabaseRealtime.from('notification_settings').select('*').order('label')
   return data || []
 }
 
 export async function updateNotificationSetting(id: string, enabled: boolean) {
-  const { error } = await supabase.from('notification_settings').update({ setting_value: enabled }).eq('id', id)
+  const { error } = await supabaseRealtime.from('notification_settings').update({ setting_value: enabled }).eq('id', id)
   if (error) throw new Error(`Failed to update: ${error.message}`)
 }
 
 export async function updateProjectNotificationsEnabled(projectId: string, enabled: boolean) {
-  const { error } = await supabase.from('projects').update({ notifications_enabled: enabled }).eq('id', projectId)
+  const { error } = await supabaseRealtime.from('projects').update({ notifications_enabled: enabled }).eq('id', projectId)
   if (error) throw new Error(`Failed to update: ${error.message}`)
 }
 
 export async function fetchProjectOwnerEmail(userId: string): Promise<string | null> {
-  const { data } = await supabase.from('profiles').select('email').eq('id', userId).single()
+  const { data } = await supabaseRealtime.from('profiles').select('email').eq('id', userId).single()
   return (data as any)?.email || null
 }
 
 // ── App Settings ──────────────────────────────────────────────
 export async function fetchAppSettings(): Promise<Record<string, string>> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('app_settings')
     .select('key, value');
   if (error) throw error;
@@ -1470,7 +1470,7 @@ export async function fetchAppSettings(): Promise<Record<string, string>> {
 }
 
 export async function updateAppSetting(key: string, value: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('app_settings')
     .update({ value, updated_at: new Date().toISOString() })
     .eq('key', key);
@@ -1493,7 +1493,7 @@ export interface DeliveryNote {
 }
 
 export async function fetchDeliveryNotes(projectId: string): Promise<DeliveryNote[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('project_delivery_notes')
     .select('*')
     .eq('project_id', projectId)
@@ -1509,7 +1509,7 @@ export async function fetchDeliveryNotes(projectId: string): Promise<DeliveryNot
 
   let profileMap: Record<string, { full_name: string; role: string }> = {}
   if (userIds.length > 0) {
-    const { data: profiles } = await supabase
+    const { data: profiles } = await supabaseRealtime
       .from('profiles')
       .select('id, full_name, role')
       .in('id', userIds)
@@ -1537,7 +1537,7 @@ export async function createDeliveryNote(
   note: string,
   userId: string,
 ): Promise<DeliveryNote> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('project_delivery_notes')
     .insert({ project_id: projectId, note: note.trim(), created_by: userId })
     .select('*')
@@ -1545,7 +1545,7 @@ export async function createDeliveryNote(
 
   if (error) throw new Error(`Failed to create delivery note: ${error.message}`)
 
-  const { data: profile } = await supabase
+  const { data: profile } = await supabaseRealtime
     .from('profiles')
     .select('full_name, role')
     .eq('id', userId)
@@ -1564,7 +1564,7 @@ export async function updateDeliveryNote(
   note: string,
   userId: string,
 ): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('project_delivery_notes')
     .update({ note: note.trim(), updated_at: new Date().toISOString(), updated_by: userId })
     .eq('id', noteId)
@@ -1573,7 +1573,7 @@ export async function updateDeliveryNote(
 }
 
 export async function deleteDeliveryNote(noteId: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('project_delivery_notes')
     .delete()
     .eq('id', noteId)
@@ -1592,7 +1592,7 @@ export async function fetchProjectETAData(projectId: string): Promise<{
   ai_eta_override_at: string | null
   ai_eta_override_reason: string | null
 } | null> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('projects')
     .select('ai_eta_days, ai_eta_confidence, ai_eta_breakdown, ai_eta_override_days, ai_eta_override_by, ai_eta_override_at, ai_eta_override_reason')
     .eq('id', projectId)
@@ -1609,7 +1609,7 @@ export async function updateProjectETA(
   oldDays: number | null,
   notifyRequester: boolean
 ): Promise<void> {
-  const { error: updateError } = await supabase
+  const { error: updateError } = await supabaseRealtime
     .from('projects')
     .update({
       ai_eta_override_days: newDays,
@@ -1620,7 +1620,7 @@ export async function updateProjectETA(
     .eq('id', projectId)
   if (updateError) throw new Error(`Failed to update ETA: ${updateError.message}`)
 
-  const { error: histError } = await supabase
+  const { error: histError } = await supabaseRealtime
     .from('project_eta_history')
     .insert({
       project_id: projectId,
@@ -1634,7 +1634,7 @@ export async function updateProjectETA(
 
   // In-app notification for project requester (always, non-blocking)
   try {
-    const { data: proj } = await supabase
+    const { data: proj } = await supabaseRealtime
       .from('projects')
       .select('created_by, project_owner')
       .eq('id', projectId)
@@ -1653,7 +1653,7 @@ export async function updateProjectETA(
 }
 
 export async function fetchProjectETAHistory(projectId: string): Promise<ProjectETAHistory[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('project_eta_history')
     .select('*, profiles!changed_by(full_name)')
     .eq('project_id', projectId)
@@ -1699,7 +1699,7 @@ export interface ClientRequest {
 }
 
 export async function fetchClients(): Promise<Client[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('clients')
     .select('*')
     .eq('is_active', true)
@@ -1709,7 +1709,7 @@ export async function fetchClients(): Promise<Client[]> {
 }
 
 export async function fetchAllClients(): Promise<Client[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('clients')
     .select('*')
     .order('name', { ascending: true })
@@ -1718,7 +1718,7 @@ export async function fetchAllClients(): Promise<Client[]> {
 }
 
 export async function createClient(name: string, externalId?: string): Promise<Client> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('clients')
     .insert({ name: name.trim(), external_id: externalId?.trim() || null })
     .select()
@@ -1728,7 +1728,7 @@ export async function createClient(name: string, externalId?: string): Promise<C
 }
 
 export async function updateClient(id: number, name: string, externalId?: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('clients')
     .update({ name: name.trim(), external_id: externalId?.trim() || null })
     .eq('id', id)
@@ -1736,7 +1736,7 @@ export async function updateClient(id: number, name: string, externalId?: string
 }
 
 export async function deactivateClient(id: number): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('clients')
     .update({ is_active: false })
     .eq('id', id)
@@ -1745,7 +1745,7 @@ export async function deactivateClient(id: number): Promise<void> {
 
 export async function importClients(rows: { name: string; external_id?: string }[]): Promise<{ inserted: number; skipped: number }> {
   // Fetch existing names (case-insensitive) to skip duplicates
-  const { data: existing } = await supabase.from('clients').select('name')
+  const { data: existing } = await supabaseRealtime.from('clients').select('name')
   const existingNames = new Set((existing || []).map((c: any) => c.name.toLowerCase()))
 
   const toInsert = rows
@@ -1754,14 +1754,14 @@ export async function importClients(rows: { name: string; external_id?: string }
 
   if (toInsert.length === 0) return { inserted: 0, skipped: rows.length }
 
-  const { error } = await supabase.from('clients').insert(toInsert)
+  const { error } = await supabaseRealtime.from('clients').insert(toInsert)
   if (error) throw new Error(`Failed to import clients: ${error.message}`)
 
   return { inserted: toInsert.length, skipped: rows.length - toInsert.length }
 }
 
 export async function submitClientRequest(requestedName: string, requestedBy: string): Promise<ClientRequest> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('client_requests')
     .insert({ requested_name: requestedName.trim(), requested_by: requestedBy })
     .select()
@@ -1773,7 +1773,7 @@ export async function submitClientRequest(requestedName: string, requestedBy: st
 export async function fetchClientRequests(): Promise<ClientRequest[]> {
   // Note: requested_by FK points to auth.users (different schema), so PostgREST
   // cannot do an embedded join for profiles. We fetch profile names separately.
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('client_requests')
     .select('*, clients!assigned_client_id(name)')
     .order('created_at', { ascending: false })
@@ -1783,7 +1783,7 @@ export async function fetchClientRequests(): Promise<ClientRequest[]> {
   const userIds = [...new Set((data || []).map((r: any) => r.requested_by).filter(Boolean))]
   let nameMap: Record<string, string> = {}
   if (userIds.length > 0) {
-    const { data: profiles } = await supabase
+    const { data: profiles } = await supabaseRealtime
       .from('profiles')
       .select('id, full_name')
       .in('id', userIds)
@@ -1801,7 +1801,7 @@ export async function fetchClientRequests(): Promise<ClientRequest[]> {
 
 export async function approveClientRequest(requestId: number, existingClientId?: number): Promise<Client> {
   // Fetch the request
-  const { data: req, error: reqErr } = await supabase
+  const { data: req, error: reqErr } = await supabaseRealtime
     .from('client_requests')
     .select('*')
     .eq('id', requestId)
@@ -1811,10 +1811,10 @@ export async function approveClientRequest(requestId: number, existingClientId?:
   let client: Client
   if (existingClientId) {
     // Reassign to existing client
-    const { data, error } = await supabase.from('clients').select('*').eq('id', existingClientId).single()
+    const { data, error } = await supabaseRealtime.from('clients').select('*').eq('id', existingClientId).single()
     if (error || !data) throw new Error('Client not found')
     client = data as Client
-    const { error: updErr } = await supabase
+    const { error: updErr } = await supabaseRealtime
       .from('client_requests')
       .update({ status: 'reassigned', assigned_client_id: existingClientId })
       .eq('id', requestId)
@@ -1822,7 +1822,7 @@ export async function approveClientRequest(requestId: number, existingClientId?:
   } else {
     // Create new client from the request
     client = await createClient(req.requested_name)
-    const { error: updErr } = await supabase
+    const { error: updErr } = await supabaseRealtime
       .from('client_requests')
       .update({ status: 'approved', assigned_client_id: client.id })
       .eq('id', requestId)
@@ -1832,7 +1832,7 @@ export async function approveClientRequest(requestId: number, existingClientId?:
 }
 
 export async function rejectClientRequest(requestId: number, notes?: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('client_requests')
     .update({ status: 'rejected', notes: notes || null })
     .eq('id', requestId)
@@ -1842,18 +1842,18 @@ export async function rejectClientRequest(requestId: number, notes?: string): Pr
 // ── Admin: Delete Project ─────────────────────────────────────────────────────
 export async function deleteProject(projectId: string): Promise<void> {
   // Best-effort: fetch file paths before deletion for storage cleanup
-  const { data: pFiles } = await supabase
+  const { data: pFiles } = await supabaseRealtime
     .from('project_files')
     .select('storage_path')
     .eq('project_id', projectId)
 
-  const { data: dFiles } = await supabase
+  const { data: dFiles } = await supabaseRealtime
     .from('project_delivery_files')
     .select('storage_path')
     .eq('project_id', projectId)
 
   // Delete the project row (CASCADE handles all related DB rows)
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('projects')
     .delete()
     .eq('id', projectId)
@@ -1876,14 +1876,14 @@ export async function deleteProject(projectId: string): Promise<void> {
 export async function fetchProjectFeedback(
   projectId: string
 ): Promise<{ entries: ProjectFeedback[]; items: ProjectFeedbackItem[] }> {
-  const { data: entries, error: e1 } = await supabase
+  const { data: entries, error: e1 } = await supabaseRealtime
     .from('project_feedback')
     .select('*')
     .eq('project_id', projectId)
     .order('created_at', { ascending: true })
   if (e1) throw e1
 
-  const { data: items, error: e2 } = await supabase
+  const { data: items, error: e2 } = await supabaseRealtime
     .from('project_feedback_items')
     .select('*')
     .eq('project_id', projectId)
@@ -1898,7 +1898,7 @@ export async function fetchProjectFeedback(
 
 // ── Project Feedback: count unresolved items (lightweight, for badge) ─────────
 export async function fetchProjectFeedbackUnresolvedCount(projectId: string): Promise<number> {
-  const { count, error } = await supabase
+  const { count, error } = await supabaseRealtime
     .from('project_feedback_items')
     .select('*', { count: 'exact', head: true })
     .eq('project_id', projectId)
@@ -1921,7 +1921,7 @@ export async function createProjectFeedback(params: {
   items?: Array<{ item_text: string; category: string; priority: string }>
 }): Promise<ProjectFeedback> {
   // Insert feedback entry
-  const { data: entry, error: e1 } = await supabase
+  const { data: entry, error: e1 } = await supabaseRealtime
     .from('project_feedback')
     .insert({
       project_id: params.projectId,
@@ -1940,7 +1940,7 @@ export async function createProjectFeedback(params: {
 
   // Insert checklist items if any
   if (params.items && params.items.length > 0) {
-    const { error: e2 } = await supabase
+    const { error: e2 } = await supabaseRealtime
       .from('project_feedback_items')
       .insert(
         params.items.map(item => ({
@@ -1956,7 +1956,7 @@ export async function createProjectFeedback(params: {
 
   // Update project status if action specifies a transition
   if (params.statusChangeToId) {
-    const { error: e3 } = await supabase
+    const { error: e3 } = await supabaseRealtime
       .from('projects')
       .update({ status_id: params.statusChangeToId })
       .eq('id', params.projectId)
@@ -1965,7 +1965,7 @@ export async function createProjectFeedback(params: {
 
   // In-app notification for project requester (always, non-blocking)
   try {
-    const { data: proj } = await supabase
+    const { data: proj } = await supabaseRealtime
       .from('projects')
       .select('created_by, project_owner')
       .eq('id', params.projectId)
@@ -2007,7 +2007,7 @@ export async function resolveProjectFeedbackItem(
   resolvedById: string,
   resolvedByName: string,
 ): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('project_feedback_items')
     .update({
       is_resolved: true,
@@ -2021,7 +2021,7 @@ export async function resolveProjectFeedbackItem(
 }
 
 export async function unresolveProjectFeedbackItem(itemId: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('project_feedback_items')
     .update({
       is_resolved: false,
@@ -2041,7 +2041,7 @@ export async function submitProjectResponse(
   authorId: string,
   authorName: string,
 ): Promise<ProjectFeedback> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('project_feedback')
     .insert({
       project_id: projectId,
@@ -2060,7 +2060,7 @@ export async function submitProjectResponse(
 
   // Notify admins about user response (non-blocking)
   try {
-    const { data: proj } = await supabase
+    const { data: proj } = await supabaseRealtime
       .from('projects')
       .select('project_owner, client_name, id_number')
       .eq('id', projectId)
@@ -2086,7 +2086,7 @@ export async function submitForReReview(
   authorName: string,
 ): Promise<void> {
   // Create resubmit feedback entry
-  const { error: e1 } = await supabase
+  const { error: e1 } = await supabaseRealtime
     .from('project_feedback')
     .insert({
       project_id: projectId,
@@ -2104,7 +2104,7 @@ export async function submitForReReview(
 
   // Notify admins (non-blocking)
   try {
-    const { data: proj } = await supabase
+    const { data: proj } = await supabaseRealtime
       .from('projects')
       .select('project_owner, client_name, id_number')
       .eq('id', projectId)
@@ -2132,7 +2132,7 @@ export async function createNotification(params: {
   projectName?: string | null
 }): Promise<void> {
   try {
-    await supabase.from('notifications').insert({
+    await supabaseRealtime.from('notifications').insert({
       user_id: params.userId,
       type: params.type,
       title: params.title,
@@ -2152,7 +2152,7 @@ export async function createNotificationsForAdmins(params: {
   excludeUserId?: string
 }): Promise<void> {
   try {
-    const { data: admins } = await supabase
+    const { data: admins } = await supabaseRealtime
       .from('profiles')
       .select('id')
       .in('role', ['admin', 'super_admin'])
@@ -2169,13 +2169,13 @@ export async function createNotificationsForAdmins(params: {
         project_name: params.projectName ?? null,
       }))
     if (rows.length > 0) {
-      await supabase.from('notifications').insert(rows)
+      await supabaseRealtime.from('notifications').insert(rows)
     }
   } catch { /* best effort */ }
 }
 
 export async function fetchNotifications(limit = 50, unreadOnly = false): Promise<AppNotification[]> {
-  let query = supabase
+  let query = supabaseRealtime
     .from('notifications')
     .select('*')
     .order('created_at', { ascending: false })
@@ -2189,7 +2189,7 @@ export async function fetchNotifications(limit = 50, unreadOnly = false): Promis
 }
 
 export async function fetchUnreadNotificationCount(): Promise<number> {
-  const { count, error } = await supabase
+  const { count, error } = await supabaseRealtime
     .from('notifications')
     .select('*', { count: 'exact', head: true })
     .eq('is_read', false)
@@ -2198,18 +2198,18 @@ export async function fetchUnreadNotificationCount(): Promise<number> {
 }
 
 export async function markNotificationRead(id: string): Promise<void> {
-  await supabase.from('notifications').update({ is_read: true }).eq('id', id)
+  await supabaseRealtime.from('notifications').update({ is_read: true }).eq('id', id)
 }
 
 export async function markAllNotificationsRead(): Promise<void> {
-  await supabase
+  await supabaseRealtime
     .from('notifications')
     .update({ is_read: true })
     .eq('is_read', false)
 }
 
 export async function deleteNotification(id: string): Promise<void> {
-  await supabase.from('notifications').delete().eq('id', id)
+  await supabaseRealtime.from('notifications').delete().eq('id', id)
 }
 
 // ── Text Presets ──────────────────────────────────────────────────────────────
@@ -2224,7 +2224,7 @@ export interface TextPreset {
 }
 
 export async function fetchTextPresets(): Promise<TextPreset[]> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('text_presets')
     .select('*')
     .order('sort_order', { ascending: true })
@@ -2238,7 +2238,7 @@ export async function createTextPreset(name: string, content: string, sortOrder:
   // causing NOT NULL constraint failures when user_id is omitted.
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
-  const { data, error } = await supabase
+  const { data, error } = await supabaseRealtime
     .from('text_presets')
     .insert({ name, content, sort_order: sortOrder, user_id: user.id })
     .select()
@@ -2251,7 +2251,7 @@ export async function updateTextPreset(
   id: string,
   updates: { name?: string; content?: string; sort_order?: number }
 ): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('text_presets')
     .update(updates)
     .eq('id', id)
@@ -2259,7 +2259,7 @@ export async function updateTextPreset(
 }
 
 export async function deleteTextPreset(id: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await supabaseRealtime
     .from('text_presets')
     .delete()
     .eq('id', id)

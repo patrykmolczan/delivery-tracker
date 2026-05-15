@@ -17,6 +17,7 @@ import type {
 } from '../types'
 import type { Client } from '../lib/data'
 import type { ProjectType } from '../lib/data'
+import { supabaseRealtime } from '../lib/supabase'
 import { parseTemplateFile, type DBCountry } from '../lib/templateParser'
 import { analyzeTemplateQuality, type TemplateQualityResult } from '../lib/templateQualityAnalyzer'
 import { TemplateQualityReview } from '../components/TemplateQualityReview'
@@ -126,7 +127,7 @@ interface Props {
 }
 
 export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel }) => {
-  const { user, profile, isAdmin } = useAuth()
+  const { user, profile, isAdmin, signOut } = useAuth()
   const [form, setForm] = useState<ProjectFormData>(EMPTY_FORM)
   const [lookups, setLookups] = useState<{ statuses: LookupItem[]; clientTypes: LookupItem[]; industries: LookupItem[]; countries: LookupItem[] } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -174,19 +175,25 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   const fileInputRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
 
-  // Load lookups
+  // Load lookups — session guard redirects immediately on expired session
   useEffect(() => {
-    Promise.all([fetchLookups(), fetchProjectTypes(), fetchClients()])
-      .then(([lu, pts, cls]) => {
-        setLookups(lu)
-        setProjectTypes(pts)
-        setClients(cls as Client[])
-      })
-      .catch(err => {
-        setError('Failed to load form options: ' + (err.message || 'Unknown error'))
-        setLookups({ statuses: [], clientTypes: [], industries: [], countries: [] })
-      })
-    fetchAnalysts().then(setAnalysts).catch(() => {})
+    const init = async () => {
+      const { data: { session } } = await supabaseRealtime.auth.getSession()
+      if (!session) { signOut(); return }
+      Promise.all([fetchLookups(), fetchProjectTypes(), fetchClients()])
+        .then(([lu, pts, cls]) => {
+          setLookups(lu)
+          setProjectTypes(pts)
+          setClients(cls as Client[])
+        })
+        .catch(err => {
+          setError('Failed to load form options: ' + (err.message || 'Unknown error'))
+          setLookups({ statuses: [], clientTypes: [], industries: [], countries: [] })
+        })
+      fetchAnalysts().then(setAnalysts).catch(() => {})
+    }
+    init()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // For normal users: auto-set Requestor to their name and Date Received to today

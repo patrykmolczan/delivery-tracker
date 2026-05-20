@@ -321,11 +321,19 @@ export const AdminPage: React.FC = () => {
     setLogoError('')
     setLogoSuccess('')
     try {
-      const { error: uploadError } = await supabase.storage
-        .from('branding')
-        .upload('logo.png', file, { upsert: true, contentType: file.type })
-      if (uploadError) throw uploadError
-      const newUrl = `https://slgtojndmckisjdplhcs.supabase.co/storage/v1/object/public/branding/logo.png?v=${Date.now()}`
+      const logoUploadUrlRes = await fetch(`${API_BASE}/api/storage/upload-url`, {
+        method: 'POST',
+        headers: { ...await getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'branding/logo.png', contentType: file.type || 'image/png' }),
+      })
+      if (!logoUploadUrlRes.ok) throw new Error('Could not get upload URL')
+      const { uploadUrl: logoUploadUrl } = await logoUploadUrlRes.json()
+      const logoBlob = new Blob([await file.arrayBuffer()], { type: file.type || 'image/png' })
+      const logoUploadRes = await fetch(logoUploadUrl, {
+        method: 'PUT', headers: { 'Content-Type': file.type || 'image/png' }, body: logoBlob,
+      })
+      if (!logoUploadRes.ok) throw new Error('Logo upload failed')
+      const newUrl = `https://delivery-tracker-files-418095506800.s3.us-east-2.amazonaws.com/branding/logo.png?v=${Date.now()}`
       await updateAppSetting('logo_url', newUrl)
       setCurrentLogoUrl(newUrl)
       setLogoSuccess('Logo updated successfully!')
@@ -357,11 +365,19 @@ export const AdminPage: React.FC = () => {
     setLoginIconError('')
     setLoginIconSuccess('')
     try {
-      const { error: uploadError } = await supabase.storage
-        .from('branding')
-        .upload('login_icon.png', file, { upsert: true, contentType: file.type })
-      if (uploadError) throw uploadError
-      const newUrl = `https://slgtojndmckisjdplhcs.supabase.co/storage/v1/object/public/branding/login_icon.png?v=${Date.now()}`
+      const iconUploadUrlRes = await fetch(`${API_BASE}/api/storage/upload-url`, {
+        method: 'POST',
+        headers: { ...await getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'branding/login_icon.png', contentType: file.type || 'image/png' }),
+      })
+      if (!iconUploadUrlRes.ok) throw new Error('Could not get upload URL')
+      const { uploadUrl: iconUploadUrl } = await iconUploadUrlRes.json()
+      const iconBlob = new Blob([await file.arrayBuffer()], { type: file.type || 'image/png' })
+      const iconUploadRes = await fetch(iconUploadUrl, {
+        method: 'PUT', headers: { 'Content-Type': file.type || 'image/png' }, body: iconBlob,
+      })
+      if (!iconUploadRes.ok) throw new Error('Icon upload failed')
+      const newUrl = `https://delivery-tracker-files-418095506800.s3.us-east-2.amazonaws.com/branding/login_icon.png?v=${Date.now()}`
       await updateAppSetting('login_icon_url', newUrl)
       setCurrentLoginIconUrl(newUrl)
       setLoginIconSuccess('Login icon updated!')

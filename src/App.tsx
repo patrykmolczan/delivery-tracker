@@ -29,6 +29,7 @@ import { pollTable } from './lib/pollingClient'
 import { NotificationBell } from './components/NotificationBell'
 import { NotificationInbox } from './pages/NotificationInbox'
 import { EntraCallbackPage } from './pages/EntraCallbackPage'
+import { CognitoCallbackPage } from './pages/CognitoCallbackPage'
 
 const NAV_ITEMS: Array<{ id: ViewMode; label: string; icon: React.ReactNode; adminOnly?: boolean; superAdminOnly?: boolean }> = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
@@ -484,10 +485,10 @@ const AppInner: React.FC = () => {
       <Loader2 size={32} className="animate-spin text-primary" />
     </div>
   )
-  // Handle Microsoft Entra ID OAuth callback — /auth/entra/callback
-  // This path is set as the Redirect URI in the Azure App Registration.
-  // The page handles code exchange + session creation, then navigates to /.
+  // Handle Microsoft Entra ID OAuth callback (legacy Supabase path)
   if (window.location.pathname === '/auth/entra/callback') return <EntraCallbackPage />
+  // Handle Cognito hosted UI OAuth callback (SSO via IAM Identity Center)
+  if (window.location.pathname === '/auth/callback') return <CognitoCallbackPage />
 
   if (user && (passwordChangeRequired || isPasswordRecovery)) return <ChangePasswordPage />
   return user ? <Dashboard /> : <LoginPage />

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Loader2, MessageSquare } from 'lucide-react'
 import { supabaseRealtime } from '../lib/supabase'
+import { pollTable } from '../lib/pollingClient'
 import { useAuth } from '../contexts/AuthContext'
 import {
   fetchMessages,
@@ -96,35 +97,21 @@ export const ProjectChat: React.FC<Props> = ({
     }
   }, [messages.length])
 
-  // Realtime subscription — uses supabaseRealtime (autoRefreshToken: false, no navigator.lock)
+  // Poll for new messages every 3s (replaces Supabase Realtime channel)
+  // Only updates state when new messages arrive — efficient re-fetch
   useEffect(() => {
-    const channel = supabaseRealtime
-      .channel('chat_' + projectId)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'project_messages',
-          filter: `project_id=eq.${projectId}`,
-        },
-        (payload) => {
-          const newMsg = payload.new as ProjectMessage
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMsg.id)) return prev
-            return [...prev, newMsg]
-          })
-          if (user?.id && newMsg.sender_id !== user.id) {
-            markMessagesRead(projectId, user.id).catch(() => {})
-            onUnreadCountChange?.(0)
-          }
+    const pollMessages = async () => {
+      try {
+        const msgs = await fetchMessages(projectId)
+        setMessages(prev => msgs.length !== prev.length ? msgs : prev)
+        if (user?.id) {
+          markMessagesRead(projectId, user.id).catch(() => {})
+          onUnreadCountChange?.(0)
         }
-      )
-      .subscribe()
-
-    return () => {
-      supabaseRealtime.removeChannel(channel)
+      } catch { /* best-effort */ }
     }
+    const poll = pollTable('chat:' + projectId, pollMessages, 3_000)
+    return () => { poll.unsubscribe() }
   }, [projectId, user?.id, onUnreadCountChange])
 
   const handleSend = async () => {

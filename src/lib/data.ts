@@ -1,4 +1,62 @@
-import { supabase, supabaseRealtime } from './supabase'
+import { supabase, supabaseRealtime, getAuthHeaders } from './supabase'
+
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string) || ''
+
+// ─── S3 storage helpers ─────────────────────────────────────────────────────
+async function s3UploadFile(
+  bucket: string,
+  storagePath: string,
+  file: File
+): Promise<void> {
+  const key = `${bucket}/${storagePath}`
+  const contentType = file.type || 'application/octet-stream'
+  const headers = await getAuthHeaders()
+  const urlRes = await fetch(`${API_BASE}/api/storage/upload-url`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key, contentType }),
+  })
+  if (!urlRes.ok) throw new Error(`Could not get upload URL: ${await urlRes.text().catch(() => urlRes.statusText)}`)
+  const { uploadUrl } = await urlRes.json()
+  const fileBlob = new Blob([await file.arrayBuffer()], { type: contentType })
+  const uploadRes = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': contentType },
+    body: fileBlob,
+  })
+  if (!uploadRes.ok) throw new Error(`S3 upload failed: ${uploadRes.statusText}`)
+}
+
+async function s3DeleteFile(bucket: string, storagePath: string): Promise<void> {
+  const key = `${bucket}/${storagePath}`
+  const headers = await getAuthHeaders()
+  await fetch(`${API_BASE}/api/storage/object`, {
+    method: 'DELETE',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key }),
+  }).catch(() => {})
+}
+
+async function s3DeleteFiles(bucket: string, storagePaths: string[]): Promise<void> {
+  if (!storagePaths.length) return
+  const keys = storagePaths.map(p => `${bucket}/${p}`)
+  const headers = await getAuthHeaders()
+  await fetch(`${API_BASE}/api/storage/object`, {
+    method: 'DELETE',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keys }),
+  }).catch(() => {})
+}
+
+async function s3GetSignedUrl(bucket: string, storagePath: string): Promise<string> {
+  const key = `${bucket}/${storagePath}`
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/api/storage/download-url?key=${encodeURIComponent(key)}`, { headers })
+  if (!res.ok) throw new Error('Could not generate download link')
+  const { downloadUrl } = await res.json()
+  return downloadUrl
+}
+
 
 // ─── Input sanitization (XSS defense-in-depth) ───────────────────────────────
 // Strips HTML tags from user-supplied text before persisting to the database.
@@ -818,30 +876,7 @@ export async function uploadProjectFile(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const storagePath = `${projectId}/${Date.now()}_${safeName}`
 
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.access_token) throw new Error('Not authenticated — please log in again')
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-  const contentType = file.type || 'application/octet-stream'
-  const fileBlob = new Blob([await file.arrayBuffer()], { type: contentType })
-
-  const uploadRes = await fetch(
-    `${supabaseUrl}/storage/v1/object/project-files/${storagePath}`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': contentType,
-        'x-upsert': 'false',
-      },
-      body: fileBlob,
-    }
-  )
-
-  if (!uploadRes.ok) {
-    const errText = await uploadRes.text().catch(() => uploadRes.statusText)
-    throw new Error(`Upload failed: ${errText}`)
-  }
+  await s3UploadFile('project-files', storagePath, file)
 
   const { data, error: dbError } = await supabaseRealtime
     .from('project_files')
@@ -857,7 +892,7 @@ export async function uploadProjectFile(
     .single()
 
   if (dbError) {
-    await supabase.storage.from('project-files').remove([storagePath])
+    await s3DeleteFile('project-files', storagePath)
     throw new Error(`Database error: ${dbError.message}`)
   }
 
@@ -888,16 +923,11 @@ export async function deleteProjectFile(
     .eq('id', fileId)
 
   if (dbError) throw new Error(`Delete failed: ${dbError.message}`)
-  await supabase.storage.from('project-files').remove([storagePath]).catch(() => {})
+  await s3DeleteFile('project-files', storagePath)
 }
 
 export async function getProjectFileUrl(storagePath: string): Promise<string> {
-  const { data, error } = await supabase.storage
-    .from('project-files')
-    .createSignedUrl(storagePath, 3600)
-
-  if (error || !data) throw new Error('Could not generate download link')
-  return data.signedUrl
+  return s3GetSignedUrl('project-files', storagePath)
 }
 
 // ─── AI Prediction Utilities ───────────────────────────────────────────────────
@@ -1316,30 +1346,7 @@ export async function uploadDeliveryFile(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const storagePath = `${projectId}/${Date.now()}_${safeName}`
 
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.access_token) throw new Error('Not authenticated — please log in again')
-
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-  const contentType = file.type || 'application/octet-stream'
-  const fileBlob = new Blob([await file.arrayBuffer()], { type: contentType })
-
-  const uploadRes = await fetch(
-    `${supabaseUrl}/storage/v1/object/project-delivery-files/${storagePath}`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': contentType,
-        'x-upsert': 'false',
-      },
-      body: fileBlob,
-    }
-  )
-
-  if (!uploadRes.ok) {
-    const errText = await uploadRes.text().catch(() => uploadRes.statusText)
-    throw new Error(`Upload failed: ${errText}`)
-  }
+  await s3UploadFile('project-delivery-files', storagePath, file)
 
   const { data, error: dbError } = await supabaseRealtime
     .from('project_delivery_files')
@@ -1355,7 +1362,7 @@ export async function uploadDeliveryFile(
     .single()
 
   if (dbError) {
-    await supabase.storage.from('project-delivery-files').remove([storagePath]).catch(() => {})
+    await s3DeleteFile('project-delivery-files', storagePath)
     throw new Error(`Database error: ${dbError.message}`)
   }
 
@@ -1397,15 +1404,11 @@ export async function deleteDeliveryFile(
     .delete()
     .eq('id', fileId)
   if (error) throw new Error(`Delete failed: ${error.message}`)
-  await supabase.storage.from('project-delivery-files').remove([storagePath]).catch(() => {})
+  await s3DeleteFile('project-delivery-files', storagePath)
 }
 
 export async function getDeliveryFileUrl(storagePath: string): Promise<string> {
-  const { data, error } = await supabase.storage
-    .from('project-delivery-files')
-    .createSignedUrl(storagePath, 3600)
-  if (error || !data) throw new Error('Could not generate download link')
-  return data.signedUrl
+  return s3GetSignedUrl('project-delivery-files', storagePath)
 }
 
 export async function trackDeliveryDownload(
@@ -1861,14 +1864,10 @@ export async function deleteProject(projectId: string): Promise<void> {
 
   // Best-effort storage cleanup (silent failures ok — orphaned files are acceptable)
   if (pFiles?.length) {
-    await supabase.storage.from('project-files')
-      .remove(pFiles.map(f => f.storage_path))
-      .catch(() => {})
+    await s3DeleteFiles('project-files', pFiles.map(f => f.storage_path))
   }
   if (dFiles?.length) {
-    await supabase.storage.from('project-delivery-files')
-      .remove(dFiles.map(f => f.storage_path))
-      .catch(() => {})
+    await s3DeleteFiles('project-delivery-files', dFiles.map(f => f.storage_path))
   }
 }
 

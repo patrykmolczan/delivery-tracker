@@ -148,7 +148,7 @@ export const LoginPage: React.FC = () => {
   }
 
   const [ssoEnabled, setSsoEnabled] = useState(false)
-  const [ssoDomain, setSsoDomain] = useState('')
+  const [_ssoDomain, setSsoDomain] = useState('')
   const [settingsLoaded, setSettingsLoaded] = useState(false)
   const [showPasswordFallback, setShowPasswordFallback] = useState(false)
   const [forgotSent, setForgotSent] = useState(false)

@@ -32,6 +32,8 @@ import {
 } from 'lucide-react'
 import { supabase, getAuthHeaders } from '../lib/supabase'
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type RowStatus = 'create' | 'update' | 'error'
@@ -336,7 +338,7 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
       const { row, idx } = eligibleRows[j]
 
       try {
-        const res = await fetch('/api/send-welcome', {
+        const res = await fetch(`${API_BASE}/api/send-welcome`, {
           method: 'POST',
           headers: await getAuthHeaders(),
           body: JSON.stringify({

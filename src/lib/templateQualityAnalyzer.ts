@@ -1,6 +1,8 @@
 import * as XLSX from 'xlsx'
 import { getAuthHeaders } from './supabase'
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+
 export interface RawTemplateRow {
   rowIndex: number
   jobTitle: string
@@ -276,7 +278,7 @@ Rules:
     // Call via serverless proxy — avoids browser CORS + keeps API key server-side only
     // systemPrompt is now built server-side; client sends only the template data (userPrompt)
     const authHeaders = await getAuthHeaders()
-    const response = await fetch('/api/analyze-template', {
+    const response = await fetch(`${API_BASE}/api/analyze-template`, {
       method: 'POST',
       headers: authHeaders,
       body: JSON.stringify({ userPrompt }),

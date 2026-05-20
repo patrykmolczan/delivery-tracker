@@ -1028,7 +1028,7 @@ export const LoginPage: React.FC = () => {
               <div className="space-y-4">
                 <button type="button" style={btnStyle} disabled={loading} onClick={handleSSOSignIn}>
                   {loading ? <AutorenewRounded sx={{ fontSize: 17 }} className="animate-spin" /> : <VpnKeyRounded sx={{ fontSize: 17 }} />}
-                  {loading ? 'Redirecting to Okta…' : 'Sign in with Okta SSO'}
+                  {loading ? 'Redirecting to SSO…' : 'Sign in with SSO'}
                 </button>
                 {error && (
                   <div className="alert alert-error py-2">
@@ -1182,7 +1182,7 @@ export const LoginPage: React.FC = () => {
                       }}
                     >
                       <VpnKeyRounded sx={{ fontSize: 17 }} />
-                      Sign in with Okta SSO
+                      Sign in with SSO
                     </button>
                   </>
                 )}
@@ -1206,7 +1206,7 @@ export const LoginPage: React.FC = () => {
                         transition: 'color 0.35s',
                       }}
                     >
-                      <ArrowBackRounded sx={{ fontSize: 14 }} /> Back to Okta SSO login
+                      <ArrowBackRounded sx={{ fontSize: 14 }} /> Back to SSO login
                     </button>
                   </div>
                 )}

@@ -59,11 +59,23 @@ supabase.auth.getSession().then(({ data }) => {
 })
 
 /**
- * Returns fetch headers including the current Supabase Bearer token.
- * Use for all calls to /api/* serverless functions.
- * Synchronous read from cache — no locks, no async, cannot hang.
+ * Returns fetch headers for /api/* calls.
+ * Prefers Cognito ID token (for Lambda API) over Supabase token.
+ * Falls back to cached Supabase token for backward compat.
  */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const { getSession: cognitoGetSession } = await import('./cognitoAuth')
+    const cognitoSession = await cognitoGetSession()
+    if (cognitoSession?.idToken) {
+      return {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${cognitoSession.idToken}`,
+      }
+    }
+  } catch {
+    // cognitoAuth not available or no session — fall through
+  }
   return {
     'Content-Type': 'application/json',
     ...(_cachedToken ? { Authorization: `Bearer ${_cachedToken}` } : {}),

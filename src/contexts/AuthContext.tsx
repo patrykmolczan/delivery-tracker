@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { signIn as cognitoSignIn, signOut as cognitoSignOut } from '../lib/cognitoAuth'
 import type { UserProfile } from '../types'
 
 interface AuthContextType {
@@ -65,6 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .filter(k => k.startsWith('sb-') || k === 'delivery-tracker-auth')
         .forEach(k => localStorage.removeItem(k))
     } catch { /* Safari private-mode safe */ }
+    cognitoSignOut()
     supabase.auth.signOut().catch(() => {})
     window.location.href = '/'
   }
@@ -214,6 +216,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    // Dual auth: also sign in with Cognito for Lambda API token (fire-and-forget)
+    if (!error) cognitoSignIn(email, password).catch(() => {})
     if (!error && data.user) {
       // Log login event (non-blocking)
       void (async () => {
@@ -264,6 +268,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // 3. Fire Supabase signOut in background (don't await — avoids async navigation block)
+    cognitoSignOut()
     supabase.auth.signOut().catch(() => {})
 
     // 4. Hard redirect immediately — synchronous, always works in Safari

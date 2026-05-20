@@ -74,7 +74,7 @@ const Blob = ({ w, h, color, top, left, bottom, right, opacity, anim, blur = 70 
 )
 
 export const LoginPage: React.FC = () => {
-  const { signIn, signInWithSSO } = useAuth()
+  const { signIn } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -182,13 +182,11 @@ export const LoginPage: React.FC = () => {
     setLoading(false)
   }
 
-  const handleSSOSignIn = async () => {
-    setError(null)
-    if (!ssoDomain) { setError('SSO domain not configured — contact your administrator.'); return }
-    setLoading(true)
-    const { error } = await signInWithSSO(ssoDomain)
-    if (error) setError(error.message)
-    setLoading(false)
+  const handleSSOSignIn = () => {
+    const cognitoDomain = 'https://delivery-tracker-auth.auth.us-east-2.amazoncognito.com'
+    const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID ?? '14emlk9r5hkpd34un7729eral1'
+    const redirectUri = encodeURIComponent(`${window.location.origin}/auth/callback`)
+    window.location.href = `${cognitoDomain}/oauth2/authorize?client_id=${clientId}&response_type=code&scope=openid+email+profile&redirect_uri=${redirectUri}&identity_provider=IAMIdentityCenter`
   }
 
   const handleForgotPassword = async (e: React.FormEvent) => {

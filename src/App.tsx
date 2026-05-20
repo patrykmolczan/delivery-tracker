@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { useTheme } from './contexts/ThemeContext'
 import { supabaseRealtime } from './lib/supabase'
+import { pollTable } from './lib/pollingClient'
 import { NotificationBell } from './components/NotificationBell'
 import { NotificationInbox } from './pages/NotificationInbox'
 import { EntraCallbackPage } from './pages/EntraCallbackPage'
@@ -125,21 +126,10 @@ const Dashboard: React.FC = () => {
     return () => clearInterval(id)
   }, [])
 
-  // Real-time: auto-refresh project table when a new project is inserted
+  // Poll for project changes every 30s (replaces Supabase Realtime channel)
   useEffect(() => {
-    const channel = supabaseRealtime
-      .channel('projects-insert-watch')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'projects' }, () => {
-        loadData(true)
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'projects' }, () => {
-        loadData(true)
-      })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'projects' }, () => {
-        loadData(true)
-      })
-      .subscribe()
-    return () => { supabaseRealtime.removeChannel(channel) }
+    const poll = pollTable('projects', () => { loadData(true) }, 30_000)
+    return () => { poll.unsubscribe() }
   }, [])
 
   const filtered = useMemo(() => filterProjects(projects, filters), [projects, filters])

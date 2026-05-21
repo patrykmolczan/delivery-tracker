@@ -31,7 +31,7 @@ import {
 } from '../lib/data'
 import type { LookupItem } from '../types'
 import { useAuth } from '../contexts/AuthContext'
-import { supabaseRealtime } from '../lib/supabase'
+import { getSession as cognitoGetSession } from '../lib/cognitoAuth'
 import {
   fetchNotificationSettings,
   updateProjectNotificationsEnabled,
@@ -261,7 +261,7 @@ export const ProjectDetail: React.FC<{
 
   // Session guard — if session expired when panel opens, redirect immediately
   useEffect(() => {
-    supabaseRealtime.auth.getSession().then(({ data: { session } }) => {
+    cognitoGetSession().then(session => {
       if (!session) signOut()
     }).catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

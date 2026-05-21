@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { Loader2, AlertCircle } from 'lucide-react'
 import { COGNITO_CONFIG } from '../lib/cognitoAuth'
+import { supabase } from '../lib/supabase'
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 /**
  * CognitoCallbackPage
@@ -9,9 +12,12 @@ import { COGNITO_CONFIG } from '../lib/cognitoAuth'
  *
  * Flow:
  *   1. Cognito redirects here with ?code=...
- *   2. We POST to Cognito token endpoint to exchange code → tokens
- *   3. Store tokens in Cognito SDK localStorage format so getSession() works
- *   4. window.location.replace('/') → AuthContext picks up the session
+ *   2. POST to Cognito token endpoint → exchange code for Cognito tokens
+ *   3. Store Cognito tokens in localStorage (for Cognito SDK)
+ *   4. POST to Lambda /api/auth/cognito-exchange with the ID token
+ *   5. Lambda generates a Supabase magic-link token (no email sent)
+ *   6. Call supabase.auth.verifyOtp() to create a real Supabase session
+ *   7. window.location.replace('/') → AuthContext picks up the session
  */
 const CognitoCallbackPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
@@ -35,6 +41,7 @@ const CognitoCallbackPage: React.FC = () => {
 
     const exchange = async () => {
       try {
+        // ── Step 1: Exchange code for Cognito tokens ───────────────────────
         setStatus('Exchanging authorization code…')
 
         const redirectUri = `${window.location.origin}/auth/callback`
@@ -73,10 +80,9 @@ const CognitoCallbackPage: React.FC = () => {
         // Cognito SDK uses cognito:username as the localStorage key
         const username = idPayload['cognito:username'] || idPayload.sub
 
-        setStatus('Setting up session…')
+        setStatus('Setting up Cognito session…')
 
         // Write tokens in the exact format amazon-cognito-identity-js expects
-        // so that userPool.getCurrentUser() + getSession() work seamlessly.
         const prefix = `CognitoIdentityServiceProvider.${COGNITO_CONFIG.ClientId}`
         localStorage.setItem(`${prefix}.LastAuthUser`, username)
         localStorage.setItem(`${prefix}.${username}.idToken`, id_token)
@@ -86,8 +92,41 @@ const CognitoCallbackPage: React.FC = () => {
         }
         localStorage.setItem(`${prefix}.${username}.clockDrift`, '0')
 
+        // ── Step 2: Bridge — create Supabase session ───────────────────────
+        setStatus('Creating secure session…')
+
+        const bridgeRes = await fetch(`${API_BASE}/api/auth/cognito-exchange`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken: id_token }),
+        })
+
+        if (!bridgeRes.ok) {
+          const errText = await bridgeRes.text()
+          throw new Error(`Session bridge failed (${bridgeRes.status}): ${errText}`)
+        }
+
+        const { email, hashed_token } = await bridgeRes.json()
+
+        if (!email || !hashed_token) {
+          throw new Error('Invalid bridge response — missing email or token.')
+        }
+
+        // ── Step 3: Verify OTP to create Supabase session ─────────────────
+        setStatus('Signing in…')
+
+        const { error: otpError } = await supabase.auth.verifyOtp({
+          email,
+          token: hashed_token,
+          type: 'magiclink',
+        })
+
+        if (otpError) {
+          throw new Error(`Supabase session error: ${otpError.message}`)
+        }
+
         setStatus('Redirecting…')
-        // Replace history entry so Back button doesn't return to /auth/callback
+        // Replace history so Back button doesn't return to /auth/callback
         window.location.replace('/')
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)

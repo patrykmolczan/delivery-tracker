@@ -6,7 +6,7 @@ import {
   Search, ChevronLeft, ChevronRight, UserX, UserCheck, Bell, Mail, Image,
 } from 'lucide-react'
 import { getAuthHeaders } from '../lib/supabase'
-import { cognitoGetSession } from '../lib/cognitoAuth'
+import { getSession as cognitoGetSession } from '../lib/cognitoAuth'
 import { useAuth } from '../contexts/AuthContext'
 import {
   fetchAllAnalysts, createAnalyst, updateAnalyst, deactivateAnalyst, reactivateAnalyst,

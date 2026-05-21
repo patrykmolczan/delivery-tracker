@@ -129,7 +129,7 @@ const Dashboard: React.FC = () => {
 
   // Poll for project changes every 30s (replaces Supabase Realtime channel)
   useEffect(() => {
-    const poll = pollTable('projects', () => { loadData(true) }, 30_000)
+    const poll = pollTable('projects', () => { loadData(true) }, 10_000)
     return () => { poll.unsubscribe() }
   }, [])
 

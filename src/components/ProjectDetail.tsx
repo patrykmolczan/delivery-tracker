@@ -30,6 +30,7 @@ import {
   createNotification, createNotificationsForAdmins,
 } from '../lib/data'
 import type { LookupItem } from '../types'
+import { pollTable } from '../lib/pollingClient'
 import { useAuth } from '../contexts/AuthContext'
 import { getSession as cognitoGetSession } from '../lib/cognitoAuth'
 import {
@@ -321,18 +322,31 @@ export const ProjectDetail: React.FC<{
     }
   }
 
+  const loadReview = () => {
+    setFeedbackLoading(true)
+    withLoadTimeout(fetchProjectFeedback(localProject.id)).then(({ entries, items }) => {
+      setFeedbackEntries(entries)
+      setFeedbackItems(items)
+      setUnresolvedCount(items.filter(i => !i.is_resolved).length)
+    }).catch(() => {}).finally(() => setFeedbackLoading(false))
+  }
+
+  // Load data immediately on tab switch, then keep polling every 15 s while tab is active.
+  // Polling pauses automatically when the browser tab is hidden (pollingClient visibility guard).
   useEffect(() => {
     if (tab === 'history') loadHistory()
     if (tab === 'files') loadFiles()
     if (tab === 'delivery') { loadDeliveryFiles(); loadDeliveryNotes() }
-    if (tab === 'review') {
-      setFeedbackLoading(true)
-      withLoadTimeout(fetchProjectFeedback(localProject.id)).then(({ entries, items }) => {
-        setFeedbackEntries(entries)
-        setFeedbackItems(items)
-        setUnresolvedCount(items.filter(i => !i.is_resolved).length)
-      }).catch(() => {}).finally(() => setFeedbackLoading(false))
-    }
+    if (tab === 'review') loadReview()
+
+    // Tab-scoped smart polling
+    const TAB_POLL_MS = 15_000
+    let poll: ReturnType<typeof pollTable> | null = null
+    if (tab === 'history') poll = pollTable('detail:history:' + localProject.id, loadHistory, TAB_POLL_MS)
+    if (tab === 'files')   poll = pollTable('detail:files:' + localProject.id, loadFiles, TAB_POLL_MS)
+    if (tab === 'delivery') poll = pollTable('detail:delivery:' + localProject.id, () => { loadDeliveryFiles(); loadDeliveryNotes() }, TAB_POLL_MS)
+    if (tab === 'review')  poll = pollTable('detail:review:' + localProject.id, loadReview, TAB_POLL_MS)
+    return () => { poll?.unsubscribe() }
   }, [tab, localProject.id])
 
   const handleStatusChange = (statusId: number, statusName: string) => {

@@ -15,7 +15,7 @@ import { Charts } from './components/Charts'
 import {
   fetchProjects, fetchStatusCounts, fetchOwnerCounts, buildLookupMaps, fetchLookups,
   fetchFilterOptions, computeKPIs, filterProjects, sortProjects, fetchAllProjectCountries,
-  bulkUpdateProjectStatus
+  bulkUpdateProjectStatus, fetchAllAnalysts
 } from './lib/data'
 import { useLogo } from './hooks/useLogo'
 import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode, LookupItem } from './types'
@@ -24,7 +24,7 @@ import {
   Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon
 } from 'lucide-react'
 import { useTheme } from './contexts/ThemeContext'
-import { supabaseRealtime } from './lib/supabase'
+import { getSession as cognitoGetSession } from './lib/cognitoAuth'
 import { pollTable } from './lib/pollingClient'
 import { NotificationBell } from './components/NotificationBell'
 import { NotificationInbox } from './pages/NotificationInbox'
@@ -80,8 +80,8 @@ const Dashboard: React.FC = () => {
       // Compute stats in-memory from already-loaded projects
       const sc = fetchStatusCounts(proj)
       // Fetch inactive analyst names to exclude from Workload by Owner chart
-      const { data: inactiveAnalystRows } = await supabaseRealtime.from('analysts').select('name').eq('is_active', false)
-      const inactiveAnalystNames = new Set<string>((inactiveAnalystRows || []).map((r: any) => r.name))
+      const allAnalysts = await fetchAllAnalysts().catch(() => [])
+      const inactiveAnalystNames = new Set<string>(allAnalysts.filter(a => !a.is_active).map(a => a.name))
       const oc = fetchOwnerCounts(proj, inactiveAnalystNames)
       // Re-compute filter options with real owners
       const optsWithOwners = { ...opts, owners: [...new Set(proj.map((p: any) => p.project_owner).filter(Boolean))].sort() as string[] }
@@ -113,14 +113,14 @@ const Dashboard: React.FC = () => {
     return () => clearTimeout(timer)
   }, [loading])
 
-  // Periodic session expiry check — every 30 s, sign out if access token is expired.
-  // Uses getSession() (approved method) — never refreshSession() — navigator.locks safe.
+  // Periodic session expiry check — every 30 s, sign out if no valid session.
+  // Uses Cognito getSession() — works for both SSO and password-auth users.
+  // SSO users have no Supabase session; Cognito covers both auth paths.
   useEffect(() => {
     const CHECK_INTERVAL = 30 * 1000 // 30 seconds
     const id = setInterval(async () => {
-      const { data: { session } } = await supabaseRealtime.auth.getSession()
-      const nowSec = Math.floor(Date.now() / 1000)
-      if (!session || (session.expires_at && session.expires_at < nowSec)) {
+      const cogSession = await cognitoGetSession().catch(() => null)
+      if (!cogSession) {
         signOut()
       }
     }, CHECK_INTERVAL)

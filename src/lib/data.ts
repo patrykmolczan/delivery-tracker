@@ -1,6 +1,30 @@
-import { supabase, supabaseRealtime, getAuthHeaders } from './supabase'
+import { getAuthHeaders } from './supabase'
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string) || ''
+
+// ─── Generic API helper ────────────────────────────────────────────────────────
+async function api<T = any>(
+  path: string,
+  options: { method?: string; body?: any; query?: Record<string, string> } = {}
+): Promise<T> {
+  const { method = 'GET', body, query } = options
+  const headers = await getAuthHeaders()
+  let url = `${API_BASE}/api/${path}`
+  if (query) {
+    const qs = new URLSearchParams(query).toString()
+    if (qs) url += `?${qs}`
+  }
+  const res = await fetch(url, {
+    method,
+    headers: { ...headers, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw new Error(`API ${method} ${path} → ${res.status}: ${text}`)
+  }
+  return res.json()
+}
 
 // ─── S3 storage helpers ─────────────────────────────────────────────────────
 async function s3UploadFile(
@@ -57,14 +81,12 @@ async function s3GetSignedUrl(bucket: string, storagePath: string): Promise<stri
   return downloadUrl
 }
 
-
-// ─── Input sanitization (XSS defense-in-depth) ───────────────────────────────
-// Strips HTML tags from user-supplied text before persisting to the database.
-// React already auto-escapes JSX output, but we sanitize at write time too.
+// ─── Input sanitization ───────────────────────────────────────────────────────
 function sanitizeText(val: string | null | undefined): string | null {
   if (val == null || val === '') return null
   return String(val).replace(/<[^>]*>/g, '').trim() || null
 }
+
 import type {
   Project, KPIData, StatusCount, OwnerCount, FilterState, SortState,
   LookupItem, ProjectFeedback, ProjectFeedbackItem, ProjectFormData, ProjectCountry, ProjectCountryInput, ProjectTask,
@@ -93,7 +115,6 @@ export function buildLookupMaps(lookups: {
     industryMap: new Map(lookups.industries.map(l => [l.id, l.name])),
   }
 }
-
 
 function mapRow(row: any, lookupMaps?: LookupMaps): Project {
   return {
@@ -132,98 +153,29 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// ██████████████████████████████████████████████████████████████████████████
-// ██                                                                      ██
-// ██   ⚠️  PROTECTED FUNCTION — AI SYSTEMS: READ BEFORE TOUCHING  ⚠️     ██
-// ██                                                                      ██
-// ██   fetchProjects() — PARALLEL PAGINATION OVER SUPABASE RPC           ██
-// ██                                                                      ██
-// ██   This function caused multiple production outages when "improved"   ██
-// ██   by AI assistants. Every deviation from this exact pattern broke    ██
-// ██   the dashboard and required emergency rollbacks. DO NOT TOUCH.      ██
-// ██                                                                      ██
-// ██████████████████████████████████████████████████████████████████████████
-// ════════════════════════════════════════════════════════════════════════════
-//
-// THE PROBLEM:
-//   PostgREST hard-caps SETOF function results at 1,000 rows per response.
-//   This app has 14,302+ projects. A single RPC call silently returns only
-//   1,000 rows with no error — the dashboard just shows wrong data.
-//
-// PRODUCTION OUTAGE HISTORY (do not repeat these mistakes):
-//
-//   ❌ BROKEN — Single RPC, no pagination:
-//      supabase.rpc('get_projects_all')
-//      → PostgREST caps at 1,000. Returns 1,000 of 14,302. Silent data loss.
-//
-//   ❌ BROKEN — SQL-level LIMIT param:
-//      get_projects_all(p_limit bigint) + LIMIT p_limit in SQL
-//      → PostgREST ignores SQL LIMIT on SETOF results. Still 1,000 rows.
-//      → Adding params to get_projects_all() also breaks .range() slicing.
-//
-//   ❌ BROKEN — Sequential for-loop pagination:
-//      for (let i = 0; i < pages; i++) { await supabase.rpc(...).range(...) }
-//      → 15 sequential requests × ~300ms each = 4.5s hang on every load.
-//      → Saturates Supabase free-tier connection pool under load.
-//
-//   ❌ BROKEN — Hardcoded TOTAL_ROWS = 14302:
-//      → Works until row count crosses a page boundary (every 1,000 rows).
-//      → Silent bug: new projects stop appearing once count hits next boundary.
-//      → Fixed: now uses get_projects_count() RPC for dynamic count.
-//
-// THE WORKING PATTERN (confirmed working 2026-04-29, do not change):
-//
-//   STEP 1: Call get_projects_count() → exact row count (SECURITY DEFINER,
-//           bypasses RLS, matches get_projects_all() scope)
-//   STEP 2: Calculate totalPages = Math.ceil(count / PAGE_SIZE)
-//   STEP 3: Fire ALL page requests simultaneously with Promise.all + .range()
-//   STEP 4: Flatten all pages → map rows
-//
-// WHY EACH RULE IS NON-NEGOTIABLE:
-//   • get_projects_all() has NO params    → .range() header controls slicing
-//   • Promise.all, NOT sequential loop   → parallel ≈ 400ms vs sequential 4.5s
-//   • get_projects_count() for row count → survives DB growth, no stale hardcode
-//   • .range(from, to) per request       → the ONLY way to paginate SETOF RPCs
-//
-// ⚠️  DO NOT add parameters to get_projects_all() DB function
-// ⚠️  DO NOT replace Promise.all with a for-loop, while-loop, or reduce
-// ⚠️  DO NOT call rpc('get_projects_all') once without .range() pagination
-// ⚠️  DO NOT hardcode a row count — use get_projects_count() RPC
-// ⚠️  DO NOT use supabaseRealtime.from('projects').select() — bypasses RPC scope
-// ⚠️  DO NOT "refactor", "simplify", or "optimize" without reading
-//     /agent/uploads/prompt_History.docx (the original working fix is there)
-//
-// LAST VERIFIED: 2026-04-29 | LOADED: 14,302 rows | ZERO console errors
-// ─────────────────────────────────────────────────────────────────────────
+// ─── fetchProjects — parallel pagination via Lambda (no Supabase, no 1000-row cap) ───
+// Aurora has no PostgREST 1000-row limit. Lambda handles direct pg queries.
+// Pattern: get count → fire all pages in parallel (Promise.all) → flatten.
 export async function fetchProjects(lookupMaps?: LookupMaps): Promise<Project[]> {
-  const PAGE_SIZE = 1000
+  const PAGE_SIZE = 2000
 
-  // Step 1: Get exact row count via SECURITY DEFINER RPC (bypasses RLS,
-  // matches get_projects_all() scope). DO NOT replace with from('projects').
-  const { data: countData, error: countError } = await supabase.rpc('get_projects_count')
-  if (countError) throw countError
-  const totalRows = Number(countData ?? 0)
+  // Step 1: Get total row count
+  const countRes = await api<{ count: number }>('projects', { query: { count_only: 'true' } })
+  const totalRows = Number(countRes.count ?? 0)
   if (totalRows === 0) return []
 
   const totalPages = Math.ceil(totalRows / PAGE_SIZE)
 
-  // Step 2: Fire ALL page requests simultaneously — parallel is mandatory.
-  // DO NOT convert this to a sequential loop. See incident history above.
+  // Step 2: Fire all pages in parallel
   const pages = await Promise.all(
     Array.from({ length: totalPages }, (_, i) =>
-      supabase
-        .rpc('get_projects_all')           // NO params — .range() does the slicing
-        .range(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1)
-        .then(({ data, error }) => {
-          if (error) throw error
-          return (data as any[]) || []
-        })
+      api<any[]>('projects', {
+        query: { limit: String(PAGE_SIZE), offset: String(i * PAGE_SIZE) },
+      })
     )
   )
 
-  const all = pages.flat()
-  return all.map((row: any) => mapRow(row, lookupMaps))
+  return pages.flat().map((row: any) => mapRow(row, lookupMaps))
 }
 
 export async function fetchLookups(): Promise<{
@@ -232,28 +184,15 @@ export async function fetchLookups(): Promise<{
   industries: LookupItem[]
   countries: LookupItem[]
 }> {
-  const [{ data: statuses }, { data: clientTypes }, { data: industries }, { data: countries }] =
-    await Promise.all([
-      supabaseRealtime.from('project_statuses').select('id, name').eq('is_active', true).order('display_order'),
-      supabaseRealtime.from('client_types').select('id, name').eq('is_active', true).order('name'),
-      supabaseRealtime.from('industries').select('id, name').eq('is_active', true).order('name'),
-      supabaseRealtime.from('countries').select('id, name').eq('is_active', true).order('name'),
-    ])
-
-  return {
-    statuses: (statuses || []) as LookupItem[],
-    clientTypes: (clientTypes || []) as LookupItem[],
-    industries: (industries || []) as LookupItem[],
-    countries: (countries || []) as LookupItem[],
-  }
+  return api('lookups')
 }
 
 export async function createProject(
   form: ProjectFormData,
-  userId: string,
+  _userId: string,
   eta?: { estimate: number; confidence: string; breakdown: string } | null
 ): Promise<Project> {
-  const insertData: any = {
+  const body: any = {
     project_owner: sanitizeText(form.project_owner) ?? form.project_owner,
     analyst: sanitizeText(form.analyst),
     client_type_id: form.client_type_id,
@@ -263,96 +202,24 @@ export async function createProject(
     expected_delivery_date: form.expected_delivery_date || null,
     date_delivered: form.date_delivered || null,
     project_summary: sanitizeText(form.project_summary),
-    job_count: form.job_count ? parseInt(form.job_count) : null,
+    job_count: form.job_count || null,
     status_id: form.status_id,
-    country_id: form.project_countries.length > 0
-      ? form.project_countries[0].country_id
-      : form.country_id,
+    country_id: form.country_id,
     industry_id: form.industry_id,
     project_type: form.project_type || null,
-    time_allocation: form.time_allocation ? parseFloat(form.time_allocation as string) : null,
-    created_by: userId,
+    time_allocation: form.time_allocation || null,
+    project_countries: form.project_countries,
+    project_tasks: form.project_tasks,
     ai_eta_days: eta?.estimate ?? null,
     ai_eta_confidence: eta?.confidence ?? null,
     ai_eta_breakdown: eta?.breakdown ?? null,
   }
-
-  const { data, error } = await supabaseRealtime
-    .from('projects')
-    .insert(insertData)
-    .select(`
-      id, project_owner, analyst, client_name, requestor,
-      date_received, expected_delivery_date, date_delivered,
-      project_summary, job_count, days_to_complete, created_by, created_at,
-      project_type, status_id, client_type_id, country_id, industry_id,
-      id_number, time_allocation,
-      ai_eta_days, ai_eta_confidence, ai_eta_breakdown,
-      ai_eta_override_days, ai_eta_override_by, ai_eta_override_at, ai_eta_override_reason,
-      project_statuses!inner(name),
-      client_types(name),
-      countries(name),
-      industries(name)
-    `)
-    .single()
-
-  if (error) throw error
-
-  const projectId = data.id
-
-  // Sync multi-country entries
-  if (form.project_countries.length > 0) {
-    await syncProjectCountries(projectId, form.project_countries)
-  }
-
-  // Sync task items
-  if (form.project_tasks.length > 0) {
-    await syncProjectTasks(projectId, form.project_tasks, userId)
-  }
-
-  return {
-    id: data.id,
-    project_owner: data.project_owner,
-    analyst: data.analyst,
-    client_name: data.client_name,
-    requestor: data.requestor,
-    date_received: data.date_received,
-    expected_delivery_date: data.expected_delivery_date,
-    date_delivered: data.date_delivered,
-    project_summary: data.project_summary,
-    job_count: data.job_count,
-    days_to_complete: data.days_to_complete,
-    status: (data as any).project_statuses?.name || 'Unknown',
-    status_id: data.status_id,
-    client_type: (data as any).client_types?.name || null,
-    client_type_id: data.client_type_id,
-    country: (data as any).countries?.name || null,
-    country_id: data.country_id,
-    industry: (data as any).industries?.name || null,
-    industry_id: data.industry_id,
-    project_type: (data as any).project_type || null,
-    id_number: (data as any).id_number ?? null,
-    time_allocation: (data as any).time_allocation ?? null,
-    created_by: data.created_by,
-    created_at: data.created_at,
-    ai_eta_days: (data as any).ai_eta_days ?? null,
-    ai_eta_confidence: (data as any).ai_eta_confidence ?? null,
-    ai_eta_breakdown: (data as any).ai_eta_breakdown ?? null,
-    ai_eta_override_days: (data as any).ai_eta_override_days ?? null,
-    ai_eta_override_by: (data as any).ai_eta_override_by ?? null,
-    ai_eta_override_at: (data as any).ai_eta_override_at ?? null,
-    ai_eta_override_reason: (data as any).ai_eta_override_reason ?? null,
-  }
+  const row = await api<any>('projects', { method: 'POST', body })
+  return mapRow(row)
 }
 
 export async function updateProject(id: string, form: ProjectFormData): Promise<void> {
-  // Capture current assignment state before the update so we can detect changes
-  const { data: current } = await supabaseRealtime
-    .from('projects')
-    .select('project_owner, analyst, created_by, notifications_enabled, client_name')
-    .eq('id', id)
-    .single()
-
-  const updateData: any = {
+  const body: any = {
     project_owner: sanitizeText(form.project_owner) ?? form.project_owner,
     analyst: sanitizeText(form.analyst),
     client_type_id: form.client_type_id,
@@ -362,60 +229,17 @@ export async function updateProject(id: string, form: ProjectFormData): Promise<
     expected_delivery_date: form.expected_delivery_date || null,
     date_delivered: form.date_delivered || null,
     project_summary: sanitizeText(form.project_summary),
-    job_count: form.job_count ? parseInt(form.job_count) : null,
+    job_count: form.job_count || null,
     status_id: form.status_id,
-    country_id: form.project_countries.length > 0
-      ? form.project_countries[0].country_id
-      : form.country_id,
+    country_id: form.country_id,
     industry_id: form.industry_id,
     project_type: form.project_type || null,
-    time_allocation: form.time_allocation != null ? (form.time_allocation ? parseFloat(form.time_allocation as string) : null) : null,
-    updated_at: new Date().toISOString(),
+    time_allocation: form.time_allocation ?? null,
+    project_countries: form.project_countries,
+    project_tasks: form.project_tasks,
   }
-
-  const { error } = await supabaseRealtime.from('projects').update(updateData).eq('id', id)
-  if (error) throw error
-
-  // Sync multi-country entries (full replace)
-  await syncProjectCountries(id, form.project_countries)
-
-  // Sync task items (full replace by id)
-  await syncProjectTasks(id, form.project_tasks)
-
-  // ── Assignment change notifications ─────────────────────────────────────────
-  // Fire in-app notifications to the project creator when owner/analyst changes,
-  // but only if the project has notifications enabled.
-  if (current && current.notifications_enabled !== false && current.created_by) {
-    const newOwner = (sanitizeText(form.project_owner) ?? form.project_owner)?.trim() || null
-    const newAnalyst = sanitizeText(form.analyst)?.trim() || null
-    const projectName = current.client_name || id
-
-    if (newOwner && newOwner !== (current.project_owner?.trim() || null)) {
-      await createNotification({
-        userId: current.created_by,
-        type: 'assignment_changed',
-        title: 'Project Owner Assigned',
-        body: `${newOwner} has been assigned as Project Owner on your project.`,
-        projectId: id,
-        projectName,
-      })
-    }
-
-    const oldAnalyst = current.analyst?.trim() || null
-    if (newAnalyst !== oldAnalyst && newAnalyst) {
-      await createNotification({
-        userId: current.created_by,
-        type: 'assignment_changed',
-        title: 'Analyst Assigned',
-        body: `${newAnalyst} has been assigned as Analyst on your project.`,
-        projectId: id,
-        projectName,
-      })
-    }
-  }
+  await api(`projects/${id}`, { method: 'PATCH', body })
 }
-
-
 
 export async function updateProjectStatus(
   id: string,
@@ -423,83 +247,31 @@ export async function updateProjectStatus(
   dateReceived: string | null,
   markDelivered: boolean
 ): Promise<{ date_delivered: string | null; days_to_complete: number | null }> {
-  const today = new Date().toISOString().slice(0, 10)
-  const dateDelivered = markDelivered ? today : null
-  let daysToComplete: number | null = null
-
-  if (markDelivered && dateReceived) {
-    const start = new Date(dateReceived + 'T00:00:00')
-    const end = new Date(today + 'T00:00:00')
-    daysToComplete = Math.max(0, Math.ceil((end.getTime() - start.getTime()) / 86400000))
-  }
-
-  const updateData: any = {
-    status_id: statusId,
-    updated_at: new Date().toISOString(),
-  }
-  if (markDelivered) {
-    updateData.date_delivered = dateDelivered
-  }
-
-  const { error } = await supabaseRealtime.from('projects').update(updateData).eq('id', id)
-  if (error) throw error
-  return { date_delivered: dateDelivered, days_to_complete: daysToComplete }
+  return api(`projects/${id}/status`, {
+    method: 'PATCH',
+    body: { status_id: statusId, mark_delivered: markDelivered, date_received: dateReceived },
+  })
 }
 
 export async function bulkUpdateProjectStatus(ids: string[], statusId: number): Promise<void> {
   if (ids.length === 0) return
-  const { error } = await supabaseRealtime
-    .from('projects')
-    .update({ status_id: statusId, updated_at: new Date().toISOString() })
-    .in('id', ids)
-  if (error) throw error
+  await api('projects/bulk-status', { method: 'POST', body: { ids, status_id: statusId } })
 }
 
 // ─── Project Countries ─────────────────────────────────────────────────────────
 
 export async function fetchProjectCountries(projectId: string): Promise<ProjectCountry[]> {
-  const { data, error } = await supabaseRealtime
-    .from('project_countries')
-    .select('*, countries(name)')
-    .eq('project_id', projectId)
-    .order('sort_order')
-
-  if (error) {
-    console.warn('project_countries fetch error:', error.message)
-    return []
-  }
-
-  return (data || []).map((row: any) => ({
-    id: row.id,
-    project_id: row.project_id,
-    country_id: row.country_id,
-    country_name: row.countries?.name || '',
-    job_count: row.job_count,
-    sort_order: row.sort_order,
-  }))
+  return api<ProjectCountry[]>(`projects/${projectId}/countries`).catch(() => [])
 }
 
-// Bulk-fetch ALL project_countries at once → Map<projectId, countryName[]>
-// Used by ProjectTable to show multi-country hover popover without touching fetchProjects.
 export async function fetchAllProjectCountries(): Promise<Map<string, string[]>> {
-  const { data, error } = await supabaseRealtime
-    .from('project_countries')
-    .select('project_id, countries(name)')
-    .order('sort_order')
-
-  if (error) {
-    console.warn('fetchAllProjectCountries error:', error.message)
-    return new Map()
-  }
-
+  const rows = await api<Array<{ project_id: string; country_name: string }>>('projects/countries').catch(() => [])
   const map = new Map<string, string[]>()
-  for (const row of (data || []) as any[]) {
-    const name: string | undefined = row.countries?.name
-    if (!name) continue
-    const pid: string = row.project_id
-    const existing = map.get(pid) || []
-    existing.push(name)
-    map.set(pid, existing)
+  for (const row of rows) {
+    if (!row.country_name) continue
+    const existing = map.get(row.project_id) || []
+    existing.push(row.country_name)
+    map.set(row.project_id, existing)
   }
   return map
 }
@@ -508,78 +280,21 @@ export async function syncProjectCountries(
   projectId: string,
   entries: ProjectCountryInput[]
 ): Promise<void> {
-  // Delete all existing and re-insert (simplest correct approach)
-  await supabaseRealtime.from('project_countries').delete().eq('project_id', projectId)
-
-  if (entries.length === 0) return
-
-  const rows = entries.map((e, i) => ({
-    project_id: projectId,
-    country_id: e.country_id,
-    job_count: e.job_count ? parseInt(e.job_count) : null,
-    sort_order: i,
-  }))
-
-  const { error } = await supabaseRealtime.from('project_countries').insert(rows)
-  if (error) throw new Error(`Failed to save countries: ${error.message}`)
+  await api(`projects/${projectId}/countries/sync`, { method: 'POST', body: { entries } })
 }
 
 // ─── Project Tasks ─────────────────────────────────────────────────────────────
 
 export async function fetchProjectTasks(projectId: string): Promise<ProjectTask[]> {
-  const { data, error } = await supabaseRealtime
-    .from('project_tasks')
-    .select('*')
-    .eq('project_id', projectId)
-    .order('sort_order')
-
-  if (error) {
-    console.warn('project_tasks fetch error:', error.message)
-    return []
-  }
-
-  return (data || []) as ProjectTask[]
+  return api<ProjectTask[]>(`projects/${projectId}/tasks`).catch(() => [])
 }
 
 export async function syncProjectTasks(
   projectId: string,
   tasks: Array<{ id?: string; title: string; description: string }>,
-  userId?: string
+  _userId?: string
 ): Promise<void> {
-  // Get existing task IDs
-  const { data: existing } = await supabaseRealtime
-    .from('project_tasks')
-    .select('id')
-    .eq('project_id', projectId)
-
-  const existingIds = new Set((existing || []).map((r: any) => r.id))
-  const incomingIds = new Set(tasks.filter(t => t.id).map(t => t.id!))
-
-  // Delete tasks that were removed
-  const toDelete = [...existingIds].filter(id => !incomingIds.has(id))
-  if (toDelete.length > 0) {
-    await supabaseRealtime.from('project_tasks').delete().in('id', toDelete)
-  }
-
-  // Upsert all incoming tasks
-  for (let i = 0; i < tasks.length; i++) {
-    const task = tasks[i]
-    if (task.id && existingIds.has(task.id)) {
-      // Update existing
-      await supabaseRealtime.from('project_tasks')
-        .update({ title: task.title, description: task.description, sort_order: i, updated_at: new Date().toISOString() })
-        .eq('id', task.id)
-    } else {
-      // Insert new
-      await supabaseRealtime.from('project_tasks').insert({
-        project_id: projectId,
-        title: task.title,
-        description: task.description || null,
-        sort_order: i,
-        created_by: userId || null,
-      })
-    }
-  }
+  await api(`projects/${projectId}/tasks/sync`, { method: 'POST', body: { tasks } })
 }
 
 // ─── Audit Log ─────────────────────────────────────────────────────────────────
@@ -598,66 +313,20 @@ export interface AuditEntry {
 }
 
 export async function fetchProjectHistory(projectId: string): Promise<AuditEntry[]> {
-  const { data, error } = await supabaseRealtime
-    .from('audit_log')
-    .select('*, profiles!user_id(full_name)')
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: false })
-    .limit(50)
-
-  if (error) {
-    console.warn('audit_log fetch error:', error.message)
-    return []
-  }
-  return (data || []).map((row: any) => ({
-    ...row,
-    user_name: row.profiles?.full_name || null,
-    profiles: undefined,
-  })) as AuditEntry[]
+  return api<AuditEntry[]>(`projects/${projectId}/history`).catch(() => [])
 }
 
 // ─── CSV Import ────────────────────────────────────────────────────────────────
 
 export async function importProjectsBatch(
   rows: ProjectFormData[],
-  userId: string
+  _userId: string
 ): Promise<{ success: number; errors: string[] }> {
-  const errors: string[] = []
-  let success = 0
-
-  const BATCH_SIZE = 50
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE).map(form => ({
-      project_owner: form.project_owner,
-      analyst: form.analyst || null,
-      client_type_id: form.client_type_id,
-      client_name: form.client_name,
-      requestor: form.requestor || null,
-      date_received: form.date_received,
-      expected_delivery_date: form.expected_delivery_date || null,
-      date_delivered: form.date_delivered || null,
-      project_summary: form.project_summary || null,
-      job_count: form.job_count ? parseInt(form.job_count) : null,
-      status_id: form.status_id,
-      country_id: form.country_id,
-      industry_id: form.industry_id,
-      created_by: userId,
-    }))
-
-    const { error } = await supabaseRealtime.from('projects').insert(batch)
-    if (error) {
-      errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`)
-    } else {
-      success += batch.length
-    }
-  }
-
-  return { success, errors }
+  return api('projects/import', { method: 'POST', body: { rows } })
 }
 
 // ─── Aggregates ───────────────────────────────────────────────────────────────
 
-// Now synchronous — pass the already-loaded projects array
 export function fetchStatusCounts(projects: Project[]): StatusCount[] {
   const map: Record<string, number> = {}
   projects.forEach(p => { map[p.status] = (map[p.status] || 0) + 1 })
@@ -681,31 +350,15 @@ export function fetchOwnerCounts(projects: Project[], excludeOwners: Set<string>
   return Object.values(map).sort((a, b) => b.count - a.count)
 }
 
-// Accept already-loaded projects to derive owners; fetch lookup dropdowns from DB
-export async function fetchFilterOptions(projects: Project[]) {
-  const [{ data: clientTypes }, { data: industries }, { data: countries }, { data: statuses }, { data: analystRows }] =
-    await Promise.all([
-      supabaseRealtime.from('client_types').select('name').eq('is_active', true).order('name'),
-      supabaseRealtime.from('industries').select('name').eq('is_active', true).order('name'),
-      supabaseRealtime.from('countries').select('name').eq('is_active', true).order('name'),
-      supabaseRealtime.from('project_statuses').select('name').eq('is_active', true).order('display_order'),
-      supabaseRealtime.from('analysts').select('name').eq('is_active', true).order('name'),
-    ])
-
-  const owners = [...new Set(projects.map(p => p.project_owner).filter(Boolean))].sort() as string[]
-  // Also include unique analyst values from actual project data (catches historical data not in analysts table)
-  const analystsFromDB = (analystRows || []).map((r: any) => r.name) as string[]
-  const analystsFromProjects = [...new Set(projects.map(p => p.analyst).filter(Boolean))].sort() as string[]
-  const analysts = [...new Set([...analystsFromDB, ...analystsFromProjects])].sort()
-
-  return {
-    owners,
-    analysts,
-    clientTypes: (clientTypes || []).map((r: any) => r.name),
-    industries: (industries || []).map((r: any) => r.name),
-    countries: (countries || []).map((r: any) => r.name),
-    statuses: (statuses || []).map((r: any) => r.name),
-  }
+export async function fetchFilterOptions(_projects: Project[]) {
+  const opts = await api<{
+    clientTypes: string[]
+    industries: string[]
+    countries: string[]
+    statuses: string[]
+    analysts: string[]
+  }>('filter-options')
+  return { ...opts, owners: [] as string[] }
 }
 
 export function computeKPIs(projects: Project[]): KPIData {
@@ -831,85 +484,33 @@ export function formatFileSize(bytes: number): string {
 }
 
 export async function fetchProjectFiles(projectId: string): Promise<ProjectFile[]> {
-  const { data, error } = await supabaseRealtime
-    .from('project_files')
-    .select('*, profiles!uploaded_by(full_name, email)')
-    .eq('project_id', projectId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-
-  if (error) {
-    console.warn('project_files fetch error:', error.message)
-    return []
-  }
-
-  return (data || []).map((row: any) => ({
-    id: row.id,
-    project_id: row.project_id,
-    file_name: row.file_name,
-    file_size: row.file_size,
-    file_type: row.file_type,
-    storage_path: row.storage_path,
-    uploaded_by: row.uploaded_by,
-    created_at: row.created_at,
-    deleted_at: row.deleted_at,
-    deleted_by: row.deleted_by,
-    uploader_name: row.profiles?.full_name || null,
-    uploader_email: row.profiles?.email || null,
-  }))
+  return api<ProjectFile[]>(`delivery/projects/${projectId}/files`).catch(() => [])
 }
 
 export async function uploadProjectFile(
   projectId: string,
   file: File,
-  userId: string
+  _userId: string
 ): Promise<ProjectFile> {
   if (file.size > MAX_FILE_SIZE_BYTES) {
     throw new Error(`File size ${formatFileSize(file.size)} exceeds the 2 MB limit`)
   }
-
   const existing = await fetchProjectFiles(projectId)
   if (existing.length >= MAX_FILES_PER_PROJECT) {
     throw new Error(`Maximum of ${MAX_FILES_PER_PROJECT} files per project reached`)
   }
-
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const storagePath = `${projectId}/${Date.now()}_${safeName}`
-
   await s3UploadFile('project-files', storagePath, file)
-
-  const { data, error: dbError } = await supabaseRealtime
-    .from('project_files')
-    .insert({
-      project_id: projectId,
+  return api<ProjectFile>(`delivery/projects/${projectId}/files`, {
+    method: 'POST',
+    body: {
       file_name: file.name,
       file_size: file.size,
       file_type: file.type || 'application/octet-stream',
       storage_path: storagePath,
-      uploaded_by: userId,
-    })
-    .select('*, profiles!uploaded_by(full_name, email)')
-    .single()
-
-  if (dbError) {
-    await s3DeleteFile('project-files', storagePath)
-    throw new Error(`Database error: ${dbError.message}`)
-  }
-
-  return {
-    id: data.id,
-    project_id: data.project_id,
-    file_name: data.file_name,
-    file_size: data.file_size,
-    file_type: data.file_type,
-    storage_path: data.storage_path,
-    uploaded_by: data.uploaded_by,
-    created_at: data.created_at,
-    deleted_at: data.deleted_at,
-    deleted_by: data.deleted_by,
-    uploader_name: (data as any).profiles?.full_name || null,
-    uploader_email: (data as any).profiles?.email || null,
-  }
+    },
+  })
 }
 
 export async function deleteProjectFile(
@@ -917,12 +518,7 @@ export async function deleteProjectFile(
   storagePath: string,
   _userId: string
 ): Promise<void> {
-  const { error: dbError } = await supabaseRealtime
-    .from('project_files')
-    .delete()
-    .eq('id', fileId)
-
-  if (dbError) throw new Error(`Delete failed: ${dbError.message}`)
+  await api(`delivery/files/${fileId}`, { method: 'DELETE' })
   await s3DeleteFile('project-files', storagePath)
 }
 
@@ -941,7 +537,7 @@ export interface PredictionStats {
 }
 
 export function buildPredictionStats(projects: Project[]): PredictionStats {
-  const MAX_DAYS = 365  // cap: projects > 1 year are treated as data errors
+  const MAX_DAYS = 365
   const completed = projects.filter(p => p.status === 'Completed' && p.days_to_complete && p.days_to_complete > 0 && p.days_to_complete <= MAX_DAYS)
   const days = completed.map(p => p.days_to_complete as number).sort((a, b) => a - b)
 
@@ -962,7 +558,7 @@ export function buildPredictionStats(projects: Project[]): PredictionStats {
     const result: Record<string, { avg: number; count: number }> = {}
     Object.entries(map).forEach(([k, v]) => {
       const sorted_v = [...v].sort((a, b) => a - b)
-      result[k] = { avg: median(sorted_v), count: sorted_v.length }  // median: outlier-resistant
+      result[k] = { avg: median(sorted_v), count: sorted_v.length }
     })
     return result
   }
@@ -978,7 +574,7 @@ export function buildPredictionStats(projects: Project[]): PredictionStats {
   ranges.forEach(r => {
     const group = completed.filter(p => p.job_count != null && p.job_count >= r.min && p.job_count <= r.max)
     const vals = group.map(p => p.days_to_complete as number).sort((a, b) => a - b)
-    byJobRange[r.label] = { avg: median(vals), count: vals.length }  // median: outlier-resistant
+    byJobRange[r.label] = { avg: median(vals), count: vals.length }
   })
 
   return {
@@ -1045,51 +641,30 @@ export interface Analyst {
 }
 
 export async function fetchAnalysts(): Promise<Analyst[]> {
-  const { data, error } = await supabaseRealtime
-    .from('analysts')
-    .select('*')
-    .eq('is_active', true)
-    .order('name')
-  if (error) throw error
-  return (data || []) as Analyst[]
+  return api<Analyst[]>('analysts')
 }
 
 export async function fetchAllAnalysts(): Promise<Analyst[]> {
-  const { data, error } = await supabaseRealtime
-    .from('analysts')
-    .select('*')
-    .order('name')
-  if (error) throw error
-  return (data || []) as Analyst[]
+  return api<Analyst[]>('analysts/all')
 }
 
 export async function createAnalyst(name: string): Promise<Analyst> {
-  const { data, error } = await supabaseRealtime
-    .from('analysts')
-    .insert({ name: name.trim() })
-    .select()
-    .single()
-  if (error) throw error
-  return data as Analyst
+  return api<Analyst>('analysts', { method: 'POST', body: { name } })
 }
 
 export async function deactivateAnalyst(id: number): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('analysts')
-    .update({ is_active: false })
-    .eq('id', id)
-  if (error) throw error
+  await api(`analysts/${id}/deactivate`, { method: 'PATCH' })
 }
 
 export async function reactivateAnalyst(id: number): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('analysts')
-    .update({ is_active: true })
-    .eq('id', id)
-  if (error) throw error
+  await api(`analysts/${id}/reactivate`, { method: 'PATCH' })
 }
 
-// ─── Client Types (admin CRUD) ────────────────────────────────────────────────
+export async function updateAnalyst(id: number, name: string): Promise<void> {
+  await api(`analysts/${id}`, { method: 'PATCH', body: { name } })
+}
+
+// ─── Client Types ─────────────────────────────────────────────────────────────
 
 export interface ClientType {
   id: number
@@ -1098,52 +673,22 @@ export interface ClientType {
 }
 
 export async function fetchClientTypesAdmin(): Promise<ClientType[]> {
-  const { data, error } = await supabaseRealtime
-    .from('client_types')
-    .select('*')
-    .eq('is_active', true)
-    .order('name')
-  if (error) throw error
-  return (data || []) as ClientType[]
+  return api<ClientType[]>('client-types')
 }
 
 export async function createClientType(name: string): Promise<ClientType> {
-  const { data, error } = await supabaseRealtime
-    .from('client_types')
-    .insert({ name: name.trim() })
-    .select()
-    .single()
-  if (error) throw error
-  return data as ClientType
+  return api<ClientType>('client-types', { method: 'POST', body: { name } })
 }
 
 export async function updateClientType(id: number, name: string): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('client_types')
-    .update({ name: name.trim() })
-    .eq('id', id)
-  if (error) throw error
+  await api(`client-types/${id}`, { method: 'PATCH', body: { name } })
 }
 
 export async function deactivateClientType(id: number): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('client_types')
-    .update({ is_active: false })
-    .eq('id', id)
-  if (error) throw error
+  await api(`client-types/${id}/deactivate`, { method: 'PATCH' })
 }
 
-// ─── Analyst edit (rename) ────────────────────────────────────────────────────
-
-export async function updateAnalyst(id: number, name: string): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('analysts')
-    .update({ name: name.trim() })
-    .eq('id', id)
-  if (error) throw error
-}
-
-// ─── Project Types (admin CRUD) ───────────────────────────────────────────────
+// ─── Project Types ────────────────────────────────────────────────────────────
 
 export interface ProjectType {
   id: number
@@ -1155,106 +700,55 @@ export interface ProjectType {
 }
 
 export async function fetchProjectTypes(): Promise<ProjectType[]> {
-  const { data, error } = await supabaseRealtime
-    .from('project_types')
-    .select('*')
-    .eq('is_active', true)
-    .order('display_order')
-  if (error) throw error
-  return (data || []) as ProjectType[]
+  return api<ProjectType[]>('project-types')
 }
 
 export async function createProjectType(
   name: string,
   templateFile?: File,
-  accessToken?: string
+  _accessToken?: string
 ): Promise<ProjectType> {
   let templateUrl: string | null = null
   let templateLabel: string | null = null
 
-  if (templateFile && accessToken) {
+  if (templateFile) {
     const safeName = templateFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
     const storagePath = `${Date.now()}_${safeName}`
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-
-    const uploadRes = await fetch(
-      `${supabaseUrl}/storage/v1/object/project-type-templates/${storagePath}`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': templateFile.type || 'application/octet-stream',
-          'x-upsert': 'false',
-        },
-        body: templateFile,
-      }
-    )
-    if (!uploadRes.ok) {
-      const err = await uploadRes.text().catch(() => uploadRes.statusText)
-      throw new Error(`Template upload failed: ${err}`)
-    }
-    templateUrl = `${supabaseUrl}/storage/v1/object/public/project-type-templates/${storagePath}`
+    await s3UploadFile('project-type-templates', storagePath, templateFile)
+    templateUrl = `project-type-templates/${storagePath}`
     templateLabel = templateFile.name
   }
 
-  const { data, error } = await supabaseRealtime
-    .from('project_types')
-    .insert({ name: name.trim(), template_url: templateUrl, template_label: templateLabel })
-    .select()
-    .single()
-  if (error) throw error
-  return data as ProjectType
+  return api<ProjectType>('project-types', {
+    method: 'POST',
+    body: { name: name.trim(), template_url: templateUrl, template_label: templateLabel },
+  })
 }
 
 export async function updateProjectType(
   id: number,
   name: string,
   templateFile?: File,
-  accessToken?: string
+  _accessToken?: string
 ): Promise<void> {
   const updates: any = { name: name.trim() }
 
-  if (templateFile && accessToken) {
+  if (templateFile) {
     const safeName = templateFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
     const storagePath = `${Date.now()}_${safeName}`
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-
-    const uploadRes = await fetch(
-      `${supabaseUrl}/storage/v1/object/project-type-templates/${storagePath}`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': templateFile.type || 'application/octet-stream',
-          'x-upsert': 'false',
-        },
-        body: templateFile,
-      }
-    )
-    if (!uploadRes.ok) {
-      const err = await uploadRes.text().catch(() => uploadRes.statusText)
-      throw new Error(`Template upload failed: ${err}`)
-    }
-    updates.template_url = `${supabaseUrl}/storage/v1/object/public/project-type-templates/${storagePath}`
+    await s3UploadFile('project-type-templates', storagePath, templateFile)
+    updates.template_url = `project-type-templates/${storagePath}`
     updates.template_label = templateFile.name
   }
 
-  const { error } = await supabaseRealtime
-    .from('project_types')
-    .update(updates)
-    .eq('id', id)
-  if (error) throw error
+  await api(`project-types/${id}`, { method: 'PATCH', body: updates })
 }
 
 export async function deactivateProjectType(id: number): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('project_types')
-    .update({ is_active: false })
-    .eq('id', id)
-  if (error) throw error
+  await api(`project-types/${id}/deactivate`, { method: 'PATCH' })
 }
 
-// ─── Delivery Files (Admin upload / User download) ────────────────────────────
+// ─── Delivery Files ───────────────────────────────────────────────────────────
 
 export const MAX_DELIVERY_FILES = 25
 export const MAX_DELIVERY_FILE_SIZE_BYTES = 2 * 1024 * 1024   // 2 MB
@@ -1287,123 +781,47 @@ export interface DeliveryFileDownload {
 }
 
 export async function fetchDeliveryFiles(projectId: string): Promise<DeliveryFile[]> {
-  const { data, error } = await supabaseRealtime
-    .from('project_delivery_files')
-    .select('*, profiles!uploaded_by(full_name, email)')
-    .eq('project_id', projectId)
-    .order('uploaded_at', { ascending: false })
-
-  if (error) {
-    console.warn('delivery files fetch error:', error.message)
-    return []
-  }
-
-  // Get download counts in one query
-  const ids = (data || []).map((r: any) => r.id)
-  let countMap: Record<string, number> = {}
-  if (ids.length > 0) {
-    const { data: dlData } = await supabaseRealtime
-      .from('delivery_file_downloads')
-      .select('file_id')
-      .in('file_id', ids)
-    ;(dlData || []).forEach((r: any) => {
-      countMap[r.file_id] = (countMap[r.file_id] || 0) + 1
-    })
-  }
-
-  return (data || []).map((row: any) => ({
-    id: row.id,
-    project_id: row.project_id,
-    file_name: row.file_name,
-    file_size: row.file_size,
-    file_type: row.file_type,
-    description: row.description,
-    storage_path: row.storage_path,
-    uploaded_by: row.uploaded_by,
-    uploaded_at: row.uploaded_at,
-    updated_at: row.updated_at,
-    uploader_name: row.profiles?.full_name || null,
-    uploader_email: row.profiles?.email || null,
-    download_count: countMap[row.id] || 0,
-    expires_at: row.expires_at || null,
-  }))
+  return api<DeliveryFile[]>(`delivery/projects/${projectId}/delivery-files`).catch(() => [])
 }
 
 export async function uploadDeliveryFile(
   projectId: string,
   file: File,
-  userId: string
+  _userId: string
 ): Promise<DeliveryFile> {
   if (file.size > MAX_DELIVERY_FILE_SIZE_BYTES) {
     throw new Error(`File size ${formatFileSize(file.size)} exceeds the 2 MB limit`)
   }
-
   const existing = await fetchDeliveryFiles(projectId)
   if (existing.length >= MAX_DELIVERY_FILES) {
     throw new Error(`Maximum of ${MAX_DELIVERY_FILES} delivery files per project reached`)
   }
-
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const storagePath = `${projectId}/${Date.now()}_${safeName}`
-
   await s3UploadFile('project-delivery-files', storagePath, file)
-
-  const { data, error: dbError } = await supabaseRealtime
-    .from('project_delivery_files')
-    .insert({
-      project_id: projectId,
+  return api<DeliveryFile>(`delivery/projects/${projectId}/delivery-files`, {
+    method: 'POST',
+    body: {
       file_name: file.name,
       file_size: file.size,
       file_type: file.type || 'application/octet-stream',
       storage_path: storagePath,
-      uploaded_by: userId,
-    })
-    .select('*, profiles!uploaded_by(full_name, email)')
-    .single()
-
-  if (dbError) {
-    await s3DeleteFile('project-delivery-files', storagePath)
-    throw new Error(`Database error: ${dbError.message}`)
-  }
-
-  return {
-    id: data.id,
-    project_id: data.project_id,
-    file_name: data.file_name,
-    file_size: data.file_size,
-    file_type: data.file_type,
-    description: data.description,
-    storage_path: data.storage_path,
-    uploaded_by: data.uploaded_by,
-    uploaded_at: data.uploaded_at,
-    updated_at: data.updated_at,
-    uploader_name: (data as any).profiles?.full_name || null,
-    uploader_email: (data as any).profiles?.email || null,
-    expires_at: data.expires_at || null,
-    download_count: 0,
-  }
+    },
+  })
 }
 
 export async function updateDeliveryFile(
   fileId: string,
   updates: { file_name?: string; description?: string }
 ): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('project_delivery_files')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', fileId)
-  if (error) throw new Error(`Update failed: ${error.message}`)
+  await api(`delivery/files/${fileId}`, { method: 'PATCH', body: updates })
 }
 
 export async function deleteDeliveryFile(
   fileId: string,
   storagePath: string
 ): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('project_delivery_files')
-    .delete()
-    .eq('id', fileId)
-  if (error) throw new Error(`Delete failed: ${error.message}`)
+  await api(`delivery/files/${fileId}`, { method: 'DELETE' })
   await s3DeleteFile('project-delivery-files', storagePath)
 }
 
@@ -1418,69 +836,51 @@ export async function trackDeliveryDownload(
   userEmail: string | null,
   userName: string | null
 ): Promise<void> {
-  await supabaseRealtime.from('delivery_file_downloads').insert({
-    file_id: fileId,
-    project_id: projectId,
-    downloaded_by: userId,
-    downloaded_by_email: userEmail,
-    downloaded_by_name: userName,
-  }).then(() => {}) // fire and forget, don't block download
+  api(`delivery/files/${fileId}/download`, {
+    method: 'POST',
+    body: { project_id: projectId, downloaded_by: userId, downloaded_by_email: userEmail, downloaded_by_name: userName },
+  }).catch(() => {})
 }
 
 export async function fetchDeliveryFileDownloads(fileId: string): Promise<DeliveryFileDownload[]> {
-  const { data, error } = await supabaseRealtime
-    .from('delivery_file_downloads')
-    .select('*')
-    .eq('file_id', fileId)
-    .order('downloaded_at', { ascending: false })
-    .limit(50)
-  if (error) return []
-  return (data || []) as DeliveryFileDownload[]
+  return api<DeliveryFileDownload[]>(`delivery/files/${fileId}/history`).catch(() => [])
 }
 
-// ── Notification Settings ────────────────────────────────────────────────────
+// ─── Notification Settings ────────────────────────────────────────────────────
+
 export async function fetchNotificationSettings() {
-  const { data } = await supabaseRealtime.from('notification_settings').select('*').order('label')
-  return data || []
+  return api<any[]>('notifications/settings').catch(() => [])
 }
 
 export async function updateNotificationSetting(id: string, enabled: boolean) {
-  const { error } = await supabaseRealtime.from('notification_settings').update({ setting_value: enabled }).eq('id', id)
-  if (error) throw new Error(`Failed to update: ${error.message}`)
+  await api(`notifications/settings/${id}`, { method: 'PATCH', body: { enabled } })
 }
 
 export async function updateProjectNotificationsEnabled(projectId: string, enabled: boolean) {
-  const { error } = await supabaseRealtime.from('projects').update({ notifications_enabled: enabled }).eq('id', projectId)
-  if (error) throw new Error(`Failed to update: ${error.message}`)
+  await api(`projects/${projectId}/notifications`, { method: 'PATCH', body: { enabled } })
 }
 
 export async function fetchProjectOwnerEmail(userId: string): Promise<string | null> {
-  const { data } = await supabaseRealtime.from('profiles').select('email').eq('id', userId).single()
-  return (data as any)?.email || null
+  const data = await api<{ email: string | null }>(`settings/profiles/owner-email/${userId}`).catch(() => null)
+  return data?.email ?? null
 }
 
-// ── App Settings ──────────────────────────────────────────────
+// ─── App Settings ──────────────────────────────────────────────────────────────
+
 export async function fetchAppSettings(): Promise<Record<string, string>> {
-  const { data, error } = await supabaseRealtime
-    .from('app_settings')
-    .select('key, value');
-  if (error) throw error;
-  const result: Record<string, string> = {};
-  for (const row of data ?? []) {
-    if (row.value != null) result[row.key] = row.value;
+  const rows = await api<Array<{ key: string; value: string }>>('settings').catch(() => [])
+  const result: Record<string, string> = {}
+  for (const row of rows) {
+    if (row.value != null) result[row.key] = row.value
   }
-  return result;
+  return result
 }
 
 export async function updateAppSetting(key: string, value: string): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('app_settings')
-    .update({ value, updated_at: new Date().toISOString() })
-    .eq('key', key);
-  if (error) throw error;
+  await api(`settings/${key}`, { method: 'PATCH', body: { value } })
 }
 
-// ── Project Delivery Notes ────────────────────────────────────────────────────
+// ─── Delivery Notes ────────────────────────────────────────────────────────────
 
 export interface DeliveryNote {
   id: string
@@ -1496,92 +896,30 @@ export interface DeliveryNote {
 }
 
 export async function fetchDeliveryNotes(projectId: string): Promise<DeliveryNote[]> {
-  const { data, error } = await supabaseRealtime
-    .from('project_delivery_notes')
-    .select('*')
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: false })
-
-  if (error) throw new Error(`Failed to fetch delivery notes: ${error.message}`)
-  if (!data || data.length === 0) return []
-
-  const userIds = [...new Set([
-    ...data.map((d: any) => d.created_by).filter(Boolean),
-    ...data.map((d: any) => d.updated_by).filter(Boolean),
-  ])]
-
-  let profileMap: Record<string, { full_name: string; role: string }> = {}
-  if (userIds.length > 0) {
-    const { data: profiles } = await supabaseRealtime
-      .from('profiles')
-      .select('id, full_name, role')
-      .in('id', userIds)
-    for (const p of (profiles || [])) {
-      profileMap[(p as any).id] = { full_name: (p as any).full_name, role: (p as any).role }
-    }
-  }
-
-  return data.map((d: any) => ({
-    id: d.id,
-    project_id: d.project_id,
-    note: d.note,
-    created_by: d.created_by,
-    created_at: d.created_at,
-    updated_at: d.updated_at,
-    updated_by: d.updated_by,
-    author_name: d.created_by ? profileMap[d.created_by]?.full_name ?? null : null,
-    author_role: d.created_by ? profileMap[d.created_by]?.role ?? null : null,
-    updater_name: d.updated_by ? profileMap[d.updated_by]?.full_name ?? null : null,
-  }))
+  return api<DeliveryNote[]>(`delivery/projects/${projectId}/notes`).catch(() => [])
 }
 
 export async function createDeliveryNote(
   projectId: string,
   note: string,
-  userId: string,
+  _userId: string
 ): Promise<DeliveryNote> {
-  const { data, error } = await supabaseRealtime
-    .from('project_delivery_notes')
-    .insert({ project_id: projectId, note: note.trim(), created_by: userId })
-    .select('*')
-    .single()
-
-  if (error) throw new Error(`Failed to create delivery note: ${error.message}`)
-
-  const { data: profile } = await supabaseRealtime
-    .from('profiles')
-    .select('full_name, role')
-    .eq('id', userId)
-    .single()
-
-  return {
-    ...(data as any),
-    author_name: (profile as any)?.full_name ?? null,
-    author_role: (profile as any)?.role ?? null,
-    updater_name: null,
-  }
+  return api<DeliveryNote>(`delivery/projects/${projectId}/notes`, {
+    method: 'POST',
+    body: { note: note.trim() },
+  })
 }
 
 export async function updateDeliveryNote(
   noteId: string,
   note: string,
-  userId: string,
+  _userId: string
 ): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('project_delivery_notes')
-    .update({ note: note.trim(), updated_at: new Date().toISOString(), updated_by: userId })
-    .eq('id', noteId)
-
-  if (error) throw new Error(`Failed to update delivery note: ${error.message}`)
+  await api(`delivery/projects/notes/${noteId}`, { method: 'PATCH', body: { note: note.trim() } })
 }
 
 export async function deleteDeliveryNote(noteId: string): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('project_delivery_notes')
-    .delete()
-    .eq('id', noteId)
-
-  if (error) throw new Error(`Failed to delete delivery note: ${error.message}`)
+  await api(`delivery/projects/notes/${noteId}`, { method: 'DELETE' })
 }
 
 // ─── AI ETA ───────────────────────────────────────────────────────────────────
@@ -1595,91 +933,28 @@ export async function fetchProjectETAData(projectId: string): Promise<{
   ai_eta_override_at: string | null
   ai_eta_override_reason: string | null
 } | null> {
-  const { data, error } = await supabaseRealtime
-    .from('projects')
-    .select('ai_eta_days, ai_eta_confidence, ai_eta_breakdown, ai_eta_override_days, ai_eta_override_by, ai_eta_override_at, ai_eta_override_reason')
-    .eq('id', projectId)
-    .single()
-  if (error || !data) return null
-  return data as any
+  return api(`eta/${projectId}`).catch(() => null)
 }
 
 export async function updateProjectETA(
   projectId: string,
   newDays: number,
   reason: string | null,
-  adminUserId: string,
+  _adminUserId: string,
   oldDays: number | null,
   notifyRequester: boolean
 ): Promise<void> {
-  const { error: updateError } = await supabaseRealtime
-    .from('projects')
-    .update({
-      ai_eta_override_days: newDays,
-      ai_eta_override_by: adminUserId,
-      ai_eta_override_at: new Date().toISOString(),
-      ai_eta_override_reason: reason || null,
-    })
-    .eq('id', projectId)
-  if (updateError) throw new Error(`Failed to update ETA: ${updateError.message}`)
-
-  const { error: histError } = await supabaseRealtime
-    .from('project_eta_history')
-    .insert({
-      project_id: projectId,
-      changed_by: adminUserId,
-      old_days: oldDays,
-      new_days: newDays,
-      reason: reason || null,
-      notified_requester: notifyRequester,
-    })
-  if (histError) throw new Error(`Failed to record ETA history: ${histError.message}`)
-
-  // In-app notification for project requester (always, non-blocking)
-  try {
-    const { data: proj } = await supabaseRealtime
-      .from('projects')
-      .select('created_by, project_owner')
-      .eq('id', projectId)
-      .single()
-    if (proj?.created_by && proj.created_by !== adminUserId) {
-      await createNotification({
-        userId: proj.created_by,
-        type: 'eta_update',
-        title: 'Delivery estimate updated',
-        body: `Your project's ETA has been updated to ${newDays} day${newDays !== 1 ? 's' : ''}${reason ? `: ${reason}` : ''}.`,
-        projectId,
-        projectName: proj.project_owner,
-      })
-    }
-  } catch { /* best effort */ }
+  await api(`eta/${projectId}`, {
+    method: 'PATCH',
+    body: { new_days: newDays, reason: reason || null, old_days: oldDays, notify_requester: notifyRequester },
+  })
 }
 
 export async function fetchProjectETAHistory(projectId: string): Promise<ProjectETAHistory[]> {
-  const { data, error } = await supabaseRealtime
-    .from('project_eta_history')
-    .select('*, profiles!changed_by(full_name)')
-    .eq('project_id', projectId)
-    .order('changed_at', { ascending: false })
-    .limit(20)
-  if (error) {
-    console.warn('project_eta_history fetch error:', error.message)
-    return []
-  }
-  return (data || []).map((row: any) => ({
-    id: row.id,
-    project_id: row.project_id,
-    changed_by: row.changed_by,
-    changed_at: row.changed_at,
-    old_days: row.old_days,
-    new_days: row.new_days,
-    reason: row.reason,
-    notified_requester: row.notified_requester,
-    changed_by_name: row.profiles?.full_name || null,
-  })) as ProjectETAHistory[]
+  return api<ProjectETAHistory[]>(`eta/${projectId}/history`).catch(() => [])
 }
 
-// ─── Client Name Management ────────────────────────────────────────────────────
+// ─── Client Management ────────────────────────────────────────────────────────
 
 export interface Client {
   id: number
@@ -1702,167 +977,59 @@ export interface ClientRequest {
 }
 
 export async function fetchClients(): Promise<Client[]> {
-  const { data, error } = await supabaseRealtime
-    .from('clients')
-    .select('*')
-    .eq('is_active', true)
-    .order('name', { ascending: true })
-  if (error) throw new Error(`Failed to fetch clients: ${error.message}`)
-  return (data || []) as Client[]
+  return api<Client[]>('clients')
 }
 
 export async function fetchAllClients(): Promise<Client[]> {
-  const { data, error } = await supabaseRealtime
-    .from('clients')
-    .select('*')
-    .order('name', { ascending: true })
-  if (error) throw new Error(`Failed to fetch clients: ${error.message}`)
-  return (data || []) as Client[]
+  return api<Client[]>('clients/all')
 }
 
 export async function createClient(name: string, externalId?: string): Promise<Client> {
-  const { data, error } = await supabaseRealtime
-    .from('clients')
-    .insert({ name: name.trim(), external_id: externalId?.trim() || null })
-    .select()
-    .single()
-  if (error) throw new Error(`Failed to create client: ${error.message}`)
-  return data as Client
+  return api<Client>('clients', { method: 'POST', body: { name: name.trim(), external_id: externalId?.trim() || null } })
 }
 
 export async function updateClient(id: number, name: string, externalId?: string): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('clients')
-    .update({ name: name.trim(), external_id: externalId?.trim() || null })
-    .eq('id', id)
-  if (error) throw new Error(`Failed to update client: ${error.message}`)
+  await api(`clients/${id}`, { method: 'PATCH', body: { name: name.trim(), external_id: externalId?.trim() || null } })
 }
 
 export async function deactivateClient(id: number): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('clients')
-    .update({ is_active: false })
-    .eq('id', id)
-  if (error) throw new Error(`Failed to deactivate client: ${error.message}`)
+  await api(`clients/${id}/deactivate`, { method: 'PATCH' })
 }
 
 export async function importClients(rows: { name: string; external_id?: string }[]): Promise<{ inserted: number; skipped: number }> {
-  // Fetch existing names (case-insensitive) to skip duplicates
-  const { data: existing } = await supabaseRealtime.from('clients').select('name')
-  const existingNames = new Set((existing || []).map((c: any) => c.name.toLowerCase()))
-
-  const toInsert = rows
-    .filter(r => r.name.trim() && !existingNames.has(r.name.trim().toLowerCase()))
-    .map(r => ({ name: r.name.trim(), external_id: r.external_id?.trim() || null }))
-
-  if (toInsert.length === 0) return { inserted: 0, skipped: rows.length }
-
-  const { error } = await supabaseRealtime.from('clients').insert(toInsert)
-  if (error) throw new Error(`Failed to import clients: ${error.message}`)
-
-  return { inserted: toInsert.length, skipped: rows.length - toInsert.length }
+  return api('clients/import', { method: 'POST', body: { rows } })
 }
 
-export async function submitClientRequest(requestedName: string, requestedBy: string): Promise<ClientRequest> {
-  const { data, error } = await supabaseRealtime
-    .from('client_requests')
-    .insert({ requested_name: requestedName.trim(), requested_by: requestedBy })
-    .select()
-    .single()
-  if (error) throw new Error(`Failed to submit client request: ${error.message}`)
-  return data as ClientRequest
+export async function submitClientRequest(requestedName: string, _requestedBy: string): Promise<ClientRequest> {
+  return api<ClientRequest>('client-requests', { method: 'POST', body: { requested_name: requestedName.trim() } })
 }
 
 export async function fetchClientRequests(): Promise<ClientRequest[]> {
-  // Note: requested_by FK points to auth.users (different schema), so PostgREST
-  // cannot do an embedded join for profiles. We fetch profile names separately.
-  const { data, error } = await supabaseRealtime
-    .from('client_requests')
-    .select('*, clients!assigned_client_id(name)')
-    .order('created_at', { ascending: false })
-  if (error) throw new Error(`Failed to fetch client requests: ${error.message}`)
-
-  // Collect unique requester UUIDs and resolve their display names from profiles
-  const userIds = [...new Set((data || []).map((r: any) => r.requested_by).filter(Boolean))]
-  let nameMap: Record<string, string> = {}
-  if (userIds.length > 0) {
-    const { data: profiles } = await supabaseRealtime
-      .from('profiles')
-      .select('id, full_name')
-      .in('id', userIds)
-    if (profiles) {
-      profiles.forEach((p: any) => { nameMap[p.id] = p.full_name })
-    }
-  }
-
-  return (data || []).map((row: any) => ({
-    ...row,
-    requester_name: nameMap[row.requested_by] || null,
-    assigned_client_name: row.clients?.name || null,
-  })) as ClientRequest[]
+  return api<ClientRequest[]>('client-requests')
 }
 
 export async function approveClientRequest(requestId: number, existingClientId?: number): Promise<Client> {
-  // Fetch the request
-  const { data: req, error: reqErr } = await supabaseRealtime
-    .from('client_requests')
-    .select('*')
-    .eq('id', requestId)
-    .single()
-  if (reqErr || !req) throw new Error('Request not found')
-
-  let client: Client
-  if (existingClientId) {
-    // Reassign to existing client
-    const { data, error } = await supabaseRealtime.from('clients').select('*').eq('id', existingClientId).single()
-    if (error || !data) throw new Error('Client not found')
-    client = data as Client
-    const { error: updErr } = await supabaseRealtime
-      .from('client_requests')
-      .update({ status: 'reassigned', assigned_client_id: existingClientId })
-      .eq('id', requestId)
-    if (updErr) throw new Error(`Failed to reassign request: ${updErr.message}`)
-  } else {
-    // Create new client from the request
-    client = await createClient(req.requested_name)
-    const { error: updErr } = await supabaseRealtime
-      .from('client_requests')
-      .update({ status: 'approved', assigned_client_id: client.id })
-      .eq('id', requestId)
-    if (updErr) throw new Error(`Failed to approve request: ${updErr.message}`)
-  }
-  return client
+  return api<Client>(`client-requests/${requestId}/approve`, {
+    method: 'POST',
+    body: existingClientId ? { existing_client_id: existingClientId } : {},
+  })
 }
 
 export async function rejectClientRequest(requestId: number, notes?: string): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('client_requests')
-    .update({ status: 'rejected', notes: notes || null })
-    .eq('id', requestId)
-  if (error) throw new Error(`Failed to reject request: ${error.message}`)
+  await api(`client-requests/${requestId}/reject`, { method: 'POST', body: { notes: notes || null } })
 }
 
-// ── Admin: Delete Project ─────────────────────────────────────────────────────
+// ─── Delete Project ───────────────────────────────────────────────────────────
+
 export async function deleteProject(projectId: string): Promise<void> {
-  // Best-effort: fetch file paths before deletion for storage cleanup
-  const { data: pFiles } = await supabaseRealtime
-    .from('project_files')
-    .select('storage_path')
-    .eq('project_id', projectId)
+  // Best-effort file path fetch for storage cleanup
+  const [pFiles, dFiles] = await Promise.all([
+    api<Array<{ storage_path: string }>>(`delivery/projects/${projectId}/files`).catch(() => [] as Array<{ storage_path: string }>),
+    api<Array<{ storage_path: string }>>(`delivery/projects/${projectId}/delivery-files`).catch(() => [] as Array<{ storage_path: string }>),
+  ])
 
-  const { data: dFiles } = await supabaseRealtime
-    .from('project_delivery_files')
-    .select('storage_path')
-    .eq('project_id', projectId)
+  await api(`projects/${projectId}`, { method: 'DELETE' })
 
-  // Delete the project row (CASCADE handles all related DB rows)
-  const { error } = await supabaseRealtime
-    .from('projects')
-    .delete()
-    .eq('id', projectId)
-  if (error) throw error
-
-  // Best-effort storage cleanup (silent failures ok — orphaned files are acceptable)
   if (pFiles?.length) {
     await s3DeleteFiles('project-files', pFiles.map(f => f.storage_path))
   }
@@ -1871,42 +1038,19 @@ export async function deleteProject(projectId: string): Promise<void> {
   }
 }
 
-// ── Project Feedback: fetch ──────────────────────────────────────────────────
+// ─── Project Feedback ─────────────────────────────────────────────────────────
+
 export async function fetchProjectFeedback(
   projectId: string
 ): Promise<{ entries: ProjectFeedback[]; items: ProjectFeedbackItem[] }> {
-  const { data: entries, error: e1 } = await supabaseRealtime
-    .from('project_feedback')
-    .select('*')
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: true })
-  if (e1) throw e1
-
-  const { data: items, error: e2 } = await supabaseRealtime
-    .from('project_feedback_items')
-    .select('*')
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: true })
-  if (e2) throw e2
-
-  return {
-    entries: (entries || []) as ProjectFeedback[],
-    items: (items || []) as ProjectFeedbackItem[],
-  }
+  return api(`feedback/projects/${projectId}`)
 }
 
-// ── Project Feedback: count unresolved items (lightweight, for badge) ─────────
 export async function fetchProjectFeedbackUnresolvedCount(projectId: string): Promise<number> {
-  const { count, error } = await supabaseRealtime
-    .from('project_feedback_items')
-    .select('*', { count: 'exact', head: true })
-    .eq('project_id', projectId)
-    .eq('is_resolved', false)
-  if (error) return 0
-  return count ?? 0
+  const data = await api<{ count: number }>(`feedback/projects/${projectId}/unresolved-count`).catch(() => ({ count: 0 }))
+  return data.count ?? 0
 }
 
-// ── Project Feedback: create admin action ────────────────────────────────────
 export async function createProjectFeedback(params: {
   projectId: string
   authorId: string
@@ -1919,11 +1063,9 @@ export async function createProjectFeedback(params: {
   notifyRequester: boolean
   items?: Array<{ item_text: string; category: string; priority: string }>
 }): Promise<ProjectFeedback> {
-  // Insert feedback entry
-  const { data: entry, error: e1 } = await supabaseRealtime
-    .from('project_feedback')
-    .insert({
-      project_id: params.projectId,
+  return api<ProjectFeedback>(`feedback/projects/${params.projectId}`, {
+    method: 'POST',
+    body: {
       author_id: params.authorId,
       author_name: params.authorName,
       author_role: params.authorRole,
@@ -1932,195 +1074,51 @@ export async function createProjectFeedback(params: {
       status_change_to_id: params.statusChangeToId,
       status_change_to_name: params.statusChangeToName,
       notify_requester: params.notifyRequester,
-    })
-    .select()
-    .single()
-  if (e1) throw e1
-
-  // Insert checklist items if any
-  if (params.items && params.items.length > 0) {
-    const { error: e2 } = await supabaseRealtime
-      .from('project_feedback_items')
-      .insert(
-        params.items.map(item => ({
-          feedback_id: (entry as any).id,
-          project_id: params.projectId,
-          item_text: item.item_text,
-          category: item.category,
-          priority: item.priority,
-        }))
-      )
-    if (e2) throw e2
-  }
-
-  // Update project status if action specifies a transition
-  if (params.statusChangeToId) {
-    const { error: e3 } = await supabaseRealtime
-      .from('projects')
-      .update({ status_id: params.statusChangeToId })
-      .eq('id', params.projectId)
-    if (e3) throw e3
-  }
-
-  // In-app notification for project requester (always, non-blocking)
-  try {
-    const { data: proj } = await supabaseRealtime
-      .from('projects')
-      .select('created_by, project_owner')
-      .eq('id', params.projectId)
-      .single()
-    if (proj?.created_by && proj.created_by !== params.authorId) {
-      const typeMap: Record<string, NotificationType> = {
-        hold: 'feedback_hold',
-        request_changes: 'feedback_changes',
-        reject: 'feedback_reject',
-        approve: 'feedback_approve',
-      }
-      const titleMap: Record<string, string> = {
-        hold: 'Your project has been put on hold',
-        request_changes: 'Changes requested on your project',
-        reject: 'Your project has been rejected',
-        approve: 'Your project has been approved',
-      }
-      const notifType = typeMap[params.actionType]
-      if (notifType) {
-        await createNotification({
-          userId: proj.created_by,
-          type: notifType,
-          title: titleMap[params.actionType] ?? 'Project update',
-          body: params.message || `${params.authorName} took action on your project.`,
-          projectId: params.projectId,
-          projectName: proj.project_owner,
-        })
-      }
-    }
-  } catch { /* best effort */ }
-
-  return entry as ProjectFeedback
+      items: params.items,
+    },
+  })
 }
 
-// ── Project Feedback: resolve / unresolve item ───────────────────────────────
 export async function resolveProjectFeedbackItem(
   itemId: string,
   note: string | null,
   resolvedById: string,
   resolvedByName: string,
 ): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('project_feedback_items')
-    .update({
-      is_resolved: true,
-      resolved_by: resolvedById,
-      resolved_by_name: resolvedByName,
-      resolved_at: new Date().toISOString(),
-      resolution_note: note || null,
-    })
-    .eq('id', itemId)
-  if (error) throw error
+  await api(`feedback/items/${itemId}/resolve`, {
+    method: 'PATCH',
+    body: { note, resolved_by: resolvedById, resolved_by_name: resolvedByName },
+  })
 }
 
 export async function unresolveProjectFeedbackItem(itemId: string): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('project_feedback_items')
-    .update({
-      is_resolved: false,
-      resolved_by: null,
-      resolved_by_name: null,
-      resolved_at: null,
-      resolution_note: null,
-    })
-    .eq('id', itemId)
-  if (error) throw error
+  await api(`feedback/items/${itemId}/unresolve`, { method: 'PATCH' })
 }
 
-// ── Project Feedback: submit user response ────────────────────────────────────
 export async function submitProjectResponse(
   projectId: string,
   message: string,
   authorId: string,
   authorName: string,
 ): Promise<ProjectFeedback> {
-  const { data, error } = await supabaseRealtime
-    .from('project_feedback')
-    .insert({
-      project_id: projectId,
-      author_id: authorId,
-      author_name: authorName,
-      author_role: 'user',
-      action_type: 'user_response',
-      message,
-      status_change_to_id: null,
-      status_change_to_name: null,
-      notify_requester: false,
-    })
-    .select()
-    .single()
-  if (error) throw error
-
-  // Notify admins about user response (non-blocking)
-  try {
-    const { data: proj } = await supabaseRealtime
-      .from('projects')
-      .select('project_owner, client_name, id_number')
-      .eq('id', projectId)
-      .single()
-    const responseLabel = proj?.client_name || proj?.project_owner || (proj?.id_number ? `#${proj.id_number}` : projectId)
-    await createNotificationsForAdmins({
-      type: 'user_response',
-      title: 'User replied to feedback',
-      body: `${authorName} responded on "${responseLabel}".`,
-      projectId,
-      projectName: responseLabel,
-      excludeUserId: authorId,
-    })
-  } catch { /* best effort */ }
-
-  return data as ProjectFeedback
+  return api<ProjectFeedback>(`feedback/projects/${projectId}/user-response`, {
+    method: 'POST',
+    body: { message, author_id: authorId, author_name: authorName },
+  })
 }
 
-// ── Project Feedback: submit for re-review (changes status → Under Review) ───
 export async function submitForReReview(
   projectId: string,
   authorId: string,
   authorName: string,
 ): Promise<void> {
-  // Create resubmit feedback entry
-  const { error: e1 } = await supabaseRealtime
-    .from('project_feedback')
-    .insert({
-      project_id: projectId,
-      author_id: authorId,
-      author_name: authorName,
-      author_role: 'user',
-      action_type: 'resubmit',
-      message: 'Project submitted for re-review.',
-      status_change_to_id: null,
-      status_change_to_name: null,
-      notify_requester: false,
-    })
-  if (e1) throw e1
-  // Status intentionally NOT changed — project stays On Hold until admin approves
-
-  // Notify admins (non-blocking)
-  try {
-    const { data: proj } = await supabaseRealtime
-      .from('projects')
-      .select('project_owner, client_name, id_number')
-      .eq('id', projectId)
-      .single()
-    const resubmitLabel = proj?.client_name || proj?.project_owner || (proj?.id_number ? `#${proj.id_number}` : projectId)
-    await createNotificationsForAdmins({
-      type: 'resubmit',
-      title: 'Project submitted for re-review',
-      body: `${authorName} submitted "${resubmitLabel}" for re-review.`,
-      projectId,
-      projectName: resubmitLabel,
-      excludeUserId: authorId,
-    })
-  } catch { /* best effort */ }
+  await api(`feedback/projects/${projectId}/re-review`, {
+    method: 'POST',
+    body: { author_id: authorId, author_name: authorName },
+  })
 }
 
-// ── In-App Notifications ──────────────────────────────────────────────────────
+// ─── Notifications ────────────────────────────────────────────────────────────
 
 export async function createNotification(params: {
   userId: string
@@ -2130,16 +1128,17 @@ export async function createNotification(params: {
   projectId?: string | null
   projectName?: string | null
 }): Promise<void> {
-  try {
-    await supabaseRealtime.from('notifications').insert({
+  api('notifications', {
+    method: 'POST',
+    body: {
       user_id: params.userId,
       type: params.type,
       title: params.title,
       body: params.body,
       project_id: params.projectId ?? null,
       project_name: params.projectName ?? null,
-    })
-  } catch { /* best effort — never block the main operation */ }
+    },
+  }).catch(() => {})
 }
 
 export async function createNotificationsForAdmins(params: {
@@ -2150,68 +1149,43 @@ export async function createNotificationsForAdmins(params: {
   projectName?: string | null
   excludeUserId?: string
 }): Promise<void> {
-  try {
-    const { data: admins } = await supabaseRealtime
-      .from('profiles')
-      .select('id')
-      .in('role', ['admin', 'super_admin'])
-      .eq('is_active', true)
-    if (!admins?.length) return
-    const rows = admins
-      .filter((a: any) => a.id !== params.excludeUserId)
-      .map((a: any) => ({
-        user_id: a.id,
-        type: params.type,
-        title: params.title,
-        body: params.body,
-        project_id: params.projectId ?? null,
-        project_name: params.projectName ?? null,
-      }))
-    if (rows.length > 0) {
-      await supabaseRealtime.from('notifications').insert(rows)
-    }
-  } catch { /* best effort */ }
+  api('notifications/for-admins', {
+    method: 'POST',
+    body: {
+      type: params.type,
+      title: params.title,
+      body: params.body,
+      project_id: params.projectId ?? null,
+      project_name: params.projectName ?? null,
+      exclude_user_id: params.excludeUserId,
+    },
+  }).catch(() => {})
 }
 
 export async function fetchNotifications(limit = 50, unreadOnly = false): Promise<AppNotification[]> {
-  let query = supabaseRealtime
-    .from('notifications')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit)
-  if (unreadOnly) {
-    query = query.eq('is_read', false)
-  }
-  const { data, error } = await query
-  if (error) throw error
-  return (data || []) as AppNotification[]
+  return api<AppNotification[]>('notifications', {
+    query: { limit: String(limit), unread_only: String(unreadOnly) },
+  }).catch(() => [])
 }
 
 export async function fetchUnreadNotificationCount(): Promise<number> {
-  const { count, error } = await supabaseRealtime
-    .from('notifications')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_read', false)
-  if (error) return 0
-  return count ?? 0
+  const data = await api<{ count: number }>('notifications/unread-count').catch(() => ({ count: 0 }))
+  return data.count ?? 0
 }
 
 export async function markNotificationRead(id: string): Promise<void> {
-  await supabaseRealtime.from('notifications').update({ is_read: true }).eq('id', id)
+  api(`notifications/${id}/read`, { method: 'POST' }).catch(() => {})
 }
 
 export async function markAllNotificationsRead(): Promise<void> {
-  await supabaseRealtime
-    .from('notifications')
-    .update({ is_read: true })
-    .eq('is_read', false)
+  api('notifications/mark-all-read', { method: 'POST' }).catch(() => {})
 }
 
 export async function deleteNotification(id: string): Promise<void> {
-  await supabaseRealtime.from('notifications').delete().eq('id', id)
+  api(`notifications/${id}`, { method: 'DELETE' }).catch(() => {})
 }
 
-// ── Text Presets ──────────────────────────────────────────────────────────────
+// ─── Text Presets ──────────────────────────────────────────────────────────────
 
 export interface TextPreset {
   id: string
@@ -2223,45 +1197,23 @@ export interface TextPreset {
 }
 
 export async function fetchTextPresets(): Promise<TextPreset[]> {
-  const { data, error } = await supabaseRealtime
-    .from('text_presets')
-    .select('*')
-    .order('sort_order', { ascending: true })
-  if (error) throw new Error(`Failed to fetch presets: ${error.message}`)
-  return (data || []) as TextPreset[]
+  return api<TextPreset[]>('settings/text-presets').catch(() => [])
 }
 
 export async function createTextPreset(name: string, content: string, sortOrder: number): Promise<TextPreset> {
-  // Explicitly fetch user id and pass it in the payload.
-  // Safari does not reliably propagate auth.uid() to DB-side triggers,
-  // causing NOT NULL constraint failures when user_id is omitted.
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
-  const { data, error } = await supabaseRealtime
-    .from('text_presets')
-    .insert({ name, content, sort_order: sortOrder, user_id: user.id })
-    .select()
-    .single()
-  if (error) throw new Error(`Failed to create preset: ${error.message}`)
-  return data as TextPreset
+  return api<TextPreset>('settings/text-presets', {
+    method: 'POST',
+    body: { name, content, sort_order: sortOrder },
+  })
 }
 
 export async function updateTextPreset(
   id: string,
   updates: { name?: string; content?: string; sort_order?: number }
 ): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('text_presets')
-    .update(updates)
-    .eq('id', id)
-  if (error) throw new Error(`Failed to update preset: ${error.message}`)
+  await api(`settings/text-presets/${id}`, { method: 'PATCH', body: updates })
 }
 
 export async function deleteTextPreset(id: string): Promise<void> {
-  const { error } = await supabaseRealtime
-    .from('text_presets')
-    .delete()
-    .eq('id', id)
-  if (error) throw new Error(`Failed to delete preset: ${error.message}`)
+  await api(`settings/text-presets/${id}`, { method: 'DELETE' })
 }
-

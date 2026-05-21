@@ -20,9 +20,11 @@
 
 import React, { useState } from 'react'
 import { Lock, Eye, EyeOff, CheckCircle, XCircle, ShieldCheck } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useLogo } from '../hooks/useLogo'
+import { getAuthHeaders } from '../lib/cognitoAuth'
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 import { useTheme } from '../contexts/ThemeContext'
 
 interface PasswordRequirement {
@@ -51,7 +53,7 @@ function strengthLabel(score: number): { label: string; color: string } {
 }
 
 export const ChangePasswordPage: React.FC = () => {
-  const { user, profile, signOut, refreshProfile, clearPasswordRecovery, isPasswordRecovery } = useAuth()
+  const { user, profile, signOut, refreshProfile, clearPasswordRecovery } = useAuth()
   const { logoUrl } = useLogo()
   const { isDark } = useTheme()
 
@@ -90,87 +92,21 @@ export const ChangePasswordPage: React.FC = () => {
       )])
 
     try {
-      if (isPasswordRecovery) {
-        // Recovery flow: call GoTrue REST API directly via fetch.
-        //
-        // WHY NOT supabase.auth.updateUser()?
-        // updateUser() successfully updates the password on the server but then
-        // the Supabase JS client hangs internally trying to process the session
-        // rotation (new tokens). During recovery, the client can't refresh tokens
-        // cleanly, so it never resolves — causing a timeout even though the
-        // password was changed. Using fetch() bypasses all internal session
-        // management and gives us a clean HTTP response.
-        //
-        const { data: sessionData } = await supabase.auth.getSession()
-        const accessToken = sessionData?.session?.access_token
-
-        if (!accessToken) {
-          throw new Error('No active session. Please request a new password reset link.')
-        }
-
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
-
-        const response = await withTimeout(
-          fetch(`${supabaseUrl}/auth/v1/user`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${accessToken}`,
-              'apikey': supabaseAnonKey,
-            },
-            body: JSON.stringify({ password: newPw }),
-          })
-        )
-
-        if (!response.ok) {
-          let errMsg = 'Failed to update password.'
-          try {
-            const errBody = await response.json()
-            if (errBody?.message) errMsg = errBody.message
-          } catch { /* ignore json parse errors */ }
-          throw new Error(errMsg)
-        }
-
-        // SUCCESS — show success screen immediately.
-        // No more awaited Supabase calls after this point.
-        setSaving(false)
-        setDone(true)
-
-        // Fire-and-forget audit log — no await, no blocking
-        Promise.resolve(
-          supabase.from('audit_log').insert({
-            project_id: null,
-            user_id: user?.id ?? null,
-            action: 'USER_PASSWORD_CHANGED',
-            field_changed: null,
-            old_value: null,
-            new_value: null,
-            metadata: { email: user?.email, reason: 'password_recovery' },
-          })
-        ).then(() => {}).catch(() => {})
-
-        return
-      } else {
-        // Admin-forced flow: RPC updates bcrypt hash + clears flag atomically
-        const { error: rpcError } = await withTimeout(
-          Promise.resolve(supabase.rpc('user_set_forced_password', { new_password: newPw }))
-        )
-        if (rpcError) throw rpcError
-      }
-
-      // Log to audit_log (non-blocking) — admin-forced path only
-      try {
-        await supabase.from('audit_log').insert({
-          project_id: null,
-          user_id: user?.id ?? null,
-          action: 'USER_PASSWORD_CHANGED',
-          field_changed: null,
-          old_value: null,
-          new_value: null,
-          metadata: { email: user?.email, reason: 'forced_change_on_login' },
+      // Call Lambda — uses Cognito AdminSetUserPassword (no old password needed)
+      // and clears password_change_required flag in Aurora atomically.
+      const headers = await getAuthHeaders()
+      const res = await withTimeout(
+        fetch(`${API_BASE}/api/auth/change-password`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ newPassword: newPw }),
         })
-      } catch { /* non-blocking */ }
+      )
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        throw new Error((errBody as { error?: string })?.error || 'Failed to update password. Please try again.')
+      }
 
       // Refresh profile in context (clears passwordChangeRequired flag in UI)
       await refreshProfile()

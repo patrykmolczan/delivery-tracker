@@ -1,18 +1,32 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
-import type { User, Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
-import { signIn as cognitoSignIn, signOut as cognitoSignOut, getSession as cognitoGetSession } from '../lib/cognitoAuth'
+import {
+  signIn as cognitoSignIn,
+  signOut as cognitoSignOut,
+  getSession,
+  COGNITO_CONFIG,
+} from '../lib/cognitoAuth'
 import type { UserProfile } from '../types'
 
+// ── App-level user type (replaces @supabase/supabase-js User) ────────────────
+// Only fields actually consumed by the app are included.
+export interface AppUser {
+  id: string
+  email: string
+  user_metadata: {
+    sso_provider?: string   // 'entra' for SSO users (disables Change Password in App.tsx)
+    full_name?: string
+  }
+}
+
 interface AuthContextType {
-  user: User | null
-  session: Session | null
+  user: AppUser | null
+  session: null                     // kept for interface compat — always null in Cognito world
   profile: UserProfile | null
   isAdmin: boolean
   isSuperAdmin: boolean
   passwordChangeRequired: boolean
-  isPasswordRecovery: boolean
-  clearPasswordRecovery: () => void
+  isPasswordRecovery: boolean       // always false — Cognito uses code-based reset flow
+  clearPasswordRecovery: () => void // no-op — kept for compat
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signInWithSSO: (domain: string) => Promise<{ error: Error | null }>
@@ -22,323 +36,177 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Detect Supabase JWT / auth errors that mean the session is dead.
-// These are returned as error objects from .from().select() calls.
-function isAuthError(error: any): boolean {
-  if (!error) return false
-  const msg = (error.message || '').toLowerCase()
-  const code = String(error.code || '')
-  const status = error.status ?? error.statusCode
-  return (
-    status === 401 ||
-    code === 'PGRST301' ||         // PostgREST: JWT expired
-    msg.includes('jwt expired') ||
-    msg.includes('jwt invalid') ||
-    msg.includes('invalid jwt') ||
-    msg.includes('jwtsignaturemismatch') ||
-    msg.includes('not authenticated') ||
-    msg.includes('invalid claim')
-  )
-}
-
-// Lambda API base — used for Cognito-only profile fetch
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
+// Decode a JWT payload without network verification (reads claims only)
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(b64))
+  } catch {
+    return {}
+  }
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
+  const [user, setUser] = useState<AppUser | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
-  // Detect recovery URL on mount BEFORE any auth events fire — used to suppress
-  // the SIGNED_OUT redirect that Supabase fires when exchanging a recovery token
-  // (Supabase fires SIGNED_OUT to clear old session BEFORE firing PASSWORD_RECOVERY)
-  const isRecoveryUrl = useRef(
-    typeof window !== 'undefined' &&
-    (window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery'))
-  )
-  // Track whether the current session is Cognito-only (no Supabase session).
-  // Used to guard Supabase-specific paths (SIGNED_OUT redirect, visibilityChange refresh).
-  const isCognitoOnly = useRef(false)
+  const initialized = useRef(false)
 
-  // Wipe all Supabase auth keys and force redirect to login.
-  // Identical clean-up path to signOut() — reusable for auth error recovery.
-  const forceSignOut = () => {
-    setUser(null)
-    setSession(null)
-    setProfile(null)
-    isCognitoOnly.current = false
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  type CogUser = NonNullable<Awaited<ReturnType<typeof getSession>>>
+
+  const buildAppUser = (cogUser: CogUser, profileData: UserProfile | null): AppUser => {
+    const claims = decodeJwtPayload(cogUser.idToken)
+    // Federated (SSO) users have an 'identities' claim in their Cognito ID token
+    const isSSOUser = Array.isArray(claims.identities) && (claims.identities as unknown[]).length > 0
+    return {
+      id: cogUser.id,
+      email: cogUser.email,
+      user_metadata: {
+        full_name: profileData?.full_name ?? cogUser.full_name ?? '',
+        sso_provider: isSSOUser ? 'entra' : undefined,
+      },
+    }
+  }
+
+  const fetchProfileFromLambda = async (idToken: string): Promise<UserProfile | null> => {
     try {
-      Object.keys(localStorage)
-        .filter(k => k.startsWith('sb-') || k === 'delivery-tracker-auth')
-        .forEach(k => localStorage.removeItem(k))
-    } catch { /* Safari private-mode safe */ }
-    cognitoSignOut()
-    supabase.auth.signOut().catch(() => {})
-    window.location.href = '/'
+      const res = await fetch(`${API_BASE}/api/me`, {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+        },
+      })
+      if (res.ok) return await res.json()
+    } catch { /* safe */ }
+    return null
   }
 
-  // Returns true if profile was fetched successfully (or error was non-auth).
-  // Returns false if the error was an auth/JWT failure — caller must sign out.
-  const fetchProfile = async (userId: string): Promise<boolean> => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-
-    if (error) {
-      if (isAuthError(error)) return false  // session is dead
-      return true                            // non-auth error (profile not found etc.) — stay logged in
-    }
-    if (data) setProfile(data as UserProfile)
-    return true
-  }
-
-  const refreshProfile = async () => {
-    if (!user) return
-    // Cognito-only path: re-fetch profile from Lambda /api/me
-    if (isCognitoOnly.current) {
-      try {
-        const cogUser = await cognitoGetSession()
-        if (!cogUser) return
-        const res = await fetch(`${API_BASE}/api/me`, {
-          headers: { Authorization: `Bearer ${cogUser.idToken}` },
-        })
-        if (res.ok) setProfile(await res.json())
-      } catch { /* safe */ }
-      return
-    }
-    await fetchProfile(user.id)
-  }
-
-  const clearPasswordRecovery = () => setIsPasswordRecovery(false)
+  // ── Mount: initialize from existing Cognito session ────────────────────────
 
   useEffect(() => {
-    // CRITICAL: Register onAuthStateChange FIRST.
-    // Supabase v2 fires INITIAL_SESSION synchronously from localStorage —
-    // no network call, no hang. getSession() called first triggers a
-    // token-refresh network request that can block 8+ seconds on refresh.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session)
-        setUser(session?.user ?? null)
+    if (initialized.current) return
+    initialized.current = true
 
-        if (session?.user) {
-          try {
-            const authOk = await fetchProfile(session.user.id)
-            if (!authOk) {
-              // Profile fetch returned a JWT/auth error — the session stored in
-              // localStorage is corrupt or the token is expired/rotated away.
-              // TOKEN_REFRESH_FAILED may never fire for this class of corruption,
-              // so we handle it here: wipe storage and force re-login immediately.
-              forceSignOut()
-              return
-            }
-          } catch {
-            // Unexpected exception — don't block the UI
-          }
-        } else {
-          // No Supabase session — check for a Cognito-only session (SSO via Cognito hosted UI).
-          // This path handles INITIAL_SESSION when a user signed in via SSO but has no Supabase session.
-          if (event === 'INITIAL_SESSION') {
-            try {
-              const cogUser = await cognitoGetSession()
-              if (cogUser) {
-                isCognitoOnly.current = true
-                const res = await fetch(`${API_BASE}/api/me`, {
-                  headers: { Authorization: `Bearer ${cogUser.idToken}` },
-                })
-                if (res.ok) {
-                  const profileData: UserProfile = await res.json()
-                  // Build a minimal synthetic User object from Cognito claims.
-                  // Only fields used by the app are populated.
-                  const syntheticUser = {
-                    id: cogUser.id,
-                    email: cogUser.email,
-                    aud: 'authenticated',
-                    role: 'authenticated',
-                    created_at: '',
-                    updated_at: '',
-                    app_metadata: {},
-                    user_metadata: {
-                      full_name: profileData?.full_name ?? cogUser.full_name ?? '',
-                      sso_provider: 'entra',
-                    },
-                  } as unknown as User
-                  setUser(syntheticUser)
-                  setProfile(profileData)
-                  setLoading(false)
-                  return  // auth complete — skip remaining event checks
-                }
-              }
-            } catch { /* safe — fall through to unauthenticated state */ }
-          }
-          setProfile(null)
+    const init = async () => {
+      try {
+        const cogUser = await getSession()
+        if (cogUser) {
+          const profileData = await fetchProfileFromLambda(cogUser.idToken)
+          setProfile(profileData)
+          setUser(buildAppUser(cogUser, profileData))
         }
+      } catch { /* safe — unauthenticated state */ }
+      setLoading(false)
+    }
 
-        // PASSWORD_RECOVERY: user clicked a password-reset link — show the change-password form
-        if (event === 'PASSWORD_RECOVERY') {
-          isRecoveryUrl.current = true
-          setIsPasswordRecovery(true)
-        }
+    void init()
 
-        // INITIAL_SESSION fires on mount — this is our signal that auth is ready.
-        // All other events (SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED) keep loading false.
-        if (event === 'INITIAL_SESSION') {
-          setLoading(false)
-        }
-
-        // SAFARI / INACTIVITY FIX: supabase-js bug — when a proactive token refresh
-        // fails (e.g. after Safari freezes a tab for 2-3h), _callRefreshToken silently
-        // deletes the session and fires SIGNED_OUT even though the user never signed out.
-        // Without this redirect the app shows an infinite "Loading delivery data…" spinner.
-        if (event === 'SIGNED_OUT') {
-          // Don't redirect if we're in a password recovery flow.
-          // Supabase fires SIGNED_OUT to clear the old session BEFORE firing PASSWORD_RECOVERY.
-          // Redirecting here wipes the recovery token from the URL — user lands on login page.
-          // Also don't redirect if this is a Cognito-only session (no Supabase session existed).
-          if (!isRecoveryUrl.current && !isCognitoOnly.current) {
-            window.location.href = '/'
-          }
-          return
-        }
-
-        // When the refresh token is invalid/rotated-away, Supabase clears the
-        // session automatically but leaves the UI in a zombie auth state.
-        // Redirect to login immediately so the user gets a clean sign-in screen.
-        if ((event as string) === 'TOKEN_REFRESH_FAILED') {
-          forceSignOut()
-        }
-      }
-    )
-
-    // SAFARI TAB VISIBILITY FIX: Safari aggressively throttles background tabs.
-    // When the user returns to the tab after 2-3h, the token may have expired and
-    // the SDK's auto-refresh timer may not have fired. Re-validate the session the
-    // moment the tab becomes visible so we catch dead sessions before data fetching.
+    // Tab visibility: re-validate Cognito session when tab comes back into focus.
+    // Catches expired sessions after device sleep / long inactivity.
     const handleVisibilityChange = async () => {
       if (document.visibilityState !== 'visible') return
-      if (isRecoveryUrl.current) return  // don't redirect during password recovery flow
-      if (isCognitoOnly.current) return  // Cognito-only sessions: skip Supabase refresh check
       try {
-        // refreshSession() makes a network call — this is intentional.
-        // getSession() only reads from cache, so stale tokens are missed.
-        // After idle (screen lock, laptop close), we MUST hit the network to
-        // get a fresh token before the user's next action fires.
-        const { data: { session: currentSession } } = await supabase.auth.refreshSession()
-        if (!currentSession) {
-          // Tab was hidden, session is now gone — clean up and redirect to login
+        const cogUser = await getSession()
+        if (!cogUser) {
+          // Session expired while tab was in background — clean up and redirect
+          cognitoSignOut()
           try {
             Object.keys(localStorage)
-              .filter(k => k.startsWith('sb-') || k === 'delivery-tracker-auth')
+              .filter(k => k.startsWith('CognitoIdentityServiceProvider'))
               .forEach(k => localStorage.removeItem(k))
           } catch { /* Safari private-mode safe */ }
           window.location.href = '/'
         }
-      } catch { /* safe to ignore — don't block UI */ }
+      } catch { /* safe */ }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    // Auto-exchange recovery token from URL — token_hash flow.
-    // Email security scanners (Mimecast/Proofpoint) pre-fetch the Supabase
-    // /auth/v1/verify URL which consumes the one-time token before the user clicks.
-    // We now send a link to our own app with token_hash as a query param instead.
-    // Mimecast fetches our React app (harmless). JS exchanges the token only here.
-    const urlParams = new URLSearchParams(window.location.search)
-    const tokenHash = urlParams.get('token_hash')
-    const tokenType = urlParams.get('type')
-    if (tokenHash && tokenType === 'recovery') {
-      // Clear the token from URL immediately (security + clean UX)
-      window.history.replaceState({}, '', window.location.pathname)
-      // Exchange token — fires PASSWORD_RECOVERY event on success, which sets
-      // isPasswordRecovery=true and AppInner renders ChangePasswordPage.
-      supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' })
-        .catch(err => {
-          console.error('[auth] verifyOtp failed:', err)
-          setLoading(false)
-        })
-    }
-
-    // Safety net: if INITIAL_SESSION never fires (e.g. no stored session at all
-    // and Supabase doesn't emit the event), unblock after 3 seconds.
-    const timeout = setTimeout(() => setLoading(false), 3000)
-
-    return () => {
-      subscription.unsubscribe()
-      clearTimeout(timeout)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
-  const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    // Dual auth: also sign in with Cognito for Lambda API token (fire-and-forget)
-    if (!error) cognitoSignIn(email, password).catch(() => {})
-    if (!error && data.user) {
-      // Log login event (non-blocking)
-      void (async () => {
-        try {
-          await supabase.from('audit_log').insert({
-            project_id: null,
-            user_id: data.user!.id,
-            action: 'USER_LOGIN',
-            field_changed: null,
-            old_value: null,
-            new_value: null,
-            metadata: { email, login_at: new Date().toISOString() },
-          })
-        } catch { /* non-blocking */ }
-      })()
-    }
-    return { error }
+  // ── Auth actions ───────────────────────────────────────────────────────────
+
+  const refreshProfile = async () => {
+    try {
+      const cogUser = await getSession()
+      if (!cogUser) return
+      const profileData = await fetchProfileFromLambda(cogUser.idToken)
+      setProfile(profileData)
+      if (profileData) setUser(buildAppUser(cogUser, profileData))
+    } catch { /* safe */ }
   }
 
-  const signInWithSSO = async (domain: string): Promise<{ error: Error | null }> => {
+  const signIn = async (email: string, password: string): Promise<{ error: Error | null }> => {
+    const { user: cogUser, error } = await cognitoSignIn(email, password)
+    if (error || !cogUser) {
+      return { error: new Error(error ?? 'Sign-in failed') }
+    }
+    const profileData = await fetchProfileFromLambda(cogUser.idToken)
+    setProfile(profileData)
+    setUser(buildAppUser(cogUser, profileData))
+    return { error: null }
+  }
+
+  const signInWithSSO = async (_domain: string): Promise<{ error: Error | null }> => {
     try {
-      // signInWithSSO redirects the browser to the identity provider.
-      // On return, Supabase handles the callback and fires onAuthStateChange(SIGNED_IN).
-      const { error } = await (supabase.auth as any).signInWithSSO({ domain })
-      return { error: error as Error | null }
+      const cognitoDomain = 'https://delivery-tracker-auth.auth.us-east-2.amazoncognito.com'
+      const clientId = COGNITO_CONFIG.ClientId
+      const redirectUri = encodeURIComponent(`${window.location.origin}/auth/callback`)
+      window.location.href = `${cognitoDomain}/oauth2/authorize?client_id=${clientId}&response_type=code&scope=openid+email+profile&redirect_uri=${redirectUri}&identity_provider=IAMIdentityCenter`
+      return { error: null }
     } catch (e) {
       return { error: e as Error }
     }
   }
 
   const signOut = () => {
-    // SAFARI FIX: Safari blocks navigation that fires after an `await` (async-initiated
-    // navigation is suppressed by ITP unless it originates directly from a user gesture).
-    // Solution: do everything synchronously first, THEN fire signOut in the background.
-
-    // 1. Immediately clear React state
+    // 1. Clear React state immediately (synchronous — Safari-safe)
     setUser(null)
-    setSession(null)
     setProfile(null)
-    isCognitoOnly.current = false
 
-    // 2. Wipe all Supabase auth keys from localStorage synchronously
+    // 2. Clear Cognito localStorage keys synchronously
     try {
       Object.keys(localStorage)
-        .filter(k => k.startsWith('sb-') || k === 'delivery-tracker-auth')
+        .filter(k =>
+          k.startsWith('CognitoIdentityServiceProvider') ||
+          k.startsWith('sb-') ||
+          k === 'delivery-tracker-auth'
+        )
         .forEach(k => localStorage.removeItem(k))
-    } catch {
-      // localStorage may be restricted in Safari private-mode — safe to ignore
-    }
+    } catch { /* Safari private-mode safe */ }
 
-    // 3. Fire Supabase signOut in background (don't await — avoids async navigation block)
+    // 3. Cognito sign-out (clears SDK session)
     cognitoSignOut()
-    supabase.auth.signOut().catch(() => {})
 
-    // 4. Hard redirect immediately — synchronous, always works in Safari
+    // 4. Hard redirect — synchronous, always works in Safari
     window.location.href = '/'
   }
+
+  // ── Derived state ──────────────────────────────────────────────────────────
 
   const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin'
   const isSuperAdmin = profile?.role === 'super_admin'
   const passwordChangeRequired = !!(profile?.password_change_required)
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, isAdmin, isSuperAdmin, passwordChangeRequired, isPasswordRecovery, clearPasswordRecovery, loading, signIn, signInWithSSO, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{
+      user,
+      session: null,
+      profile,
+      isAdmin,
+      isSuperAdmin,
+      passwordChangeRequired,
+      isPasswordRecovery: false,
+      clearPasswordRecovery: () => {},
+      loading,
+      signIn,
+      signInWithSSO,
+      signOut,
+      refreshProfile,
+    }}>
       {children}
     </AuthContext.Provider>
   )

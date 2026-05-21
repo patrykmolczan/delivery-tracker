@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { X, Eye, EyeOff, Lock, CheckCircle2 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { signIn as cognitoSignIn, changePassword } from '../lib/cognitoAuth'
 import { useAuth } from '../contexts/AuthContext'
 
 interface Props {
@@ -43,21 +43,18 @@ export default function ChangePasswordModal({ onClose }: Props) {
     setError(null)
     setLoading(true)
 
-    // Step 1: verify current password
-    const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: user?.email ?? '',
-      password: current,
-    })
+    // Step 1: verify current password via Cognito sign-in
+    const { error: signInErr } = await cognitoSignIn(user?.email ?? '', current)
     if (signInErr) {
       setError('Current password is incorrect.')
       setLoading(false)
       return
     }
 
-    // Step 2: update to new password
-    const { error: updateErr } = await supabase.auth.updateUser({ password: next })
+    // Step 2: update to new password via Cognito changePassword
+    const { error: updateErr } = await changePassword(current, next)
     if (updateErr) {
-      setError(updateErr.message || 'Failed to update password.')
+      setError(updateErr || 'Failed to update password.')
       setLoading(false)
       return
     }

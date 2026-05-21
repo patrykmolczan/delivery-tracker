@@ -120,9 +120,9 @@ const CognitoCallbackPage: React.FC = () => {
         }
         localStorage.setItem(`${prefix}.${username}.clockDrift`, '0')
 
-        // ── Step 3: Brief pause so user sees final step tick in ───────────
+        // ── Step 3: Pause so user can appreciate the completed screen ─────
         setStep(3)
-        await new Promise(r => setTimeout(r, 520))
+        await new Promise(r => setTimeout(r, 1500))
 
         // Fade out, then replace history so Back button doesn't return to /auth/callback
         setFading(true)
@@ -185,7 +185,7 @@ const CognitoCallbackPage: React.FC = () => {
       background: 'linear-gradient(145deg, #060b18 0%, #0a1628 45%, #0b1e3a 100%)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       position: 'relative', overflow: 'hidden',
-      /* Fade-to-white before dashboard appears */
+      /* Fade-to-black before dashboard appears */
       opacity: fading ? 0 : 1,
       transition: 'opacity 0.58s ease',
     }}>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Bot, User, Sparkles, TrendingUp, Clock, BarChart2, RefreshCw } from 'lucide-react'
 import type { Project, AIChatMessage } from '../types'
 import { getAuthHeaders } from '../lib/supabase'
+import DOMPurify from 'dompurify'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -570,7 +571,7 @@ export const AIPage: React.FC<Props> = ({ projects }) => {
                 ? 'bg-base-200 border border-base-300 rounded-tl-sm'
                 : 'bg-primary text-primary-content rounded-tr-sm'}`}>
               {msg.role === 'assistant' ? (
-                <div dangerouslySetInnerHTML={{ __html: `<p>${renderMarkdown(msg.content)}</p>` }} />
+                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(`<p>${renderMarkdown(msg.content)}</p>`, { ADD_TAGS: ['br'], FORCE_BODY: false }) }} />
               ) : (
                 <p>{msg.content}</p>
               )}

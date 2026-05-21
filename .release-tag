@@ -1,0 +1,4 @@
+stable/v6.0-aws-complete
+commit: 92684f3
+date: 2026-05-21
+description: Full AWS migration complete. Cognito auth, Aurora DB, Lambda API, Amplify hosting. All Supabase removed. Logo fix deployed.

@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
-import { signIn as cognitoSignIn, signOut as cognitoSignOut } from '../lib/cognitoAuth'
+import { signIn as cognitoSignIn, signOut as cognitoSignOut, getSession as cognitoGetSession } from '../lib/cognitoAuth'
 import type { UserProfile } from '../types'
 
 interface AuthContextType {
@@ -41,6 +41,9 @@ function isAuthError(error: any): boolean {
   )
 }
 
+// Lambda API base — used for Cognito-only profile fetch
+const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
@@ -54,6 +57,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     typeof window !== 'undefined' &&
     (window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery'))
   )
+  // Track whether the current session is Cognito-only (no Supabase session).
+  // Used to guard Supabase-specific paths (SIGNED_OUT redirect, visibilityChange refresh).
+  const isCognitoOnly = useRef(false)
 
   // Wipe all Supabase auth keys and force redirect to login.
   // Identical clean-up path to signOut() — reusable for auth error recovery.
@@ -61,6 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null)
     setSession(null)
     setProfile(null)
+    isCognitoOnly.current = false
     try {
       Object.keys(localStorage)
         .filter(k => k.startsWith('sb-') || k === 'delivery-tracker-auth')
@@ -89,7 +96,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const refreshProfile = async () => {
-    if (user) await fetchProfile(user.id)
+    if (!user) return
+    // Cognito-only path: re-fetch profile from Lambda /api/me
+    if (isCognitoOnly.current) {
+      try {
+        const cogUser = await cognitoGetSession()
+        if (!cogUser) return
+        const res = await fetch(`${API_BASE}/api/me`, {
+          headers: { Authorization: `Bearer ${cogUser.idToken}` },
+        })
+        if (res.ok) setProfile(await res.json())
+      } catch { /* safe */ }
+      return
+    }
+    await fetchProfile(user.id)
   }
 
   const clearPasswordRecovery = () => setIsPasswordRecovery(false)
@@ -119,6 +139,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Unexpected exception — don't block the UI
           }
         } else {
+          // No Supabase session — check for a Cognito-only session (SSO via Cognito hosted UI).
+          // This path handles INITIAL_SESSION when a user signed in via SSO but has no Supabase session.
+          if (event === 'INITIAL_SESSION') {
+            try {
+              const cogUser = await cognitoGetSession()
+              if (cogUser) {
+                isCognitoOnly.current = true
+                const res = await fetch(`${API_BASE}/api/me`, {
+                  headers: { Authorization: `Bearer ${cogUser.idToken}` },
+                })
+                if (res.ok) {
+                  const profileData: UserProfile = await res.json()
+                  // Build a minimal synthetic User object from Cognito claims.
+                  // Only fields used by the app are populated.
+                  const syntheticUser = {
+                    id: cogUser.id,
+                    email: cogUser.email,
+                    aud: 'authenticated',
+                    role: 'authenticated',
+                    created_at: '',
+                    updated_at: '',
+                    app_metadata: {},
+                    user_metadata: {
+                      full_name: profileData?.full_name ?? cogUser.full_name ?? '',
+                      sso_provider: 'entra',
+                    },
+                  } as unknown as User
+                  setUser(syntheticUser)
+                  setProfile(profileData)
+                  setLoading(false)
+                  return  // auth complete — skip remaining event checks
+                }
+              }
+            } catch { /* safe — fall through to unauthenticated state */ }
+          }
           setProfile(null)
         }
 
@@ -142,7 +197,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Don't redirect if we're in a password recovery flow.
           // Supabase fires SIGNED_OUT to clear the old session BEFORE firing PASSWORD_RECOVERY.
           // Redirecting here wipes the recovery token from the URL — user lands on login page.
-          if (!isRecoveryUrl.current) {
+          // Also don't redirect if this is a Cognito-only session (no Supabase session existed).
+          if (!isRecoveryUrl.current && !isCognitoOnly.current) {
             window.location.href = '/'
           }
           return
@@ -164,6 +220,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleVisibilityChange = async () => {
       if (document.visibilityState !== 'visible') return
       if (isRecoveryUrl.current) return  // don't redirect during password recovery flow
+      if (isCognitoOnly.current) return  // Cognito-only sessions: skip Supabase refresh check
       try {
         // refreshSession() makes a network call — this is intentional.
         // getSession() only reads from cache, so stale tokens are missed.
@@ -257,6 +314,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null)
     setSession(null)
     setProfile(null)
+    isCognitoOnly.current = false
 
     // 2. Wipe all Supabase auth keys from localStorage synchronously
     try {

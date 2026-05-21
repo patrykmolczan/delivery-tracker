@@ -873,12 +873,8 @@ export async function fetchProjectOwnerEmail(userId: string): Promise<string | n
 // ─── App Settings ──────────────────────────────────────────────────────────────
 
 export async function fetchAppSettings(): Promise<Record<string, string>> {
-  const rows = await api<Array<{ key: string; value: string }>>('settings').catch(() => [])
-  const result: Record<string, string> = {}
-  for (const row of rows) {
-    if (row.value != null) result[row.key] = row.value
-  }
-  return result
+  // Lambda returns a flat {key: value} object directly — not an array
+  return api<Record<string, string>>('settings').catch(() => ({}))
 }
 
 export async function updateAppSetting(key: string, value: string): Promise<void> {

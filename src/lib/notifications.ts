@@ -1,4 +1,8 @@
-import { supabase, getAuthHeaders } from './supabase'
+/**
+ * notifications.ts — Notification helpers via Lambda API
+ * Fully migrated off Supabase; all queries go through Aurora via Lambda.
+ */
+import { getAuthHeaders } from './supabase'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -11,38 +15,46 @@ export interface NotificationSetting {
 }
 
 export async function fetchNotificationSettings(): Promise<NotificationSetting[]> {
-  const { data, error } = await supabase
-    .from('notification_settings')
-    .select('*')
-    .order('label')
-  if (error) return []
-  return (data || []) as NotificationSetting[]
+  try {
+    const headers = await getAuthHeaders()
+    const res = await fetch(`${API_BASE}/api/notifications/settings`, { headers })
+    if (!res.ok) return []
+    return (await res.json()) || []
+  } catch {
+    return []
+  }
 }
 
 export async function updateNotificationSetting(id: string, enabled: boolean): Promise<void> {
-  const { error } = await supabase
-    .from('notification_settings')
-    .update({ setting_value: enabled })
-    .eq('id', id)
-  if (error) throw new Error(`Failed to update setting: ${error.message}`)
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/api/notifications/settings/${id}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ enabled }),
+  })
+  if (!res.ok) throw new Error(`Failed to update setting`)
 }
 
 export async function updateProjectNotifications(projectId: string, enabled: boolean): Promise<void> {
-  const { error } = await supabase
-    .from('projects')
-    .update({ notifications_enabled: enabled })
-    .eq('id', projectId)
-  if (error) throw new Error(`Failed to update notifications: ${error.message}`)
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/api/projects/${projectId}/notifications`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ notifications_enabled: enabled }),
+  })
+  if (!res.ok) throw new Error(`Failed to update notifications`)
 }
 
 export async function fetchProjectOwnerEmail(userId: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('email')
-    .eq('id', userId)
-    .single()
-  if (error || !data) return null
-  return (data as any).email || null
+  try {
+    const headers = await getAuthHeaders()
+    const res = await fetch(`${API_BASE}/api/profiles/owner-email/${userId}`, { headers })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.email ?? null
+  } catch {
+    return null
+  }
 }
 
 export async function sendNotification(payload: {

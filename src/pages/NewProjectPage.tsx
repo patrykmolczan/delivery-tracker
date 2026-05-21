@@ -4,6 +4,7 @@ import {
   Globe, ListTodo, Paperclip, Zap, Download, FileText,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { getSession as cognitoGetSession } from '../lib/cognitoAuth'
 import {
   fetchLookups, createProject, updateProject, fetchProjects,
   buildLookupMaps, buildPredictionStats, predictDeliveryTime,
@@ -17,7 +18,6 @@ import type {
 } from '../types'
 import type { Client } from '../lib/data'
 import type { ProjectType } from '../lib/data'
-import { supabaseRealtime } from '../lib/supabase'
 import { parseTemplateFile, type DBCountry } from '../lib/templateParser'
 import { analyzeTemplateQuality, type TemplateQualityResult } from '../lib/templateQualityAnalyzer'
 import { TemplateQualityReview } from '../components/TemplateQualityReview'
@@ -178,7 +178,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   // Load lookups — session guard redirects immediately on expired session
   useEffect(() => {
     const init = async () => {
-      const { data: { session } } = await supabaseRealtime.auth.getSession()
+      const session = await cognitoGetSession()
       if (!session) { signOut(); return }
       Promise.all([fetchLookups(), fetchProjectTypes(), fetchClients()])
         .then(([lu, pts, cls]) => {

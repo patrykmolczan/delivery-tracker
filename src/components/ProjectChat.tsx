@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Loader2, MessageSquare } from 'lucide-react'
-import { supabaseRealtime } from '../lib/supabase'
 import { pollTable } from '../lib/pollingClient'
 import { useAuth } from '../contexts/AuthContext'
+import { getSession as cognitoGetSession } from '../lib/cognitoAuth'
 import {
   fetchMessages,
   sendMessage as sendChatMessage,
@@ -64,7 +64,7 @@ export const ProjectChat: React.FC<Props> = ({
   const load = useCallback(async () => {
     try {
       // Session guard — redirect immediately on expired session, no infinite spinner
-      const { data: { session } } = await supabaseRealtime.auth.getSession()
+      const session = await cognitoGetSession()
       if (!session) { signOut(); return }
       const msgs = await fetchMessages(projectId)
       setMessages(msgs)

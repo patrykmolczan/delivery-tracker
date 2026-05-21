@@ -1,4 +1,10 @@
-import { supabaseRealtime as supabase } from './supabase'
+/**
+ * chat.ts — Project chat messages via Lambda API
+ * Fully migrated off Supabase; all queries go through Aurora via Lambda.
+ */
+import { getAuthHeaders } from './supabase'
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
 export interface ProjectMessage {
   id: string
@@ -12,61 +18,49 @@ export interface ProjectMessage {
 }
 
 export async function fetchMessages(projectId: string): Promise<ProjectMessage[]> {
-  const { data, error } = await supabase
-    .from('project_messages')
-    .select('*')
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: true })
-  if (error) throw error
-  return data || []
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/api/chat/${projectId}`, { headers })
+  if (!res.ok) throw new Error('Failed to fetch messages')
+  return (await res.json()) || []
 }
 
 export async function sendMessage(
   projectId: string,
-  senderId: string,
-  senderName: string,
-  senderRole: string,
+  _senderId: string,
+  _senderName: string,
+  _senderRole: string,
   message: string
 ): Promise<ProjectMessage> {
-  const { data, error } = await supabase
-    .from('project_messages')
-    .insert({
-      project_id: projectId,
-      sender_id: senderId,
-      sender_name: senderName,
-      sender_role: senderRole,
-      message: message.trim(),
-      read_by: [senderId],
-    })
-    .select()
-    .single()
-  if (error) throw error
-  return data
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/api/chat/${projectId}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ content: message.trim() }),
+  })
+  if (!res.ok) throw new Error('Failed to send message')
+  return await res.json()
 }
 
-export async function markMessagesRead(projectId: string, userId: string): Promise<void> {
-  const { data: msgs } = await supabase
-    .from('project_messages')
-    .select('id, read_by')
-    .eq('project_id', projectId)
-  if (!msgs || msgs.length === 0) return
-  const unread = msgs.filter((m: { id: string; read_by: string[] }) => !m.read_by.includes(userId))
-  if (unread.length === 0) return
-  await Promise.all(
-    unread.map((m: { id: string; read_by: string[] }) =>
-      supabase
-        .from('project_messages')
-        .update({ read_by: [...m.read_by, userId] })
-        .eq('id', m.id)
-    )
-  )
+export async function markMessagesRead(projectId: string, _userId: string): Promise<void> {
+  try {
+    const headers = await getAuthHeaders()
+    await fetch(`${API_BASE}/api/chat/${projectId}/read`, {
+      method: 'POST',
+      headers,
+    })
+  } catch {
+    // fire-and-forget — don't block UI
+  }
 }
 
 export async function getUnreadCount(projectId: string, userId: string): Promise<number> {
-  const { data, error } = await supabase
-    .from('project_messages')
-    .select('id, read_by')
-    .eq('project_id', projectId)
-  if (error || !data) return 0
-  return data.filter((m: { id: string; read_by: string[] }) => !m.read_by.includes(userId)).length
+  try {
+    const headers = await getAuthHeaders()
+    const res = await fetch(`${API_BASE}/api/chat/${projectId}`, { headers })
+    if (!res.ok) return 0
+    const msgs: ProjectMessage[] = await res.json()
+    return msgs.filter(m => !(m.read_by ?? []).includes(userId)).length
+  } catch {
+    return 0
+  }
 }

@@ -30,7 +30,7 @@ import {
   AlertTriangle, RefreshCw, FileText, UserPlus, UserCheck,
   ChevronRight, Eye, EyeOff, Mail, Send, Shield,
 } from 'lucide-react'
-import { supabase, getAuthHeaders } from '../lib/supabase'
+import { getAuthHeaders } from '../lib/supabase'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -212,11 +212,18 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
     let existingEmails = new Set<string>()
 
     if (validEmails.length > 0) {
-      const { data: existing } = await supabase
-        .from('profiles')
-        .select('email')
-        .in('email', validEmails)
-      existingEmails = new Set((existing ?? []).map((e: { email: string }) => e.email))
+      try {
+        const headers = await getAuthHeaders()
+        const res = await fetch(`${API_BASE}/api/users`, { headers })
+        if (res.ok) {
+          const allUsers: Array<{ id: string; email: string }> = await res.json()
+          existingEmails = new Set(allUsers.map(u => u.email))
+          // Build email→id map for update operations
+          ;(processFile as any)._emailToId = Object.fromEntries(allUsers.map(u => [u.email, u.id]))
+        }
+      } catch {
+        // fail-open: treat all as new if lookup fails
+      }
     }
 
     // Classify rows and generate passwords for CREATE rows
@@ -277,35 +284,46 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
           if (!row.generatedPassword) {
             throw new Error('No generated password — please re-upload the CSV.')
           }
-          const { error } = await supabase.rpc('admin_create_user', {
-            p_email:     row.email,
-            p_password:  row.generatedPassword,
-            p_full_name: row.full_name || row.email,
-            p_role:      'user',
+          const createRes = await fetch(`${API_BASE}/api/users`, {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+            body: JSON.stringify({
+              email:     row.email,
+              password:  row.generatedPassword,
+              full_name: row.full_name || row.email,
+              role:      'user',
+            }),
           })
-          if (error) {
-            const msg = (error as any).message || JSON.stringify(error)
-            throw new Error(msg)
+          if (!createRes.ok) {
+            const errData = await createRes.json().catch(() => ({ error: 'Unknown error' }))
+            throw new Error(errData.error || `Create failed (${createRes.status})`)
           }
+          const createdUser = await createRes.json()
 
           if (!normalizeStatus(row.status)) {
-            await supabase.rpc('admin_update_user', {
-              p_email:     row.email,
-              p_full_name: row.full_name || row.email,
-              p_is_active: false,
+            await fetch(`${API_BASE}/api/users/${createdUser.id}`, {
+              method: 'PATCH',
+              headers: await getAuthHeaders(),
+              body: JSON.stringify({ is_active: false }),
             })
           }
 
           updated[i] = { ...updated[i], processResult: 'success', processMsg: 'Account created' }
         } else {
-          const { error } = await supabase.rpc('admin_update_user', {
-            p_email:     row.email,
-            p_full_name: row.full_name || null,
-            p_is_active: normalizeStatus(row.status),
+          const emailToId: Record<string, string> = (processFile as any)._emailToId ?? {}
+          const targetId = emailToId[row.email]
+          if (!targetId) throw new Error(`User ID not found for ${row.email} — re-upload the CSV to retry`)
+          const updateRes = await fetch(`${API_BASE}/api/users/${targetId}`, {
+            method: 'PATCH',
+            headers: await getAuthHeaders(),
+            body: JSON.stringify({
+              full_name: row.full_name || null,
+              is_active: normalizeStatus(row.status),
+            }),
           })
-          if (error) {
-            const msg = (error as any).message || JSON.stringify(error)
-            throw new Error(msg)
+          if (!updateRes.ok) {
+            const errData = await updateRes.json().catch(() => ({ error: 'Unknown error' }))
+            throw new Error(errData.error || `Update failed (${updateRes.status})`)
           }
           updated[i] = { ...updated[i], processResult: 'success', processMsg: 'User updated' }
         }

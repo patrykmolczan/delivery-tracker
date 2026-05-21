@@ -5,7 +5,8 @@ import {
   Loader2, RefreshCw, Users, Plus, Trash2, Tag, Layers, Upload, Download,
   Search, ChevronLeft, ChevronRight, UserX, UserCheck, Bell, Mail, Image,
 } from 'lucide-react'
-import { supabase, supabaseRealtime, getAuthHeaders } from '../lib/supabase'
+import { getAuthHeaders } from '../lib/supabase'
+import { cognitoGetSession } from '../lib/cognitoAuth'
 import { useAuth } from '../contexts/AuthContext'
 import {
   fetchAllAnalysts, createAnalyst, updateAnalyst, deactivateAnalyst, reactivateAnalyst,
@@ -402,8 +403,13 @@ export const AdminPage: React.FC = () => {
 
   const fetchUsers = async () => {
     setLoading(true)
-    const { data, error } = await supabaseRealtime.from('profiles').select('*').order('created_at', { ascending: false })
-    if (!error) setUsers(data as UserProfile[])
+    try {
+      const res = await fetch(`${API_BASE}/api/users`, { headers: await getAuthHeaders() })
+      if (res.ok) {
+        const data = await res.json()
+        setUsers(data as UserProfile[])
+      }
+    } catch (_e) { /* ignore */ }
     setLoading(false)
   }
 
@@ -433,7 +439,7 @@ export const AdminPage: React.FC = () => {
     //
     // getSession() reads from cache and only refreshes if the token is actually
     // expired — it does not fight the auto-refresh loop for the lock.
-    supabaseRealtime.auth.getSession().then(() => {
+    cognitoGetSession().then(() => {
       loadAll()
       fetchAppSettings().then(s => {
         setCurrentLogoUrl(s.logo_url || null)
@@ -471,9 +477,10 @@ export const AdminPage: React.FC = () => {
   const showSuccess = (msg: string) => { setSuccess(msg); setTimeout(() => setSuccess(null), 3000) }
 
   const getAccessToken = async (): Promise<string> => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.access_token) throw new Error('Not authenticated')
-    return session.access_token
+    const sess = await cognitoGetSession()
+    const token = sess?.idToken || sess?.accessToken
+    if (!token) throw new Error('Not authenticated')
+    return token
   }
 
   // ── User CRUD ─────────────────────────────────────────────────────────────
@@ -482,8 +489,13 @@ export const AdminPage: React.FC = () => {
     if (!newUser.email || !newUser.password || !newUser.full_name) return
     setCreating(true); setError(null)
     try {
-      const { error } = await supabase.rpc('admin_create_user', { p_email: newUser.email, p_password: newUser.password, p_full_name: newUser.full_name, p_role: newUser.role })
-      if (error) throw error
+      const res = await fetch(`${API_BASE}/api/users`, {
+        method: 'POST',
+        headers: { ...await getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newUser.email, password: newUser.password, full_name: newUser.full_name, role: newUser.role }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to create user')
       setNewUser({ email: '', full_name: '', password: '', role: 'user' })
       await fetchUsers()
       showSuccess(`User ${newUser.email} created successfully!`)
@@ -496,8 +508,13 @@ export const AdminPage: React.FC = () => {
   const saveEdit = async (id: string) => {
     setError(null)
     try {
-      const { error } = await supabase.from('profiles').update({ full_name: editForm.full_name, role: editForm.role, is_active: editForm.is_active, updated_at: new Date().toISOString() }).eq('id', id)
-      if (error) throw error
+      const res = await fetch(`${API_BASE}/api/users/${id}`, {
+        method: 'PUT',
+        headers: { ...await getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_name: editForm.full_name, role: editForm.role, is_active: editForm.is_active }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to update user')
       setEditId(null); await fetchUsers(); showSuccess('User updated successfully!')
     } catch (err: any) { setError(err.message || 'Failed to update user') }
   }
@@ -530,12 +547,17 @@ export const AdminPage: React.FC = () => {
 
   const quickToggleActive = async (user: UserProfile) => {
     const newActive = !(user.is_active ?? true)
-    const { error } = await supabase.from('profiles').update({ is_active: newActive, updated_at: new Date().toISOString() }).eq('id', user.id)
-    if (!error) {
+    const res = await fetch(`${API_BASE}/api/users/${user.id}`, {
+      method: 'PUT',
+      headers: { ...await getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: newActive }),
+    })
+    if (res.ok) {
       setUsers(prev => prev.map(u => u.id === user.id ? { ...u, is_active: newActive } : u))
       showSuccess(`${user.full_name || user.email} ${newActive ? 'activated' : 'deactivated'}.`)
     } else {
-      setError(error.message)
+      const data = await res.json().catch(() => ({}))
+      setError(data.error || 'Failed to update user')
     }
   }
 
@@ -566,12 +588,18 @@ export const AdminPage: React.FC = () => {
       }
       const tempPassword = chars.join('')
 
-      // Reset password in DB + set password_change_required = true
-      const { error: resetErr } = await supabase.rpc('admin_reset_user_password', {
-        p_email: userEmail,
-        p_new_password: tempPassword,
+      // Reset password via Lambda + set password_change_required = true
+      const targetUser = users.find(u => u.email === userEmail)
+      if (!targetUser) throw new Error('User not found')
+      const resetRes = await fetch(`${API_BASE}/api/users/${targetUser.id}/reset-password`, {
+        method: 'POST',
+        headers: { ...await getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_password: tempPassword }),
       })
-      if (resetErr) throw new Error(resetErr.message)
+      if (!resetRes.ok) {
+        const resetErr = await resetRes.json().catch(() => ({}))
+        throw new Error(resetErr.error || `Reset failed HTTP ${resetRes.status}`)
+      }
 
       // Send welcome email
       const res = await fetch(`${API_BASE}/api/send-welcome`, {
@@ -603,11 +631,16 @@ export const AdminPage: React.FC = () => {
         return u?.role !== 'super_admin' || isSuperAdmin
       })
       if (ids.length === 0) { showSuccess('No eligible users to deactivate.'); return }
-      const { error } = await supabase.from('profiles').update({ is_active: false, updated_at: new Date().toISOString() }).in('id', ids)
-      if (error) throw error
+      const res = await fetch(`${API_BASE}/api/users/bulk-deactivate`, {
+        method: 'POST',
+        headers: { ...await getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Bulk deactivate failed')
       setUsers(prev => prev.map(u => selectedUserIds.has(u.id) ? { ...u, is_active: false } : u))
       setSelectedUserIds(new Set())
-      showSuccess(`${ids.length} user(s) deactivated.`)
+      showSuccess(`${data.deactivated} user(s) deactivated.`)
     } catch (err: any) {
       setError(err.message || 'Bulk deactivate failed')
     } finally {
@@ -620,8 +653,12 @@ export const AdminPage: React.FC = () => {
     setDeleting(true)
     setError(null)
     try {
-      const { error } = await supabase.rpc('admin_delete_user', { p_user_id: deleteUserTarget.id })
-      if (error) throw error
+      const res = await fetch(`${API_BASE}/api/users/${deleteUserTarget.id}`, {
+        method: 'DELETE',
+        headers: await getAuthHeaders(),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to delete user')
       setUsers(prev => prev.filter(u => u.id !== deleteUserTarget.id))
       setDeleteUserTarget(null)
       setDeleteConfirmEmail('')

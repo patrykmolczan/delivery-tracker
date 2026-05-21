@@ -427,7 +427,12 @@ export function sortProjects(projects: Project[], sort: SortState): Project[] {
 
 export function formatDate(d: string | null | undefined): string {
   if (!d) return '—'
-  const date = new Date(d + 'T00:00:00')
+  // Aurora returns full ISO timestamps (e.g. "2024-01-15T00:00:00.000Z").
+  // Strip to date-part only before appending local midnight, otherwise
+  // "...ZT00:00:00" is an invalid date string and renders as "Invalid Date".
+  const datePart = d.includes('T') ? d.slice(0, 10) : d
+  const date = new Date(datePart + 'T00:00:00')
+  if (isNaN(date.getTime())) return '—'
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 

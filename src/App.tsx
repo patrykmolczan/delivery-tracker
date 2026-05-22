@@ -136,7 +136,6 @@ const Dashboard: React.FC = () => {
     return () => { poll.unsubscribe() }
   }, [])
 
-  const filtered = useMemo(() => filterProjects(projects, filters), [projects, filters])
   // Tab-filtered subsets (Projects tab vs One-offs tab in table view)
   const tabProjects = useMemo(
     () => projects.filter(p => ((p as any).record_type ?? 'project') === recordType),

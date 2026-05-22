@@ -409,17 +409,17 @@ const Dashboard: React.FC = () => {
                   totalCount={projects.length}
                 />
                 <ProjectTable
-                  projects={sorted.slice(0, DASHBOARD_TABLE_ROWS)}
+                  projects={tabSorted.slice(0, DASHBOARD_TABLE_ROWS)}
                   sort={sort}
                   onSort={setSort}
                   onSelectProject={setSelectedProject}
                   selectedId={selectedProject?.id || null}
                   countriesMap={countriesMap}
                 />
-                {sorted.length > DASHBOARD_TABLE_ROWS && (
+                {tabSorted.length > DASHBOARD_TABLE_ROWS && (
                   <div className="text-center">
                     <button className="btn btn-ghost btn-sm gap-1.5" onClick={() => navigate('table')}>
-                      View all {sorted.length} projects <ChevronRight size={14} />
+                      View all {tabSorted.length} projects <ChevronRight size={14} />
                     </button>
                   </div>
                 )}

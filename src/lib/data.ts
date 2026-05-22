@@ -158,6 +158,13 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
     ai_eta_override_by: row.ai_eta_override_by ?? null,
     ai_eta_override_at: row.ai_eta_override_at ?? null,
     ai_eta_override_reason: row.ai_eta_override_reason ?? null,
+    // Import / assignment columns
+    record_type: row.record_type ?? 'project',
+    is_imported: row.is_imported ?? false,
+    assignment_acknowledged: row.assignment_acknowledged ?? false,
+    countries_text: row.countries_text ?? null,
+    industry_text: row.industry_text ?? null,
+    external_id: row.external_id ?? null,
   }
 }
 
@@ -1067,6 +1074,7 @@ export async function createProjectFeedback(params: {
   authorRole: 'admin' | 'user'
   actionType: string
   message: string | null
+  checklist?: Array<{ item_text: string; category: string; priority: string }>
   statusChangeToId: number | null
   statusChangeToName: string | null
   notifyRequester: boolean

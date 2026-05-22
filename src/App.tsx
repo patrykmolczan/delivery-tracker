@@ -21,7 +21,7 @@ import { useLogo } from './hooks/useLogo'
 import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode, LookupItem } from './types'
 import {
   LayoutDashboard, Table2, RefreshCw, LogOut, Lock, Truck, Loader2,
-  Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon
+  Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon, AlertTriangle
 } from 'lucide-react'
 import { useTheme } from './contexts/ThemeContext'
 import { getSession as cognitoGetSession } from './lib/cognitoAuth'
@@ -64,6 +64,7 @@ const Dashboard: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [countriesMap, setCountriesMap] = useState<Map<string, string[]>>(new Map())
   const [statusLookups, setStatusLookups] = useState<LookupItem[]>([])
+  const [showUnassignedOnly, setShowUnassignedOnly] = useState(false)
 
   const loadData = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -136,6 +137,14 @@ const Dashboard: React.FC = () => {
   const filtered = useMemo(() => filterProjects(projects, filters), [projects, filters])
   const sorted = useMemo(() => sortProjects(filtered, sort), [filtered, sort])
   const kpis = useMemo(() => computeKPIs(projects), [projects])
+  const unassignedProjects = useMemo(
+    () => projects.filter(p => (!p.project_owner?.trim()) || (!p.analyst?.trim())),
+    [projects]
+  )
+  const displaySorted = useMemo(
+    () => showUnassignedOnly ? sortProjects(unassignedProjects, sort) : sorted,
+    [showUnassignedOnly, unassignedProjects, sorted, sort]
+  )
 
   const navigate = (v: ViewMode) => {
     setView(v)
@@ -350,6 +359,24 @@ const Dashboard: React.FC = () => {
           {/* Dashboard View */}
           {view === 'dashboard' && (
             <div className="space-y-6">
+              {/* Needs Assignment Banner — admin only */}
+              {isAdmin && unassignedProjects.length > 0 && (
+                <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-warning/40 bg-warning/10">
+                  <div className="flex items-center gap-2.5">
+                    <AlertTriangle size={15} className="text-warning flex-shrink-0" />
+                    <span className="font-semibold text-sm text-warning">
+                      {unassignedProjects.length} project{unassignedProjects.length !== 1 ? 's' : ''} need{unassignedProjects.length === 1 ? 's' : ''} assignment
+                    </span>
+                    <span className="hidden sm:inline text-xs text-base-content/50">— owner or analyst not yet set</span>
+                  </div>
+                  <button
+                    className="btn btn-outline btn-warning btn-xs flex-shrink-0"
+                    onClick={() => { setShowUnassignedOnly(true); navigate('table') }}
+                  >
+                    View projects
+                  </button>
+                </div>
+              )}
               <KPICards kpis={kpis} />
               <Charts statusCounts={statusCounts} ownerCounts={ownerCounts} />
               <div className="space-y-4">
@@ -391,15 +418,40 @@ const Dashboard: React.FC = () => {
                   <Plus size={14} /> New Project
                 </button>
               </div>
+              {/* Needs Assignment Banner — admin only */}
+              {isAdmin && unassignedProjects.length > 0 && (
+                <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-warning/40 bg-warning/10">
+                  <div className="flex items-center gap-2.5">
+                    <AlertTriangle size={15} className="text-warning flex-shrink-0" />
+                    <span className="font-semibold text-sm text-warning">
+                      {unassignedProjects.length} project{unassignedProjects.length !== 1 ? 's' : ''} need{unassignedProjects.length === 1 ? 's' : ''} assignment
+                    </span>
+                    <span className="hidden sm:inline text-xs text-base-content/50">— owner or analyst not yet set</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {showUnassignedOnly && (
+                      <button className="btn btn-ghost btn-xs" onClick={() => setShowUnassignedOnly(false)}>
+                        Clear filter
+                      </button>
+                    )}
+                    <button
+                      className={`btn btn-xs ${showUnassignedOnly ? 'btn-warning' : 'btn-outline btn-warning'}`}
+                      onClick={() => setShowUnassignedOnly(v => !v)}
+                    >
+                      {showUnassignedOnly ? '✓ Showing unassigned' : 'View projects'}
+                    </button>
+                  </div>
+                </div>
+              )}
               <FilterBar
                 filters={filters}
                 onChange={setFilters}
                 options={filterOptions}
-                resultCount={filtered.length}
+                resultCount={showUnassignedOnly ? unassignedProjects.length : filtered.length}
                 totalCount={projects.length}
               />
               <ProjectTable
-                projects={sorted}
+                projects={displaySorted}
                 sort={sort}
                 onSort={setSort}
                 onSelectProject={setSelectedProject}

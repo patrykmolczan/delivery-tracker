@@ -50,14 +50,28 @@ function getNotifMeta(type: string): NotifMeta {
     eta_update:       { icon: '🕐', colorClass: 'text-accent',  badgeClass: 'badge-accent',   label: 'ETA Updated' },
     project_created:  { icon: '🆕', colorClass: 'text-success', badgeClass: 'badge-success',  label: 'New Project' },
     status_change:    { icon: '📊', colorClass: 'text-neutral', badgeClass: 'badge-neutral',  label: 'Status Change' },
+    assignment_changed: { icon: '👤', colorClass: 'text-secondary', badgeClass: 'badge-secondary', label: 'Assignment' },
+    chat_message:       { icon: '💬', colorClass: 'text-primary',   badgeClass: 'badge-primary',   label: 'Chat Message' },
   }
   return map[type] ?? { icon: '🔔', colorClass: 'text-base-content', badgeClass: 'badge-ghost', label: 'Notification' }
 }
 
-type FilterType = 'all' | 'unread' | 'admin_actions' | 'user_actions' | 'eta'
+// ── tab routing by notification type ─────────────────────────────────────────
+function getNotifTab(type: string): string | undefined {
+  const reviewTypes = ['resubmit', 'checklist_resolved', 'feedback_hold', 'feedback_changes', 'feedback_reject', 'feedback_approve', 'user_response']
+  if (reviewTypes.includes(type)) return 'review'
+  if (type === 'eta_update') return 'details'
+  if (type === 'status_change') return 'details'
+  if (type === 'assignment_changed') return 'details'
+  if (type === 'chat_message') return 'chat'
+  return undefined
+}
+
+type FilterType = 'all' | 'unread' | 'chat' | 'admin_actions' | 'user_actions' | 'eta'
 const FILTER_TABS: { id: FilterType; label: string }[] = [
   { id: 'all',          label: 'All' },
   { id: 'unread',       label: 'Unread' },
+  { id: 'chat',         label: 'Chat' },
   { id: 'admin_actions',label: 'Admin Actions' },
   { id: 'user_actions', label: 'User Actions' },
   { id: 'eta',          label: 'ETA Updates' },
@@ -67,7 +81,7 @@ const USER_ACTION_TYPES  = ['user_response', 'resubmit', 'project_created']
 
 // ── component ─────────────────────────────────────────────────────────────────
 interface Props {
-  onProjectOpen?: (projectId: string) => void
+  onProjectOpen?: (projectId: string, tab?: string) => void
 }
 
 export const NotificationInbox: React.FC<Props> = ({ onProjectOpen }) => {
@@ -92,7 +106,7 @@ export const NotificationInbox: React.FC<Props> = ({ onProjectOpen }) => {
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x))
     }
     if (n.project_id && onProjectOpen) {
-      onProjectOpen(n.project_id)
+      onProjectOpen(n.project_id, getNotifTab(n.type))
     }
   }
 
@@ -110,6 +124,7 @@ export const NotificationInbox: React.FC<Props> = ({ onProjectOpen }) => {
   // Filter
   const filtered = notifications.filter(n => {
     if (filter === 'unread')        return !n.is_read
+    if (filter === 'chat')          return n.type === 'chat_message'
     if (filter === 'admin_actions') return ADMIN_ACTION_TYPES.includes(n.type)
     if (filter === 'user_actions')  return USER_ACTION_TYPES.includes(n.type)
     if (filter === 'eta')           return n.type === 'eta_update'
@@ -150,9 +165,9 @@ export const NotificationInbox: React.FC<Props> = ({ onProjectOpen }) => {
         <Filter size={13} className="text-base-content/40" />
         {FILTER_TABS
           .filter(tab => {
-            // Only show tabs that have matching items
             if (tab.id === 'all') return true
             if (tab.id === 'unread') return unreadCount > 0
+            if (tab.id === 'chat')          return notifications.some(n => n.type === 'chat_message')
             if (tab.id === 'admin_actions') return notifications.some(n => ADMIN_ACTION_TYPES.includes(n.type))
             if (tab.id === 'user_actions')  return notifications.some(n => USER_ACTION_TYPES.includes(n.type))
             if (tab.id === 'eta')           return notifications.some(n => n.type === 'eta_update')
@@ -206,12 +221,12 @@ export const NotificationInbox: React.FC<Props> = ({ onProjectOpen }) => {
             {group.items.map((n, idx) => {
               const meta = getNotifMeta(n.type)
               return (
-                <button
+                <div
                   key={n.id}
-                  onClick={() => handleRead(n)}
-                  className={`w-full text-left px-4 py-4 flex items-start gap-3 hover:bg-base-200 transition-colors
+                  className={`w-full text-left px-4 py-4 flex items-start gap-3 hover:bg-base-200 transition-colors cursor-pointer group
                     ${!n.is_read ? 'bg-primary/5' : ''}
                     ${idx < group.items.length - 1 ? 'border-b border-base-200' : ''}`}
+                  onClick={() => handleRead(n)}
                 >
                   {/* Unread dot + icon */}
                   <div className="flex-shrink-0 mt-0.5 relative">
@@ -253,7 +268,7 @@ export const NotificationInbox: React.FC<Props> = ({ onProjectOpen }) => {
                       <Trash2 size={12} />
                     </button>
                   </div>
-                </button>
+                </div>
               )
             })}
           </div>

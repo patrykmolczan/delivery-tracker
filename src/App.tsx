@@ -435,10 +435,10 @@ const Dashboard: React.FC = () => {
           {/* Notifications */}
           {view === 'notifications' && (
             <NotificationInbox
-              onProjectOpen={(projectId) => {
+              onProjectOpen={(projectId, tab) => {
                 const proj = projects.find(p => p.id === projectId)
                 if (proj) {
-                  setSelectedProjectTab(undefined)
+                  setSelectedProjectTab(tab as any)
                   setSelectedProject(proj)
                   navigate('dashboard')
                 }

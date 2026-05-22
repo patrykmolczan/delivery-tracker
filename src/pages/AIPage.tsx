@@ -405,19 +405,26 @@ export const AIPage: React.FC<Props> = ({ projects }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   // Keep last 10 messages for multi-turn context (saves tokens)
   const historyRef = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([])
+  const hasInitialized = useRef(false)
 
   useEffect(() => {
     if (projects.length > 0) {
       const ctx = buildDataContext(projects)
       setDataCtx(ctx)
-      const completedCount = ctx.overall.byStatus['Completed'] || 0
-      const activeCount = (ctx.overall.byStatus['In Process'] || 0) + (ctx.overall.byStatus['On Hold'] || 0)
-      setMessages([{
-        id: 'welcome',
-        role: 'assistant',
-        content: `Hi! I'm your **Delivery Insights Agent** — I have full access to all **${ctx.overall.total.toLocaleString()} projects** in the database.\n\nRight now:\n- **${activeCount} active** projects (${ctx.overall.byStatus['In Process'] || 0} in process, ${ctx.overall.byStatus['On Hold'] || 0} on hold)\n- **${ctx.overdueProjects.length} overdue** projects\n- **${ctx.overall.avgDeliveryDays} days** average delivery time (from ${completedCount.toLocaleString()} completed)\n\nAsk me anything — analyst workloads, client volumes, delivery trends, overdue items, or anything else about your data.`,
-        timestamp: new Date(),
-      }])
+      // Only set the welcome message on first load — not on every poll update.
+      // App.tsx polls projects every 10s; each poll returns a new array reference
+      // which triggers this effect, wiping any active conversation.
+      if (!hasInitialized.current) {
+        hasInitialized.current = true
+        const completedCount = ctx.overall.byStatus['Completed'] || 0
+        const activeCount = (ctx.overall.byStatus['In Process'] || 0) + (ctx.overall.byStatus['On Hold'] || 0)
+        setMessages([{
+          id: 'welcome',
+          role: 'assistant',
+          content: `Hi! I'm your **Delivery Insights Agent** — I have full access to all **${ctx.overall.total.toLocaleString()} projects** in the database.\n\nRight now:\n- **${activeCount} active** projects (${ctx.overall.byStatus['In Process'] || 0} in process, ${ctx.overall.byStatus['On Hold'] || 0} on hold)\n- **${ctx.overdueProjects.length} overdue** projects\n- **${ctx.overall.avgDeliveryDays} days** average delivery time (from ${completedCount.toLocaleString()} completed)\n\nAsk me anything — analyst workloads, client volumes, delivery trends, overdue items, or anything else about your data.`,
+          timestamp: new Date(),
+        }])
+      }
     }
   }, [projects])
 

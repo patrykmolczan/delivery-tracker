@@ -131,7 +131,7 @@ function mapRow(row: any, lookupMaps?: LookupMaps): Project {
     analyst: row.analyst,
     client_name: row.client_name,
     requestor: row.requestor,
-    date_received: row.date_received,
+    date_received: row.date_received ?? (row.created_at ? String(row.created_at).slice(0, 10) : null),
     expected_delivery_date: row.expected_delivery_date,
     date_delivered: row.date_delivered,
     project_summary: row.project_summary,

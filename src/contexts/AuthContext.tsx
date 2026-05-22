@@ -4,6 +4,7 @@ import {
   signOut as cognitoSignOut,
   getSession,
   COGNITO_CONFIG,
+  COGNITO_DOMAIN,
 } from '../lib/cognitoAuth'
 import type { UserProfile } from '../types'
 
@@ -38,8 +39,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
-// Decode a JWT payload without network verification (reads claims only)
-function decodeJwtPayload(token: string): Record<string, unknown> {
+// Decode a JWT payload without network verification (reads claims only).
+//
+// SECURITY NOTE: This function does NOT verify the JWT signature. Use it only
+// for display purposes (e.g. deciding what to show in the UI). NEVER trust the
+// return value for authorization decisions. Role-based gating must read
+// `profile.role` returned by GET /api/me, which verifies the token server-side.
+// See audit M-2.
+function unsafeDecodeJwtPayload(token: string): Record<string, unknown> {
   try {
     const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
     return JSON.parse(atob(b64))
@@ -59,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   type CogUser = NonNullable<Awaited<ReturnType<typeof getSession>>>
 
   const buildAppUser = (cogUser: CogUser, profileData: UserProfile | null): AppUser => {
-    const claims = decodeJwtPayload(cogUser.idToken)
+    const claims = unsafeDecodeJwtPayload(cogUser.idToken)
     // Federated (SSO) users have an 'identities' claim in their Cognito ID token
     const isSSOUser = Array.isArray(claims.identities) && (claims.identities as unknown[]).length > 0
     return {
@@ -152,10 +159,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithSSO = async (_domain: string): Promise<{ error: Error | null }> => {
     try {
-      const cognitoDomain = 'https://delivery-tracker-auth.auth.us-east-2.amazoncognito.com'
       const clientId = COGNITO_CONFIG.ClientId
       const redirectUri = encodeURIComponent(`${window.location.origin}/auth/callback`)
-      window.location.href = `${cognitoDomain}/oauth2/authorize?client_id=${clientId}&response_type=code&scope=openid+email+profile&redirect_uri=${redirectUri}&identity_provider=IAMIdentityCenter`
+      window.location.href = `${COGNITO_DOMAIN}/oauth2/authorize?client_id=${clientId}&response_type=code&scope=openid+email+profile&redirect_uri=${redirectUri}&identity_provider=IAMIdentityCenter`
       return { error: null }
     } catch (e) {
       return { error: e as Error }

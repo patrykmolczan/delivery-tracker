@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import DOMPurify from 'dompurify'
 import {
   X, Calendar, User, Building2, MapPin, Factory, Hash, Clock,
   FileText, Edit2, History, CheckCircle2, Loader2,
@@ -47,26 +48,30 @@ import { FeedbackThread } from './FeedbackThread'
 import { TextPresets } from './TextPresets'
 
 
-/** Strip dangerous elements/attributes from TipTap-generated HTML before render. */
+/**
+ * Sanitize TipTap-generated HTML before rendering via dangerouslySetInnerHTML.
+ *
+ * Uses DOMPurify (already a project dep) — replaces the prior denylist-based
+ * hand-rolled sanitizer which was missing <style>, formaction/poster/cite-style
+ * URL attributes, vbscript: URIs, etc. (audit C-3).
+ *
+ * Tag list matches what TipTap's starter-kit + the underline/text-style/color
+ * extensions can emit. Anything outside this set is stripped.
+ */
 function sanitizeNoteHtml(html: string): string {
-  try {
-    const doc = new DOMParser().parseFromString(html, 'text/html')
-    doc.querySelectorAll('script, iframe, object, embed, form, input, link, svg').forEach(el => el.remove())
-    doc.querySelectorAll('*').forEach(el => {
-      Array.from(el.attributes).forEach(attr => {
-        if (
-          attr.name.startsWith('on') ||
-          (attr.name === 'href' && /^\s*(javascript:|data:)/i.test(attr.value)) ||
-          (attr.name === 'src'  && /^\s*(javascript:|data:)/i.test(attr.value))
-        ) {
-          el.removeAttribute(attr.name)
-        }
-      })
-    })
-    return doc.body.innerHTML
-  } catch {
-    return ''
-  }
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: [
+      'p', 'br', 'strong', 'em', 'u', 's',
+      'ul', 'ol', 'li',
+      'blockquote', 'code', 'pre',
+      'h1', 'h2', 'h3', 'h4',
+      'a', 'span',
+    ],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'style', 'class'],
+    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|tel:|\/|#)/i,
+    // Force safe link behavior for any <a> that survives sanitisation
+    ADD_ATTR: ['target', 'rel'],
+  })
 }
 
 /** Prevents infinite spinners — rejects if the DB call does not resolve in 10 s */

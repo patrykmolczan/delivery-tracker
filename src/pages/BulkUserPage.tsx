@@ -25,6 +25,7 @@
  */
 
 import React, { useState, useRef, useCallback } from 'react'
+import Papa from 'papaparse'
 import {
   ArrowLeft, Download, Upload, Users, CheckCircle, XCircle,
   AlertTriangle, RefreshCw, FileText, UserPlus, UserCheck,
@@ -43,7 +44,8 @@ interface CsvRow {
   email: string
   full_name: string
   status: string
-  generatedPassword?: string  // auto-generated for CREATE rows
+  userId?: string             // populated by /api/users response on CREATE
+  generatedPassword?: string  // server-generated, returned ONCE in /api/users response (audit H-3 fix 1)
   passwordRevealed?: boolean  // UI state: show/hide in results
   action?: RowStatus
   errorMsg?: string
@@ -55,69 +57,41 @@ interface CsvRow {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Generate a cryptographically secure 12-character password.
- *  Guarantees: 2 uppercase + 2 lowercase + 2 digits + 2 special + 4 random
- *  Uses crypto.getRandomValues — browser native, no dependencies */
-function generateSecurePassword(): string {
-  const upper   = 'ABCDEFGHJKLMNPQRSTUVWXYZ'   // removed I, O (confusing)
-  const lower   = 'abcdefghjkmnpqrstuvwxyz'    // removed i, l, o (confusing)
-  const digits  = '23456789'                   // removed 0, 1 (confusing)
-  const special = '!@#$%^&*'
-
-  const pick = (charset: string): string => {
-    const arr = new Uint32Array(1)
-    crypto.getRandomValues(arr)
-    return charset[arr[0] % charset.length]
-  }
-
-  const required = [
-    pick(upper), pick(upper),
-    pick(lower), pick(lower),
-    pick(digits), pick(digits),
-    pick(special), pick(special),
-  ]
-
-  const all = upper + lower + digits + special
-  const remaining = Array.from({ length: 4 }, () => pick(all))
-
-  const combined = [...required, ...remaining]
-  // Fisher-Yates shuffle
-  for (let i = combined.length - 1; i > 0; i--) {
-    const arr = new Uint32Array(1)
-    crypto.getRandomValues(arr)
-    const j = arr[0] % (i + 1)
-    ;[combined[i], combined[j]] = [combined[j], combined[i]]
-  }
-
-  return combined.join('')
-}
+// (Removed: generateSecurePassword. Audit H-3 fix 1 — temp passwords are now
+// generated server-side at the moment of Cognito user creation and returned
+// in the create response. They no longer exist in the browser before the
+// network call, eliminating the pre-call exposure window.)
 
 function parseCSV(text: string): CsvRow[] {
-  const lines = text.trim().split(/\r?\n/)
-  if (lines.length < 2) return []
+  // Use papaparse for RFC-4180-correct parsing — handles quoted fields with
+  // embedded commas (e.g. `"Doe, John"`), escaped quotes, CRLF line endings,
+  // and BOMs. Replaces a hand-rolled split-on-comma that mis-parsed valid CSVs.
+  // See audit L-3.
+  const result = Papa.parse<Record<string, string>>(text.trim(), {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (h) => h.trim().toLowerCase(),
+  })
 
-  const header = lines[0].split(',').map(h => h.trim().toLowerCase())
-  const emailIdx    = header.indexOf('email')
-  const fullNameIdx = header.indexOf('full_name')
-  const statusIdx   = header.indexOf('status')
-
-  if (emailIdx === -1) throw new Error('CSV must have an "email" column.')
-
-  const rows: CsvRow[] = []
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim()
-    if (!line) continue
-
-    const cols = line.match(/(\".*?\"|[^,]+|(?<=,)(?=,)|(?<=,)$|^(?=,))/g) ?? line.split(',')
-    const clean = (idx: number) => (cols[idx] ?? '').replace(/^"|"$/g, '').trim()
-
-    rows.push({
-      email:     clean(emailIdx),
-      full_name: fullNameIdx !== -1 ? clean(fullNameIdx) : '',
-      status:    statusIdx   !== -1 ? clean(statusIdx)   : 'active',
-    })
+  if (result.errors.length > 0) {
+    // Papaparse "errors" can be benign warnings; surface only the first
+    // structural one to the caller.
+    const fatal = result.errors.find(e => e.type === 'Delimiter' || e.type === 'Quotes')
+    if (fatal) throw new Error(`CSV parse error: ${fatal.message}`)
   }
-  return rows
+
+  if (result.data.length === 0) return []
+  if (!('email' in result.data[0])) {
+    throw new Error('CSV must have an "email" column.')
+  }
+
+  return result.data
+    .map(row => ({
+      email:     (row.email     ?? '').trim(),
+      full_name: (row.full_name ?? '').trim(),
+      status:    (row.status    ?? 'active').trim() || 'active',
+    }))
+    .filter(r => r.email !== '')
 }
 
 function normalizeStatus(val: string): boolean {
@@ -226,17 +200,12 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
       }
     }
 
-    // Classify rows and generate passwords for CREATE rows
+    // Classify rows (CREATE vs UPDATE). Password generation now happens
+    // server-side at the moment of Cognito user creation (audit H-3 fix 1) —
+    // we no longer pre-generate it client-side.
     for (const row of parsed) {
       if (row.action === 'error') continue
-
-      if (existingEmails.has(row.email)) {
-        row.action = 'update'
-      } else {
-        row.action = 'create'
-        // Auto-generate a secure temporary password — never from CSV
-        row.generatedPassword = generateSecurePassword()
-      }
+      row.action = existingEmails.has(row.email) ? 'update' : 'create'
     }
 
     // Mark remaining unclassified
@@ -281,15 +250,17 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
 
       try {
         if (row.action === 'create') {
-          if (!row.generatedPassword) {
-            throw new Error('No generated password — please re-upload the CSV.')
-          }
+          // Server generates the password now (audit H-3 fix 1). The client
+          // no longer sends `password` in the body — the Lambda creates the
+          // user via Cognito AdminCreateUser with a server-generated temp
+          // password and returns it ONCE in the response so the admin can
+          // display it. The plaintext never lives in the client's bundle or
+          // pre-call state.
           const createRes = await fetch(`${API_BASE}/api/users`, {
             method: 'POST',
             headers: await getAuthHeaders(),
             body: JSON.stringify({
               email:     row.email,
-              password:  row.generatedPassword,
               full_name: row.full_name || row.email,
               role:      'user',
             }),
@@ -299,6 +270,12 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
             throw new Error(errData.error || `Create failed (${createRes.status})`)
           }
           const createdUser = await createRes.json()
+          // Stash for display/reveal UI — only lives in memory for this session.
+          updated[i] = {
+            ...updated[i],
+            userId: createdUser.id,
+            generatedPassword: createdUser.tempPassword,
+          }
 
           if (!normalizeStatus(row.status)) {
             await fetch(`${API_BASE}/api/users/${createdUser.id}`, {
@@ -356,14 +333,16 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
       const { row, idx } = eligibleRows[j]
 
       try {
+        // Hardened payload — server resolves recipient and temp password from the DB
+        // via the welcome_pending table. Client no longer passes to/full_name/temp_password.
+        // See audit H-2 / H-3 fix 1 and api/send-welcome.ts.
+        if (!row.userId) {
+          throw new Error(`No userId for ${row.email} — cannot send welcome email`)
+        }
         const res = await fetch(`${API_BASE}/api/send-welcome`, {
           method: 'POST',
           headers: await getAuthHeaders(),
-          body: JSON.stringify({
-            to: row.email,
-            full_name: row.full_name || row.email,
-            temp_password: row.generatedPassword,
-          }),
+          body: JSON.stringify({ userId: row.userId }),
         })
 
         if (!res.ok) {

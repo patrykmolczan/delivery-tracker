@@ -14,16 +14,49 @@ import {
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
+function requireEnv(name: string): string {
+  const v = (import.meta.env as Record<string, string | undefined>)[name]
+  if (!v) {
+    // Fail loudly at app load. Prior to this fix LoginPage.tsx silently fell
+    // back to a hardcoded production client ID — that fallback is gone now.
+    throw new Error(`Missing required environment variable: ${name}`)
+  }
+  return v
+}
+
 export const COGNITO_CONFIG = {
-  UserPoolId: import.meta.env.VITE_COGNITO_USER_POOL_ID,
-  ClientId: import.meta.env.VITE_COGNITO_CLIENT_ID,
+  UserPoolId: requireEnv('VITE_COGNITO_USER_POOL_ID'),
+  ClientId: requireEnv('VITE_COGNITO_CLIENT_ID'),
   Region: import.meta.env.VITE_AWS_REGION ?? 'us-east-2',
 };
+
+/**
+ * Cognito hosted-UI domain. Used by the SSO flow to build the /oauth2/authorize URL.
+ * Centralised here so the value lives in exactly one place — see audit M-4.
+ */
+export const COGNITO_DOMAIN =
+  import.meta.env.VITE_COGNITO_DOMAIN
+  ?? `https://${COGNITO_CONFIG.UserPoolId.toLowerCase().replace('_', '-')}.auth.${COGNITO_CONFIG.Region}.amazoncognito.com`;
 
 const userPool = new CognitoUserPool({
   UserPoolId: COGNITO_CONFIG.UserPoolId,
   ClientId: COGNITO_CONFIG.ClientId,
 });
+
+// ─── Pending NEW_PASSWORD_REQUIRED user (module-scoped, not on window) ───────
+// Prior to this fix the CognitoUser instance was stashed on `window` so the
+// forced-password-change UI could pick it up. Module scope is equivalent for
+// same-origin scripts and keeps the global namespace clean (audit L-2).
+
+let pendingNewPasswordUser: CognitoUser | null = null;
+
+export function getPendingNewPasswordUser(): CognitoUser | null {
+  return pendingNewPasswordUser;
+}
+
+export function clearPendingNewPasswordUser(): void {
+  pendingNewPasswordUser = null;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,10 +104,11 @@ export function signIn(email: string, password: string): Promise<AuthResult> {
         resolve({ user: null, error: err.message ?? String(err) });
       },
       newPasswordRequired: (_userAttributes, _requiredAttributes) => {
-        // Return a special error so the UI can handle forced password change
+        // Stash the CognitoUser for the forced-password-change UI to pick up.
+        // Module-scoped — was previously on window (audit L-2). Consumer reads
+        // it via getPendingNewPasswordUser() and clears via clearPendingNewPasswordUser().
+        pendingNewPasswordUser = cognitoUser;
         resolve({ user: null, error: 'NEW_PASSWORD_REQUIRED' });
-        // Store cognitoUser on window for the change-password flow
-        (window as unknown as Record<string, unknown>)._cognitoNewPasswordUser = cognitoUser;
       },
     });
   });

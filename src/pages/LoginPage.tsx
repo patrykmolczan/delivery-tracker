@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLogo } from '../hooks/useLogo'
 import { useTheme } from '../contexts/ThemeContext'
 import { fetchAppSettings } from '../lib/data'
+import { COGNITO_CONFIG, COGNITO_DOMAIN } from '../lib/cognitoAuth'
 import LightModeRounded from '@mui/icons-material/LightModeRounded'
 import DarkModeRounded from '@mui/icons-material/DarkModeRounded'
 import VpnKeyRounded from '@mui/icons-material/VpnKeyRounded'
@@ -183,10 +184,12 @@ export const LoginPage: React.FC = () => {
   }
 
   const handleSSOSignIn = () => {
-    const cognitoDomain = 'https://delivery-tracker-auth.auth.us-east-2.amazoncognito.com'
-    const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID ?? '14emlk9r5hkpd34un7729eral1'
+    // COGNITO_DOMAIN and COGNITO_CONFIG.ClientId are now sourced from env vars
+    // via the centralised cognitoAuth module (audit C-1, M-4). If either env var
+    // is missing the module throws at app load — no silent production fallback.
+    const clientId = COGNITO_CONFIG.ClientId
     const redirectUri = encodeURIComponent(`${window.location.origin}/auth/callback`)
-    window.location.href = `${cognitoDomain}/oauth2/authorize?client_id=${clientId}&response_type=code&scope=openid+email+profile&redirect_uri=${redirectUri}&identity_provider=IAMIdentityCenter`
+    window.location.href = `${COGNITO_DOMAIN}/oauth2/authorize?client_id=${clientId}&response_type=code&scope=openid+email+profile&redirect_uri=${redirectUri}&identity_provider=IAMIdentityCenter`
   }
 
   const handleForgotPassword = async (e: React.FormEvent) => {

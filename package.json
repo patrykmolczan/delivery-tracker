@@ -20,7 +20,8 @@
     "lucide-react": "^1.12.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "xlsx": "^0.18.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "papaparse": "^5.4.1",
     "@tiptap/react": "^2.11.0",
     "@tiptap/pm": "^2.11.0",
     "@tiptap/starter-kit": "^2.11.0",
@@ -47,6 +48,7 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
     "vite": "^8.0.10",
-    "@types/dompurify": "^3.0.5"
+    "@types/dompurify": "^3.0.5",
+    "@types/papaparse": "^5.3.14"
   }
 }

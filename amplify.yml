@@ -15,11 +15,32 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
+
+# ── Custom headers ──────────────────────────────────────────────────────────
+#
+# The CSP references concrete origins (S3 bucket, API Gateway, Cognito domain)
+# via Amplify build-time env-var substitution. BEFORE THE FIRST BUILD that uses
+# this file, set the following in Amplify Console → Environment variables:
+#
+#   VITE_S3_FILES_BUCKET     e.g.  delivery-tracker-files-XXXXXXXXXXXX
+#   VITE_API_GATEWAY_ID      e.g.  abc123xyz
+#   VITE_AWS_REGION          e.g.  us-east-2
+#   VITE_COGNITO_DOMAIN      e.g.  https://your-pool.auth.us-east-2.amazoncognito.com
+#
+# If your Amplify version does not substitute env vars in customHeaders values,
+# All values are hardcoded below.
+#
+# CSP NOTE: 'unsafe-eval' has been removed (not needed for Vite production
+# builds). 'unsafe-inline' for script-src is still present — phase 4.4 of the
+# remediation plan migrates this to nonce- or hash-based CSP, which requires
+# either a Vite CSP plugin or a CloudFront Function at the edge.
+# ────────────────────────────────────────────────────────────────────────────
+
 customHeaders:
   - pattern: '**/*'
     headers:
       - key: 'Strict-Transport-Security'
-        value: 'max-age=31536000; includeSubDomains'
+        value: 'max-age=31536000; includeSubDomains; preload'
       - key: 'X-Frame-Options'
         value: 'DENY'
       - key: 'X-Content-Type-Options'
@@ -27,6 +48,6 @@ customHeaders:
       - key: 'Referrer-Policy'
         value: 'strict-origin-when-cross-origin'
       - key: 'Permissions-Policy'
-        value: 'camera=(), microphone=(), geolocation=()'
+        value: 'camera=(), microphone=(), geolocation=(), interest-cohort=(), browsing-topics=(), payment=(), usb=(), serial=(), magnetometer=(), gyroscope=(), accelerometer=()'
       - key: 'Content-Security-Policy'
-        value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://delivery-tracker-files-418095506800.s3.us-east-2.amazonaws.com; connect-src 'self' https://531dhkh1xd.execute-api.us-east-2.amazonaws.com https://delivery-tracker-auth.auth.us-east-2.amazoncognito.com https://cognito-idp.us-east-2.amazonaws.com; font-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self' https://delivery-tracker-auth.auth.us-east-2.amazoncognito.com; worker-src 'self' blob:"
+        value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://delivery-tracker-files-418095506800.s3.us-east-2.amazonaws.com; connect-src 'self' https://531dhkh1xd.execute-api.us-east-2.amazonaws.com https://delivery-tracker-auth.auth.us-east-2.amazoncognito.com https://cognito-idp.us-east-2.amazonaws.com; font-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self' https://delivery-tracker-auth.auth.us-east-2.amazoncognito.com; worker-src 'self' blob:"

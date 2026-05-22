@@ -195,7 +195,8 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   const handleSort = (field: SortField) => {
     onSort({
       field,
-      direction: sort.field === field && sort.direction === 'asc' ? 'desc' : 'asc',
+      // Same field: toggle direction. New field: always start desc (newest/highest first).
+      direction: sort.field === field ? (sort.direction === 'asc' ? 'desc' : 'asc') : 'desc',
     })
   }
 

@@ -6,17 +6,6 @@ import { getAuthHeaders } from '../lib/supabase'
 
 const API = import.meta.env.VITE_API_BASE_URL ?? ''
 
-// ── Status text → status_id ───────────────────────────────────────────────────
-const STATUS_MAP: Record<string, number> = {
-  'completed': 6, 'cancelled': 7, 'canceled': 7,
-  'in process': 1, 'skv validation': 4, 'on hold': 5,
-  'ready to deliver': 2, 'under review': 3,
-}
-function mapStatus(raw: unknown): number {
-  if (!raw) return 3
-  return STATUS_MAP[String(raw).toLowerCase().trim()] ?? 3
-}
-
 function excelDateToISO(val: unknown): string | null {
   if (!val) return null
   if (val instanceof Date) return val.toISOString().slice(0, 10)

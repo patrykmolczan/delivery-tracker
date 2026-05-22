@@ -144,7 +144,6 @@ const Dashboard: React.FC = () => {
   )
   const tabFiltered = useMemo(() => filterProjects(tabProjects, filters), [tabProjects, filters])
   const tabSorted = useMemo(() => sortProjects(tabFiltered, sort), [tabFiltered, sort])
-  const sorted = useMemo(() => sortProjects(filtered, sort), [filtered, sort])
   const kpis = useMemo(() => computeKPIs(projects), [projects])
   const unassignedProjects = useMemo(() => {
     const twelveMonthsAgo = new Date()

@@ -66,6 +66,7 @@ const Dashboard: React.FC = () => {
   const [statusLookups, setStatusLookups] = useState<LookupItem[]>([])
   const [showUnassignedOnly, setShowUnassignedOnly] = useState(false)
   const [recordType, setRecordType] = useState<'project' | 'one_off'>('project')
+  const [dashViewType, setDashViewType] = useState<'all' | 'project' | 'one_off'>('project')
 
   const loadData = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -166,6 +167,11 @@ const Dashboard: React.FC = () => {
     () => showUnassignedOnly ? sortProjects(unassignedProjects, sort) : tabSorted,
     [showUnassignedOnly, unassignedProjects, tabSorted, sort]
   )
+  const dashFiltered = useMemo(() => {
+    const base = dashViewType === 'all' ? projects : projects.filter(p => ((p as any).record_type ?? 'project') === dashViewType)
+    return filterProjects(base, filters)
+  }, [projects, dashViewType, filters])
+  const dashSorted = useMemo(() => sortProjects(dashFiltered, sort), [dashFiltered, sort])
 
   const navigate = (v: ViewMode) => {
     setView(v)
@@ -401,25 +407,39 @@ const Dashboard: React.FC = () => {
               <KPICards kpis={kpis} />
               <Charts statusCounts={statusCounts} ownerCounts={ownerCounts} />
               <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-base-content/60 uppercase tracking-wide">Recent Activity</span>
+                  <div className="flex rounded-xl border border-base-300 overflow-hidden text-xs">
+                    {(['all', 'project', 'one_off'] as const).map((v) => (
+                      <button
+                        key={v}
+                        className={`px-3 py-1.5 font-medium transition-colors ${dashViewType === v ? 'bg-primary text-primary-content' : 'bg-base-100 hover:bg-base-200 text-base-content/60'}`}
+                        onClick={() => setDashViewType(v)}
+                      >
+                        {v === 'all' ? 'All' : v === 'project' ? 'Projects' : 'One-offs'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <FilterBar
                   filters={filters}
                   onChange={setFilters}
                   options={filterOptions}
-                  resultCount={filtered.length}
+                  resultCount={dashFiltered.length}
                   totalCount={projects.length}
                 />
                 <ProjectTable
-                  projects={tabSorted.slice(0, DASHBOARD_TABLE_ROWS)}
+                  projects={dashSorted.slice(0, DASHBOARD_TABLE_ROWS)}
                   sort={sort}
                   onSort={setSort}
                   onSelectProject={setSelectedProject}
                   selectedId={selectedProject?.id || null}
                   countriesMap={countriesMap}
                 />
-                {tabSorted.length > DASHBOARD_TABLE_ROWS && (
+                {dashSorted.length > DASHBOARD_TABLE_ROWS && (
                   <div className="text-center">
                     <button className="btn btn-ghost btn-sm gap-1.5" onClick={() => navigate('table')}>
-                      View all {tabSorted.length} projects <ChevronRight size={14} />
+                      View all {dashSorted.length} {dashViewType === 'one_off' ? 'one-off jobs' : dashViewType === 'all' ? 'records' : 'projects'} <ChevronRight size={14} />
                     </button>
                   </div>
                 )}

@@ -46,6 +46,13 @@ export interface Project {
   created_by?: string | null
   created_at?: string | null
   notifications_enabled?: boolean
+  // ── Import / assignment fields ───────────────────────────────────────────────
+  record_type?: 'project' | 'one_off'
+  is_imported?: boolean
+  assignment_acknowledged?: boolean
+  countries_text?: string | null
+  industry_text?: string | null
+  external_id?: string | null
   // ── AI Delivery Estimate fields ─────────────────────────────────────────────
   ai_eta_days?: number | null
   ai_eta_confidence?: string | null

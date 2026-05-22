@@ -65,6 +65,7 @@ const Dashboard: React.FC = () => {
   const [countriesMap, setCountriesMap] = useState<Map<string, string[]>>(new Map())
   const [statusLookups, setStatusLookups] = useState<LookupItem[]>([])
   const [showUnassignedOnly, setShowUnassignedOnly] = useState(false)
+  const [recordType, setRecordType] = useState<'project' | 'one_off'>('project')
 
   const loadData = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -135,15 +136,35 @@ const Dashboard: React.FC = () => {
   }, [])
 
   const filtered = useMemo(() => filterProjects(projects, filters), [projects, filters])
+  // Tab-filtered subsets (Projects tab vs One-offs tab in table view)
+  const tabProjects = useMemo(
+    () => projects.filter(p => ((p as any).record_type ?? 'project') === recordType),
+    [projects, recordType]
+  )
+  const tabFiltered = useMemo(() => filterProjects(tabProjects, filters), [tabProjects, filters])
+  const tabSorted = useMemo(() => sortProjects(tabFiltered, sort), [tabFiltered, sort])
   const sorted = useMemo(() => sortProjects(filtered, sort), [filtered, sort])
   const kpis = useMemo(() => computeKPIs(projects), [projects])
-  const unassignedProjects = useMemo(
-    () => projects.filter(p => (!p.project_owner?.trim()) || (!p.analyst?.trim())),
-    [projects]
-  )
+  const unassignedProjects = useMemo(() => {
+    const twelveMonthsAgo = new Date()
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
+    const terminalStatuses = new Set([6, 7]) // Completed, Cancelled
+    return tabProjects.filter(p => {
+      if ((p as any).assignment_acknowledged) return false
+      if (terminalStatuses.has(Number((p as any).status_id))) return false
+      if (!p.project_owner?.trim() || !p.analyst?.trim()) {
+        if ((p as any).is_imported) {
+          const d = new Date((p as any).date_received || (p as any).created_at || '')
+          return d >= twelveMonthsAgo
+        }
+        return true
+      }
+      return false
+    })
+  }, [tabProjects])
   const displaySorted = useMemo(
-    () => showUnassignedOnly ? sortProjects(unassignedProjects, sort) : sorted,
-    [showUnassignedOnly, unassignedProjects, sorted, sort]
+    () => showUnassignedOnly ? sortProjects(unassignedProjects, sort) : tabSorted,
+    [showUnassignedOnly, unassignedProjects, tabSorted, sort]
   )
 
   const navigate = (v: ViewMode) => {
@@ -410,7 +431,26 @@ const Dashboard: React.FC = () => {
           {view === 'table' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold">All Projects</h2>
+                <div className="flex flex-col gap-1">
+                  <h2 className="text-xl font-bold">
+                    {recordType === 'project' ? 'Projects' : 'One-off Jobs'}
+                  </h2>
+                  {/* Record-type tabs */}
+                  <div className="flex gap-0 rounded-lg overflow-hidden border border-base-300 w-fit text-sm">
+                    <button
+                      className={`px-4 py-1.5 font-medium transition-colors ${recordType === 'project' ? 'bg-primary text-primary-content' : 'bg-base-100 hover:bg-base-200'}`}
+                      onClick={() => { setRecordType('project'); setShowUnassignedOnly(false) }}
+                    >
+                      Projects
+                    </button>
+                    <button
+                      className={`px-4 py-1.5 font-medium transition-colors ${recordType === 'one_off' ? 'bg-primary text-primary-content' : 'bg-base-100 hover:bg-base-200'}`}
+                      onClick={() => { setRecordType('one_off'); setShowUnassignedOnly(false) }}
+                    >
+                      One-off Jobs
+                    </button>
+                  </div>
+                </div>
                 <button
                   className="btn btn-primary btn-sm gap-1.5"
                   onClick={() => { setEditProject(null); navigate('new-project') }}
@@ -424,9 +464,9 @@ const Dashboard: React.FC = () => {
                   <div className="flex items-center gap-2.5">
                     <AlertTriangle size={15} className="text-warning flex-shrink-0" />
                     <span className="font-semibold text-sm text-warning">
-                      {unassignedProjects.length} project{unassignedProjects.length !== 1 ? 's' : ''} need{unassignedProjects.length === 1 ? 's' : ''} assignment
+                      {unassignedProjects.length} {recordType === 'one_off' ? 'one-off job' : 'project'}{unassignedProjects.length !== 1 ? 's' : ''} need{unassignedProjects.length === 1 ? 's' : ''} assignment
                     </span>
-                    <span className="hidden sm:inline text-xs text-base-content/50">— owner or analyst not yet set</span>
+                    <span className="hidden sm:inline text-xs text-base-content/50">— within the last 12 months</span>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {showUnassignedOnly && (
@@ -438,7 +478,22 @@ const Dashboard: React.FC = () => {
                       className={`btn btn-xs ${showUnassignedOnly ? 'btn-warning' : 'btn-outline btn-warning'}`}
                       onClick={() => setShowUnassignedOnly(v => !v)}
                     >
-                      {showUnassignedOnly ? '✓ Showing unassigned' : 'View projects'}
+                      {showUnassignedOnly ? '✓ Showing unassigned' : 'View unassigned'}
+                    </button>
+                    <button
+                      className="btn btn-xs btn-ghost text-base-content/50"
+                      title="Silence all — remove from this list"
+                      onClick={async () => {
+                        const headers = await import('./lib/supabase').then(m => m.getAuthHeaders())
+                        await fetch(`${import.meta.env.VITE_API_BASE_URL ?? ''}/api/admin/acknowledge`, {
+                          method: 'POST',
+                          headers: { ...headers, 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ all: true })
+                        })
+                        loadData(true)
+                      }}
+                    >
+                      Silence all
                     </button>
                   </div>
                 </div>
@@ -447,8 +502,8 @@ const Dashboard: React.FC = () => {
                 filters={filters}
                 onChange={setFilters}
                 options={filterOptions}
-                resultCount={showUnassignedOnly ? unassignedProjects.length : filtered.length}
-                totalCount={projects.length}
+                resultCount={showUnassignedOnly ? unassignedProjects.length : tabFiltered.length}
+                totalCount={tabProjects.length}
               />
               <ProjectTable
                 projects={displaySorted}

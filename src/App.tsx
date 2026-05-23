@@ -67,6 +67,7 @@ const Dashboard: React.FC = () => {
   const [showUnassignedOnly, setShowUnassignedOnly] = useState(false)
   const [recordType, setRecordType] = useState<'project' | 'one_off'>('project')
   const [dashViewType, setDashViewType] = useState<'all' | 'project' | 'one_off'>('project')
+  const [dashFilters, setDashFilters] = useState<FilterState>({ search: '', status: [], owner: [], analyst: [], clientType: [], industry: [], country: [], dateFrom: '', dateTo: '' })
 
   const loadData = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -167,8 +168,8 @@ const Dashboard: React.FC = () => {
   )
   const dashFiltered = useMemo(() => {
     const base = dashViewType === 'all' ? projects : projects.filter(p => ((p as any).record_type ?? 'project') === dashViewType)
-    return filterProjects(base, filters)
-  }, [projects, dashViewType, filters])
+    return filterProjects(base, dashFilters)
+  }, [projects, dashViewType, dashFilters])
   const dashSorted = useMemo(() => sortProjects(dashFiltered, sort), [dashFiltered, sort])
 
   const navigate = (v: ViewMode) => {
@@ -420,8 +421,8 @@ const Dashboard: React.FC = () => {
                   </div>
                 </div>
                 <FilterBar
-                  filters={filters}
-                  onChange={setFilters}
+                  filters={dashFilters}
+                  onChange={setDashFilters}
                   options={filterOptions}
                   resultCount={dashFiltered.length}
                   totalCount={projects.length}

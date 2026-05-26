@@ -1257,22 +1257,3 @@ export async function fetchAdminBackupDownloadUrl(key: string): Promise<string> 
   })
   return data.downloadUrl
 }
-
-// ─── Backup management (super_admin only) ─────────────────────────────────────
-
-export interface BackupFile {
-  key: string
-  fileName: string
-  size: number
-  lastModified: string
-}
-
-export async function fetchAdminBackups(): Promise<BackupFile[]> {
-  return api<BackupFile[]>('admin/backups')
-}
-
-export async function fetchAdminBackupDownloadUrl(key: string): Promise<string> {
-  const data = await api<{ url: string }>(`admin/backups/download?key=${encodeURIComponent(key)}`)
-  return data.url
-}
-

@@ -1789,9 +1789,13 @@ export const AdminPage: React.FC = () => {
                       <tr key={bk.key} className="hover">
                         <td className="font-mono text-xs max-w-xs truncate" title={bk.filename}>{bk.filename}</td>
                         <td className="text-xs text-base-content/60 whitespace-nowrap">
-                          {bk.size > 1024 * 1024
-                            ? `${(bk.size / 1024 / 1024).toFixed(1)} MB`
-                            : `${(bk.size / 1024).toFixed(0)} KB`}
+                          {bk.size === 0
+                            ? '0 B'
+                            : bk.size < 1024
+                              ? `${bk.size} B`
+                              : bk.size < 1024 * 1024
+                                ? `${(bk.size / 1024).toFixed(1)} KB`
+                                : `${(bk.size / 1024 / 1024).toFixed(1)} MB`}
                         </td>
                         <td className="text-xs text-base-content/60 whitespace-nowrap">
                           {bk.lastModified ? new Date(bk.lastModified).toLocaleString() : '—'}

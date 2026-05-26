@@ -1234,3 +1234,45 @@ export async function updateTextPreset(
 export async function deleteTextPreset(id: string): Promise<void> {
   await api(`settings/text-presets/${id}`, { method: 'DELETE' })
 }
+
+// ─── Admin: Backup Browser ─────────────────────────────────────────────────────
+
+export interface BackupFile {
+  key: string
+  filename: string
+  size: number
+  lastModified: string | null
+}
+
+/** GET /api/admin/backups — super-admin only */
+export async function fetchAdminBackups(): Promise<BackupFile[]> {
+  const data = await api<{ files: BackupFile[] }>('admin/backups')
+  return data.files ?? []
+}
+
+/** GET /api/admin/backups/download?key=... — super-admin only, 15-min pre-signed URL */
+export async function fetchAdminBackupDownloadUrl(key: string): Promise<string> {
+  const data = await api<{ downloadUrl: string }>('admin/backups/download', {
+    query: { key },
+  })
+  return data.downloadUrl
+}
+
+// ─── Backup management (super_admin only) ─────────────────────────────────────
+
+export interface BackupFile {
+  key: string
+  fileName: string
+  size: number
+  lastModified: string
+}
+
+export async function fetchAdminBackups(): Promise<BackupFile[]> {
+  return api<BackupFile[]>('admin/backups')
+}
+
+export async function fetchAdminBackupDownloadUrl(key: string): Promise<string> {
+  const data = await api<{ url: string }>(`admin/backups/download?key=${encodeURIComponent(key)}`)
+  return data.url
+}
+

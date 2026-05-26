@@ -4,6 +4,7 @@ import {
   UserPlus, Shield, User, CheckCircle2, Edit2, Save, X, AlertCircle,
   Loader2, RefreshCw, Users, Plus, Trash2, Tag, Layers, Upload, Download,
   Search, ChevronLeft, ChevronRight, UserX, UserCheck, Bell, Mail, Image,
+  Database, HardDrive, ExternalLink,
 } from 'lucide-react'
 import { getAuthHeaders } from '../lib/supabase'
 import { getSession as cognitoGetSession } from '../lib/cognitoAuth'
@@ -16,7 +17,9 @@ import {
   fetchAppSettings, updateAppSetting,
   fetchAllClients, createClient, updateClient, deactivateClient, importClients,
   fetchClientRequests, approveClientRequest, rejectClientRequest,
+  fetchAdminBackups, fetchAdminBackupDownloadUrl,
 } from '../lib/data'
+import type { BackupFile } from '../lib/data'
 import type { Analyst, ClientType, ProjectType, Client, ClientRequest } from '../lib/data'
 import type { UserProfile } from '../types'
 import { AdminEntraSSO } from '../components/sso/AdminEntraSSO'
@@ -232,6 +235,11 @@ const ManagedList: React.FC<ManagedListProps> = ({
 
 export const AdminPage: React.FC = () => {
   const { isSuperAdmin } = useAuth()
+  // ── Database / Backup state (super-admin only) ─────────────────────────────
+  const [backups, setBackups] = useState<BackupFile[]>([])
+  const [backupsLoading, setBackupsLoading] = useState(false)
+  const [backupsError, setBackupsError] = useState<string | null>(null)
+  const [downloadingKey, setDownloadingKey] = useState<string | null>(null)
   const [showBulkUsers, setShowBulkUsers] = useState(false)
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -426,6 +434,13 @@ export const AdminPage: React.FC = () => {
     // Project types
     setPtLoading(true)
     fetchProjectTypes().then(list => { setProjectTypes(list); setPtLoading(false) }).catch(e => { setPtError(e.message); setPtLoading(false) })
+    // Backups — super-admin only
+    if (isSuperAdmin) {
+      setBackupsLoading(true)
+      fetchAdminBackups()
+        .then(files => { setBackups(files); setBackupsLoading(false) })
+        .catch(e => { setBackupsError(e.message); setBackupsLoading(false) })
+    }
   }
 
   useEffect(() => {
@@ -1687,6 +1702,137 @@ export const AdminPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Database & Backups — super-admin only ─────────────────────────── */}
+      {isSuperAdmin && (
+        <div className="card bg-base-200 border border-base-300">
+          <div className="card-body">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="card-title text-base flex items-center gap-2">
+                <HardDrive size={18} className="text-primary" /> Database &amp; Backups
+              </h3>
+              <span className="badge badge-warning badge-sm flex items-center gap-1">
+                <Shield size={10} /> Super Admin Only
+              </span>
+            </div>
+            <p className="text-xs text-base-content/50 mb-4">
+              Launch pgAdmin to browse the Aurora database, or download a backup snapshot from S3.
+            </p>
+
+            {/* pgAdmin launcher */}
+            <div className="flex items-center justify-between p-3 bg-base-100 border border-base-300 rounded-xl mb-4">
+              <div>
+                <p className="text-sm font-semibold flex items-center gap-1.5">
+                  <Database size={14} className="text-primary" /> pgAdmin 4
+                </p>
+                <p className="text-xs text-base-content/50 mt-0.5">
+                  Aurora database browser · <span className="font-mono text-xs">3.147.55.238:5050</span>
+                </p>
+              </div>
+              <a
+                href="http://3.147.55.238:5050"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-primary btn-sm gap-1.5"
+              >
+                <ExternalLink size={13} /> Open pgAdmin
+              </a>
+            </div>
+
+            {/* Backup browser */}
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-semibold text-base-content/70 flex items-center gap-1.5">
+                S3 Backup Snapshots
+                <span className="badge badge-ghost badge-xs">{backups.length} files</span>
+              </h4>
+              <button
+                className="btn btn-ghost btn-xs gap-1"
+                disabled={backupsLoading}
+                onClick={() => {
+                  setBackupsLoading(true)
+                  fetchAdminBackups()
+                    .then(files => { setBackups(files); setBackupsLoading(false) })
+                    .catch(e => { setBackupsError(e.message); setBackupsLoading(false) })
+                }}
+              >
+                <RefreshCw size={11} className={backupsLoading ? 'animate-spin' : ''} /> Refresh
+              </button>
+            </div>
+
+            {backupsError && (
+              <div className="alert alert-error py-2 mb-3">
+                <AlertCircle size={14} />
+                <span className="text-sm">{backupsError}</span>
+                <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setBackupsError(null)}><X size={11} /></button>
+              </div>
+            )}
+
+            {backupsLoading ? (
+              <div className="flex items-center gap-2 py-4 text-base-content/50 text-sm">
+                <Loader2 size={14} className="animate-spin" /> Loading backups…
+              </div>
+            ) : backups.length === 0 ? (
+              <div className="text-sm text-base-content/40 py-4 text-center">No backup files found in S3.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="table table-xs w-full">
+                  <thead>
+                    <tr>
+                      <th>Filename</th>
+                      <th>Size</th>
+                      <th>Created</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {backups.map(bk => (
+                      <tr key={bk.key} className="hover">
+                        <td className="font-mono text-xs max-w-xs truncate" title={bk.filename}>{bk.filename}</td>
+                        <td className="text-xs text-base-content/60 whitespace-nowrap">
+                          {bk.size > 1024 * 1024
+                            ? `${(bk.size / 1024 / 1024).toFixed(1)} MB`
+                            : `${(bk.size / 1024).toFixed(0)} KB`}
+                        </td>
+                        <td className="text-xs text-base-content/60 whitespace-nowrap">
+                          {bk.lastModified ? new Date(bk.lastModified).toLocaleString() : '—'}
+                        </td>
+                        <td>
+                          <button
+                            className={`btn btn-ghost btn-xs gap-1 ${downloadingKey === bk.key ? 'loading' : ''}`}
+                            disabled={downloadingKey === bk.key}
+                            onClick={async () => {
+                              setDownloadingKey(bk.key)
+                              try {
+                                const url = await fetchAdminBackupDownloadUrl(bk.key)
+                                const a = document.createElement('a')
+                                a.href = url
+                                a.download = bk.filename
+                                document.body.appendChild(a)
+                                a.click()
+                                document.body.removeChild(a)
+                              } catch (e: any) {
+                                setBackupsError(e.message)
+                              } finally {
+                                setDownloadingKey(null)
+                              }
+                            }}
+                          >
+                            {downloadingKey !== bk.key && <Download size={11} />} Download
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <p className="text-xs text-base-content/30 mt-3">
+              Backups run daily at 2:00 AM UTC · stored in S3 · 5 most recent retained · 15-min download links
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── SSO / Authentication Settings — Microsoft Entra ID ── */}
       <AdminEntraSSO />

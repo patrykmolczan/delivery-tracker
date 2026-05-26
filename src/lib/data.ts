@@ -1257,3 +1257,9 @@ export async function fetchAdminBackupDownloadUrl(key: string): Promise<string> 
   })
   return data.downloadUrl
 }
+
+/** POST /api/admin/backups/run — trigger a fresh backup now, super-admin only */
+export async function runAdminBackup(): Promise<{ key: string; size: number }> {
+  const data = await api<{ key: string; size: number }>('admin/backups/run', { method: 'POST' })
+  return data
+}

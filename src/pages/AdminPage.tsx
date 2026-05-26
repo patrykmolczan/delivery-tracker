@@ -17,7 +17,7 @@ import {
   fetchAppSettings, updateAppSetting,
   fetchAllClients, createClient, updateClient, deactivateClient, importClients,
   fetchClientRequests, approveClientRequest, rejectClientRequest,
-  fetchAdminBackups, fetchAdminBackupDownloadUrl,
+  fetchAdminBackups, fetchAdminBackupDownloadUrl, runAdminBackup,
 } from '../lib/data'
 import type { BackupFile } from '../lib/data'
 import type { Analyst, ClientType, ProjectType, Client, ClientRequest } from '../lib/data'
@@ -238,6 +238,8 @@ export const AdminPage: React.FC = () => {
   // ── Database / Backup state (super-admin only) ─────────────────────────────
   const [backups, setBackups] = useState<BackupFile[]>([])
   const [backupsLoading, setBackupsLoading] = useState(false)
+  const [runningBackup, setRunningBackup] = useState(false)
+  const [backupRunMsg, setBackupRunMsg] = useState<string | null>(null)
   const [backupsError, setBackupsError] = useState<string | null>(null)
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null)
   const [showBulkUsers, setShowBulkUsers] = useState(false)
@@ -1745,18 +1747,43 @@ export const AdminPage: React.FC = () => {
                 S3 Backup Snapshots
                 <span className="badge badge-ghost badge-xs">{backups.length} files</span>
               </h4>
-              <button
-                className="btn btn-ghost btn-xs gap-1"
-                disabled={backupsLoading}
-                onClick={() => {
-                  setBackupsLoading(true)
-                  fetchAdminBackups()
-                    .then(files => { setBackups(files); setBackupsLoading(false) })
-                    .catch(e => { setBackupsError(e.message); setBackupsLoading(false) })
-                }}
-              >
-                <RefreshCw size={11} className={backupsLoading ? 'animate-spin' : ''} /> Refresh
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  className="btn btn-ghost btn-xs gap-1"
+                  disabled={backupsLoading}
+                  onClick={() => {
+                    setBackupsLoading(true)
+                    fetchAdminBackups()
+                      .then(files => { setBackups(files); setBackupsLoading(false) })
+                      .catch(e => { setBackupsError(e.message); setBackupsLoading(false) })
+                  }}
+                >
+                  <RefreshCw size={11} className={backupsLoading ? 'animate-spin' : ''} /> Refresh
+                </button>
+                <button
+                  className="btn btn-primary btn-xs gap-1"
+                  disabled={runningBackup}
+                  onClick={async () => {
+                    setRunningBackup(true)
+                    setBackupRunMsg(null)
+                    try {
+                      const result = await runAdminBackup()
+                      const sizeMb = (result.size / 1024 / 1024).toFixed(2)
+                      setBackupRunMsg(`✓ Backup created — ${sizeMb} MB`)
+                      const files = await fetchAdminBackups()
+                      setBackups(files)
+                    } catch (e: any) {
+                      setBackupRunMsg(`✗ ${(e as Error).message}`)
+                    } finally {
+                      setRunningBackup(false)
+                    }
+                  }}
+                >
+                  {runningBackup
+                    ? <><Loader2 size={11} className="animate-spin" /> Running…</>
+                    : <><Database size={11} /> Run Backup Now</>}
+                </button>
+              </div>
             </div>
 
             {backupsError && (
@@ -1764,6 +1791,12 @@ export const AdminPage: React.FC = () => {
                 <AlertCircle size={14} />
                 <span className="text-sm">{backupsError}</span>
                 <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setBackupsError(null)}><X size={11} /></button>
+              </div>
+            )}
+            {backupRunMsg && (
+              <div className={`alert py-2 mb-3 ${backupRunMsg.startsWith('✓') ? 'alert-success' : 'alert-error'}`}>
+                <span className="text-sm">{backupRunMsg}</span>
+                <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setBackupRunMsg(null)}><X size={11} /></button>
               </div>
             )}
 

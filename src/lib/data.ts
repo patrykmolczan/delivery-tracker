@@ -1,5 +1,5 @@
 import { getAuthHeaders } from './supabase'
-import DOMPurify from 'dompurify'
+import { sanitizeText } from './sanitize'
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string) || ''
 
@@ -82,18 +82,7 @@ async function s3GetSignedUrl(bucket: string, storagePath: string): Promise<stri
   return downloadUrl
 }
 
-// ─── Input sanitization ───────────────────────────────────────────────────────
-//
-// Strip ALL HTML — the function is meant to produce plain-text values for
-// fields that should never contain markup. Uses DOMPurify with empty tag/attr
-// allowlists, which handles malformed HTML, attribute-based XSS, and the
-// various URL-attribute attack vectors that the old regex (/<[^>]*>/g) missed.
-// See audit C-3.
-function sanitizeText(val: string | null | undefined): string | null {
-  if (val == null || val === '') return null
-  const cleaned = DOMPurify.sanitize(String(val), { ALLOWED_TAGS: [], ALLOWED_ATTR: [] }).trim()
-  return cleaned || null
-}
+// ─── Input sanitization — see src/lib/sanitize.ts ───────────────────────────
 
 import type {
   Project, KPIData, StatusCount, OwnerCount, FilterState, SortState,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import DOMPurify from 'dompurify'
+import { sanitizeRichText } from '../lib/sanitize'
 import {
   X, Calendar, User, Building2, MapPin, Factory, Hash, Clock,
   FileText, Edit2, History, CheckCircle2, Loader2,
@@ -48,31 +48,6 @@ import { FeedbackThread } from './FeedbackThread'
 import { TextPresets } from './TextPresets'
 
 
-/**
- * Sanitize TipTap-generated HTML before rendering via dangerouslySetInnerHTML.
- *
- * Uses DOMPurify (already a project dep) — replaces the prior denylist-based
- * hand-rolled sanitizer which was missing <style>, formaction/poster/cite-style
- * URL attributes, vbscript: URIs, etc. (audit C-3).
- *
- * Tag list matches what TipTap's starter-kit + the underline/text-style/color
- * extensions can emit. Anything outside this set is stripped.
- */
-function sanitizeNoteHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: [
-      'p', 'br', 'strong', 'em', 'u', 's',
-      'ul', 'ol', 'li',
-      'blockquote', 'code', 'pre',
-      'h1', 'h2', 'h3', 'h4',
-      'a', 'span',
-    ],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'style', 'class'],
-    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|tel:|\/|#)/i,
-    // Force safe link behavior for any <a> that survives sanitisation
-    ADD_ATTR: ['target', 'rel'],
-  })
-}
 
 /** Prevents infinite spinners — rejects if the DB call does not resolve in 10 s */
 function withLoadTimeout<T>(p: Promise<T>): Promise<T> {
@@ -1676,7 +1651,7 @@ export const ProjectDetail: React.FC<{
                                 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5
                                 [&_li]:my-0.5 [&_hr]:border-base-300 [&_hr]:my-2
                                 [&_strong]:font-semibold [&_em]:italic [&_s]:line-through [&_u]:underline"
-                              dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(n.note) }}
+                              dangerouslySetInnerHTML={{ __html: sanitizeRichText(n.note) }}
                             />
 
                             {/* Updater line */}

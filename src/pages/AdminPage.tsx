@@ -25,6 +25,7 @@ import type { UserProfile } from '../types'
 import { AdminEntraSSO } from '../components/sso/AdminEntraSSO'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+const S3_FILES_URL = (import.meta.env.VITE_S3_FILES_BUCKET_URL ?? '').replace(/\/$/, '')
 
 // ─── Reusable inline-editable list section ────────────────────────────────────
 
@@ -344,7 +345,7 @@ export const AdminPage: React.FC = () => {
         method: 'PUT', headers: { 'Content-Type': file.type || 'image/png' }, body: logoBlob,
       })
       if (!logoUploadRes.ok) throw new Error('Logo upload failed')
-      const newUrl = `https://delivery-tracker-files-418095506800.s3.us-east-2.amazonaws.com/branding/logo.png?v=${Date.now()}`
+      const newUrl = `${S3_FILES_URL}/branding/logo.png?v=${Date.now()}`
       await updateAppSetting('logo_url', newUrl)
       setCurrentLogoUrl(newUrl)
       setLogoSuccess('Logo updated successfully!')
@@ -388,7 +389,7 @@ export const AdminPage: React.FC = () => {
         method: 'PUT', headers: { 'Content-Type': file.type || 'image/png' }, body: iconBlob,
       })
       if (!iconUploadRes.ok) throw new Error('Icon upload failed')
-      const newUrl = `https://delivery-tracker-files-418095506800.s3.us-east-2.amazonaws.com/branding/login_icon.png?v=${Date.now()}`
+      const newUrl = `${S3_FILES_URL}/branding/login_icon.png?v=${Date.now()}`
       await updateAppSetting('login_icon_url', newUrl)
       setCurrentLoginIconUrl(newUrl)
       setLoginIconSuccess('Login icon updated!')

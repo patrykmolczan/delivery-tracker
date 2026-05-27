@@ -9,6 +9,7 @@
 
 import React from 'react'
 import { Key, CheckCircle2, Shield, ExternalLink } from 'lucide-react'
+import { COGNITO_CONFIG } from '../../lib/cognitoAuth'
 
 const InfoRow: React.FC<{ label: string; value: string; mono?: boolean }> = ({ label, value, mono }) => (
   <div className="flex items-start justify-between gap-4 py-2 border-b border-base-300 last:border-0">
@@ -61,7 +62,7 @@ export const AdminEntraSSO: React.FC = () => {
             <InfoRow label="Auth Provider" value="AWS Cognito User Pool" />
             <InfoRow label="SSO Method" value="SAML 2.0 via IAM Identity Center" />
             <InfoRow label="Identity Provider" value="Microsoft Entra ID (Azure AD)" />
-            <InfoRow label="User Pool" value="us-east-2_6nNReOKA7" mono />
+            <InfoRow label="User Pool" value={COGNITO_CONFIG.UserPoolId} mono />
             <InfoRow label="Callback URL" value="/auth/callback" mono />
             <InfoRow label="Password Login" value="Always available as fallback" />
           </div>

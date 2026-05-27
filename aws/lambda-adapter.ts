@@ -1,7 +1,7 @@
 /**
  * aws/lambda-adapter.ts
  *
- * Wraps Vercel-style serverless handlers (req, res) for AWS Lambda + API Gateway HTTP API v2.
+ * Wraps serverless-style handlers (req, res) for AWS Lambda + API Gateway HTTP API v2.
  * Allows existing api/ handlers to run on Lambda without any code changes.
  *
  * Simulated req surface:
@@ -13,9 +13,9 @@
  *   res.setHeader(key, value)
  */
 
-export type VercelHandler = (req: any, res: any) => Promise<void>
+export type ServerlessHandler = (req: any, res: any) => Promise<void>
 
-export function wrapVercelHandler(vercelHandler: VercelHandler) {
+export function wrapLambdaHandler(serverlessHandler: ServerlessHandler) {
   return async (event: any): Promise<any> => {
     // ── Method ────────────────────────────────────────────────────────────────
     const method = (
@@ -51,7 +51,7 @@ export function wrapVercelHandler(vercelHandler: VercelHandler) {
       headers['x-forwarded-for']?.split(',')[0]?.trim() ||
       '127.0.0.1'
 
-    // ── Simulated Vercel req ──────────────────────────────────────────────────
+    // ── Simulated request object ──────────────────────────────────────────────
     const req: any = {
       method,
       body,
@@ -67,7 +67,7 @@ export function wrapVercelHandler(vercelHandler: VercelHandler) {
       'Content-Type': 'application/json',
     }
 
-    // ── Simulated Vercel res ──────────────────────────────────────────────────
+    // ── Simulated response object ─────────────────────────────────────────────
     const res: any = {
       setHeader(key: string, value: string | number) {
         responseHeaders[key] = String(value)
@@ -94,7 +94,7 @@ export function wrapVercelHandler(vercelHandler: VercelHandler) {
       },
     }
 
-    await vercelHandler(req, res)
+    await serverlessHandler(req, res)
 
     return {
       statusCode,
@@ -103,3 +103,6 @@ export function wrapVercelHandler(vercelHandler: VercelHandler) {
     }
   }
 }
+-e 
+/** @deprecated Use wrapLambdaHandler instead. */
+export const wrapVercelHandler = wrapLambdaHandler

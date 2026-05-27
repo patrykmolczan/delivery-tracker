@@ -8,7 +8,7 @@ import {
 } from '../lib/cognitoAuth'
 import type { UserProfile } from '../types'
 
-// ── App-level user type (replaces @supabase/supabase-js User) ────────────────
+// ── App-level user type (Cognito-native, replaces legacy auth client type) ───
 // Only fields actually consumed by the app are included.
 export interface AppUser {
   id: string

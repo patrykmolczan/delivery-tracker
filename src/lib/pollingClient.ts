@@ -1,25 +1,20 @@
 /**
  * pollingClient.ts
- * Drop-in replacement for supabaseRealtime.channel() subscriptions.
+ * AWS-native polling replacement for real-time database subscriptions.
  *
- * Current Supabase usage → polling equivalent:
+ * Replaces Supabase Realtime WebSocket channels with HTTP polling.
+ * Usage map (legacy → polling equivalent):
  *
  *   App.tsx:
- *     supabaseRealtime.channel('projects-insert-watch')
- *       .on('postgres_changes', { table: 'projects' }, () => fetchProjects())
- *       .subscribe()
+ *     [realtime channel: 'projects-insert-watch']
  *     → pollTable('projects', fetchProjects, 30_000)
  *
  *   NotificationBell.tsx:
- *     supabaseRealtime.channel('notif_bell_' + uid)
- *       .on('postgres_changes', { table: 'notifications' }, loadNotifs)
- *       .subscribe()
+ *     [realtime channel: 'notif_bell_' + uid]
  *     → pollTable('notifications', loadNotifs, 15_000)
  *
  *   ProjectChat.tsx:
- *     supabaseRealtime.channel('chat_' + projectId)
- *       .on('postgres_changes', { table: 'project_messages' }, () => loadMessages())
- *       .subscribe()
+ *     [realtime channel: 'chat_' + projectId]
  *     → pollTable('chat:' + projectId, loadMessages, 3_000)
  *
  * All intervals pause when the browser tab is hidden to save resources.

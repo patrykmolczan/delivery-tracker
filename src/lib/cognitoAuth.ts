@@ -1,6 +1,6 @@
 /**
  * cognitoAuth.ts
- * Drop-in replacement for supabase.auth.* using AWS Cognito
+ * AWS Cognito authentication — the sole auth implementation for this app.
  * Uses amazon-cognito-identity-js (already available via aws-amplify)
  */
 
@@ -101,7 +101,15 @@ export function signIn(email: string, password: string): Promise<AuthResult> {
         });
       },
       onFailure: (err) => {
-        resolve({ user: null, error: err.message ?? String(err) });
+        // Return a generic message regardless of the underlying Cognito error
+        // (UserNotFoundException vs NotAuthorizedException vs other) to prevent
+        // username enumeration — see security finding APP-3.
+        const raw = err.message ?? String(err)
+        const isNewPasswordFlow = raw.includes('NEW_PASSWORD_REQUIRED')
+        resolve({
+          user: null,
+          error: isNewPasswordFlow ? raw : 'Invalid email or password',
+        });
       },
       newPasswordRequired: (_userAttributes, _requiredAttributes) => {
         // Stash the CognitoUser for the forced-password-change UI to pick up.

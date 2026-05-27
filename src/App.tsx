@@ -107,7 +107,7 @@ const Dashboard: React.FC = () => {
 
   // SAFETY NET: if loadData() hangs for >12s, force sign-out so AuthContext clears
   // the session and AppInner renders LoginPage — no redirect loop possible.
-  // Do NOT call supabase.auth.getSession() here — it can itself hang when the SDK
+  // Do NOT call cognitoAuth.getSession() here — it can itself hang when the SDK
   // is stuck retrying a dead token refresh (exactly the scenario we're trying to escape).
   useEffect(() => {
     if (!loading) return

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
-import { COGNITO_CONFIG } from '../lib/cognitoAuth'
+import { COGNITO_CONFIG, COGNITO_DOMAIN } from '../lib/cognitoAuth'
 import { useLogo } from '../hooks/useLogo'
 
 /**
@@ -74,7 +74,7 @@ const CognitoCallbackPage: React.FC = () => {
         setStep(1)
 
         const redirectUri   = `${window.location.origin}/auth/callback`
-        const tokenEndpoint = 'https://delivery-tracker-auth.auth.us-east-2.amazoncognito.com/oauth2/token'
+        const tokenEndpoint = `${COGNITO_DOMAIN}/oauth2/token`
 
         const body = new URLSearchParams({
           grant_type:   'authorization_code',

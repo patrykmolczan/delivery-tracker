@@ -3,9 +3,9 @@
  * Email notification sender
  *
  * Thin Lambda wrapper — imports the original Vercel handler from api/send-notification.ts
- * and adapts it to Lambda's event/response contract via wrapVercelHandler.
+ * and adapts it to Lambda's event/response contract via wrapLambdaHandler.
  */
 import originalHandler from '../../api/send-notification'
-import { wrapVercelHandler } from '../lambda-adapter'
+import { wrapLambdaHandler } from '../lambda-adapter'
 
-export const handler = wrapVercelHandler(originalHandler)
+export const handler = wrapLambdaHandler(originalHandler)

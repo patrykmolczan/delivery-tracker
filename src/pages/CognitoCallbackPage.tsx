@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
 import { COGNITO_CONFIG, COGNITO_DOMAIN } from '../lib/cognitoAuth'
+import { splitStorage } from '../lib/splitStorage'
 import { useLogo } from '../hooks/useLogo'
 
 /**
@@ -108,17 +109,36 @@ const CognitoCallbackPage: React.FC = () => {
         // Cognito SDK uses cognito:username as the localStorage key
         const username = idPayload['cognito:username'] || idPayload.sub
 
-        // ── Step 2: Write tokens in amazon-cognito-identity-js format ─────
+        // -- Step 2: Secure tokens (AUTH-1 Sprint N+1) -----------------------
+        // access/ID tokens -> sessionStorage via splitStorage (tab-scoped).
+        // refresh token -> HttpOnly Secure cookie via POST /api/session.
+        // After this step no Cognito token is in JS-accessible storage.
         setStep(2)
 
         const prefix = `CognitoIdentityServiceProvider.${COGNITO_CONFIG.ClientId}`
-        localStorage.setItem(`${prefix}.LastAuthUser`,          username)
-        localStorage.setItem(`${prefix}.${username}.idToken`,   id_token)
-        localStorage.setItem(`${prefix}.${username}.accessToken`, access_token)
+        splitStorage.setItem(`${prefix}.LastAuthUser`,            username)
+        splitStorage.setItem(`${prefix}.${username}.idToken`,     id_token)
+        splitStorage.setItem(`${prefix}.${username}.accessToken`, access_token)
+        splitStorage.setItem(`${prefix}.${username}.clockDrift`,  '0')
+        // refreshToken intentionally NOT written to splitStorage (blocked in N+1).
+
         if (refresh_token) {
-          localStorage.setItem(`${prefix}.${username}.refreshToken`, refresh_token)
+          const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+          try {
+            const sessionRes = await fetch(`${API_BASE}/api/session`, {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'store', refreshToken: refresh_token }),
+            })
+            if (!sessionRes.ok) {
+              // Non-fatal: user logged in for 1hr access token lifetime only.
+              console.warn('[session] Failed to store refresh token cookie:', sessionRes.status)
+            }
+          } catch (sessionErr) {
+            console.warn('[session] Could not reach /api/session:', sessionErr)
+          }
         }
-        localStorage.setItem(`${prefix}.${username}.clockDrift`, '0')
 
         // ── Step 3: Pause so user can appreciate the completed screen ─────
         setStep(3)

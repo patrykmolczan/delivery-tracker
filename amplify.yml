@@ -29,9 +29,11 @@ frontend:
 # the literal "${VAR}" string appears in the header (safe but non-functional
 # for that origin — fix by setting the var and redeploying).
 #
-# CSP NOTE: 'unsafe-inline' for script-src is still present — phase 4.4 of
-# the remediation plan migrates this to nonce- or hash-based CSP, requiring
-# a Vite CSP plugin or CloudFront Function at the edge.
+# CSP NOTE: 'unsafe-inline' has been removed from script-src (AUTH-2 fix).
+# Vite 8 production builds emit only external module scripts — no inline
+# scripts are present in the built index.html, so the directive is safe to
+# drop. style-src retains 'unsafe-inline' because @emotion/react (MUI) injects
+# styles dynamically at runtime via <style> tags.
 # ────────────────────────────────────────────────────────────────────────────
 
 customHeaders:
@@ -48,4 +50,4 @@ customHeaders:
       - key: 'Permissions-Policy'
         value: 'camera=(), microphone=(), geolocation=(), interest-cohort=(), browsing-topics=(), payment=(), usb=(), serial=(), magnetometer=(), gyroscope=(), accelerometer=()'
       - key: 'Content-Security-Policy'
-        value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: ${VITE_S3_FILES_BUCKET_URL}; connect-src 'self' ${VITE_API_GW_URL} ${VITE_COGNITO_DOMAIN} https://cognito-idp.us-east-2.amazonaws.com; font-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self' ${VITE_COGNITO_DOMAIN}; worker-src 'self' blob:"
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: ${VITE_S3_FILES_BUCKET_URL}; connect-src 'self' ${VITE_API_GW_URL} ${VITE_COGNITO_DOMAIN} https://cognito-idp.us-east-2.amazonaws.com; font-src 'self' data:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self' ${VITE_COGNITO_DOMAIN}; worker-src 'self' blob:"

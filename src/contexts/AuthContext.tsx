@@ -122,9 +122,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Session expired while tab was in background — clean up and redirect
           cognitoSignOut()
           try {
-            Object.keys(localStorage)
-              .filter(k => k.startsWith('CognitoIdentityServiceProvider'))
-              .forEach(k => localStorage.removeItem(k))
+            const prefix = 'CognitoIdentityServiceProvider'
+            Object.keys(localStorage).filter(k => k.startsWith(prefix)).forEach(k => localStorage.removeItem(k))
+            Object.keys(sessionStorage).filter(k => k.startsWith(prefix)).forEach(k => sessionStorage.removeItem(k))
           } catch { /* Safari private-mode safe */ }
           window.location.href = '/'
         }
@@ -173,21 +173,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null)
     setProfile(null)
 
-    // 2. Clear Cognito localStorage keys synchronously
+    // 2. Clear Cognito keys from both storages (AUTH-1 fix: tokens now split
+    //    across sessionStorage and localStorage via splitStorage adapter)
     try {
-      Object.keys(localStorage)
-        .filter(k =>
-          k.startsWith('CognitoIdentityServiceProvider') ||
-          k.startsWith('sb-') ||
-          k === 'delivery-tracker-auth'
-        )
-        .forEach(k => localStorage.removeItem(k))
+      const isCognitoKey = (k: string) =>
+        k.startsWith('CognitoIdentityServiceProvider') ||
+        k.startsWith('sb-') ||
+        k === 'delivery-tracker-auth'
+      Object.keys(localStorage).filter(isCognitoKey).forEach(k => localStorage.removeItem(k))
+      Object.keys(sessionStorage)
+        .filter(k => k.startsWith('CognitoIdentityServiceProvider'))
+        .forEach(k => sessionStorage.removeItem(k))
     } catch { /* Safari private-mode safe */ }
 
-    // 3. Cognito sign-out (clears SDK session)
+    // 3. Clear the HttpOnly refresh token cookie via /api/session
+    // Fire-and-forget — sign-out must complete even if the network call fails.
+    // credentials: 'include' is required so the browser sends the __rt cookie,
+    // allowing the Lambda to expire it via Set-Cookie: Max-Age=0.
+    try {
+      void fetch(`${API_BASE}/api/session`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clear' }),
+      })
+    } catch { /* non-fatal */ }
+
+    // 4. Cognito sign-out (clears SDK session)
     cognitoSignOut()
 
-    // 4. Hard redirect — synchronous, always works in Safari
+    // 5. Hard redirect — synchronous, always works in Safari
     window.location.href = '/'
   }
 

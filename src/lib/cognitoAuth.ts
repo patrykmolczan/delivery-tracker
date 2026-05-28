@@ -11,6 +11,7 @@ import {
   CognitoUserAttribute,
   CognitoUserSession,
 } from 'amazon-cognito-identity-js';
+import { splitStorage } from './splitStorage';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,9 @@ export const COGNITO_DOMAIN =
 const userPool = new CognitoUserPool({
   UserPoolId: COGNITO_CONFIG.UserPoolId,
   ClientId: COGNITO_CONFIG.ClientId,
+  // AUTH-1 fix: use split storage so access/ID tokens go to sessionStorage
+  // and only the refresh token + LastAuthUser go to localStorage.
+  Storage: splitStorage,
 });
 
 // ─── Pending NEW_PASSWORD_REQUIRED user (module-scoped, not on window) ───────
@@ -204,35 +208,64 @@ export function changePassword(
   });
 }
 
-// ─── Refresh Session ─────────────────────────────────────────────────────────
+// -- Refresh Session (AUTH-1 Sprint N+1) ---------------------
+// Calls /api/session { action: 'refresh' } which reads the HttpOnly cookie
+// and calls Cognito InitiateAuth server-side. New access + ID tokens are
+// returned in the JSON body and written into sessionStorage via splitStorage.
+// The refresh token never transits JavaScript.
 
-export function refreshSession(): Promise<AuthUser | null> {
-  return new Promise((resolve) => {
-    const cognitoUser = userPool.getCurrentUser();
-    if (!cognitoUser) return resolve(null);
+const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
 
-    cognitoUser.getSession((err: Error | null, session: CognitoUserSession | null) => {
-      if (err || !session) return resolve(null);
-
-      const refreshToken = session.getRefreshToken();
-      cognitoUser.refreshSession(refreshToken, (err2, newSession) => {
-        if (err2 || !newSession) return resolve(null);
-
-        const idPayload = newSession.getIdToken().decodePayload();
-        resolve({
-          id: idPayload.sub,
-          email: idPayload.email,
-          role: idPayload['custom:role'] ?? 'user',
-          full_name: idPayload['custom:full_name'] ?? '',
-          cognitoUser,
-          session: newSession,
-          accessToken: newSession.getAccessToken().getJwtToken(),
-          idToken: newSession.getIdToken().getJwtToken(),
-        });
-      });
+export async function refreshSession(): Promise<AuthUser | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/session`, {
+      method: 'POST',
+      credentials: 'include', // send the __rt HttpOnly cookie
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'refresh' }),
     });
-  });
+
+    if (!res.ok) return null;
+
+    const { accessToken, idToken } = await res.json() as {
+      accessToken: string;
+      idToken: string;
+      expiresIn: number;
+    };
+
+    if (!accessToken || !idToken) return null;
+
+    // Write new short-lived tokens into sessionStorage via splitStorage
+    const cognitoUser = userPool.getCurrentUser();
+    if (!cognitoUser) return null;
+
+    const username = cognitoUser.getUsername();
+    const prefix = `CognitoIdentityServiceProvider.${COGNITO_CONFIG.ClientId}`;
+    splitStorage.setItem(`${prefix}.${username}.accessToken`, accessToken);
+    splitStorage.setItem(`${prefix}.${username}.idToken`, idToken);
+    splitStorage.setItem(`${prefix}.${username}.clockDrift`, '0');
+
+    // Decode ID token to build AuthUser
+    const b64 = idToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const idPayload = JSON.parse(atob(b64));
+
+    return {
+      id: idPayload.sub,
+      email: idPayload.email,
+      role: idPayload['custom:role'] ?? 'user',
+      full_name: idPayload['custom:full_name'] ?? '',
+      cognitoUser,
+      session: null as any, // session object not available via this path
+      accessToken,
+      idToken,
+    };
+  } catch {
+    return null;
+  }
 }
+
+
+
 
 // ─── Update User Attributes ───────────────────────────────────────────────────
 

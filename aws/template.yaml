@@ -21,7 +21,14 @@ Parameters:
     NoEcho: true
     Description: >
       Secret salt for rate-limit IP hashing. Generate with: openssl rand -hex 32.
-      No default — must be supplied explicitly at deploy time.
+      No default -- must be supplied explicitly at deploy time.
+  CognitoClientId:
+    Type: String
+    NoEcho: true
+    Description: Cognito App Client ID -- used by SessionFunction for REFRESH_TOKEN_AUTH calls.
+  CognitoUserPoolId:
+    Type: String
+    Description: Cognito User Pool ID (e.g. us-east-2_XXXXXXXXX) -- used by SessionFunction.
 
 Globals:
   Function:
@@ -37,6 +44,8 @@ Globals:
         VITE_APP_URL: !Ref AppUrl
         NOTIFICATION_SECRET: !Ref NotificationSecret
         NODE_ENV: production
+        VITE_COGNITO_CLIENT_ID: !Ref CognitoClientId
+        VITE_COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
 
 Resources:
 
@@ -260,6 +269,28 @@ Resources:
       BuildMethod: esbuild
       BuildProperties:
         EntryPoints: [aws/functions/entra-test.ts]
+        External: ['@aws-sdk/*']
+        Minify: true
+        Target: es2022
+
+
+  # ── Session / HttpOnly Cookie (AUTH-1 Sprint N+1) ───────────────────────────
+  SessionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: aws/functions/session.handler
+      Description: Issues/refreshes Cognito refresh token as HttpOnly Secure cookie (AUTH-1 N+1)
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DeliveryTrackerApi
+            Path: /api/session
+            Method: POST
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [aws/functions/session.ts]
         External: ['@aws-sdk/*']
         Minify: true
         Target: es2022

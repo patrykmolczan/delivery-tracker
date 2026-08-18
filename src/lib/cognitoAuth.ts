@@ -84,7 +84,12 @@ export interface AuthResult {
 
 export function signIn(email: string, password: string): Promise<AuthResult> {
   return new Promise((resolve) => {
-    const cognitoUser = new CognitoUser({ Username: email, Pool: userPool });
+    // Fix: explicitly pass Storage so the session is written to the same
+    // splitStorage-backed store that getSession() reads from. Without this,
+    // the SDK falls back to plain localStorage for this constructor call only,
+    // causing getSession() (via userPool.getCurrentUser()) to find nothing and
+    // sign the user out on the very first session check after password login.
+    const cognitoUser = new CognitoUser({ Username: email, Pool: userPool, Storage: splitStorage });
     const authDetails = new AuthenticationDetails({ Username: email, Password: password });
 
     cognitoUser.authenticateUser(authDetails, {

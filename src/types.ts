@@ -164,6 +164,7 @@ export interface UserProfile {
   role: 'user' | 'admin' | 'super_admin'
   is_active: boolean
   password_change_required?: boolean
+  has_completed_onboarding?: boolean
   created_at: string
   updated_at?: string
 }

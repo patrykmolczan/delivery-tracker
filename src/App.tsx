@@ -30,6 +30,7 @@ import { NotificationBell } from './components/NotificationBell'
 import { NotificationInbox } from './pages/NotificationInbox'
 import { EntraCallbackPage } from './pages/EntraCallbackPage'
 import { CognitoCallbackPage } from './pages/CognitoCallbackPage'
+import { OnboardingTour } from './components/onboarding/OnboardingTour'
 
 const NAV_ITEMS: Array<{ id: ViewMode; label: string; icon: React.ReactNode; adminOnly?: boolean; superAdminOnly?: boolean }> = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
@@ -253,6 +254,7 @@ const Dashboard: React.FC = () => {
           {navItems.map(item => (
             <button
               key={item.id}
+              data-tour={`nav-${item.id}`}
               onClick={() => navigate(item.id)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left
                 ${view === item.id
@@ -342,6 +344,8 @@ const Dashboard: React.FC = () => {
         <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
       )}
 
+      <OnboardingTour profile={profile} view={view} navigate={navigate} />
+
       {/* Main content area */}
       <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
         {/* Top bar */}
@@ -359,16 +363,18 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <NotificationBell
-              onViewAll={() => navigate('notifications')}
-              onProjectOpen={(projectId, tab) => {
-                const proj = projects.find(p => p.id === projectId)
-                if (proj) {
-                  setSelectedProjectTab(tab as any)
-                  setSelectedProject(proj)
-                }
-              }}
-            />
+            <span data-tour="notification-bell">
+              <NotificationBell
+                onViewAll={() => navigate('notifications')}
+                onProjectOpen={(projectId, tab) => {
+                  const proj = projects.find(p => p.id === projectId)
+                  if (proj) {
+                    setSelectedProjectTab(tab as any)
+                    setSelectedProject(proj)
+                  }
+                }}
+              />
+            </span>
             {view !== 'table' && (
               <button
                 className="btn btn-primary btn-sm gap-1.5 hidden sm:flex"

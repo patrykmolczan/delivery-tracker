@@ -595,7 +595,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
         </div>
       )}
 
-      <form ref={formRef} onSubmit={handleSubmit} noValidate>
+      <form ref={formRef} onSubmit={handleSubmit} noValidate data-tour="new-project-form">
         <div className="flex flex-col gap-5">
 
           {/* ── Card 1: People ─────────────────────────────────────────────── */}
@@ -912,7 +912,9 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                     </div>
                   )}
                   {/* AI Quality Review Panel */}
-                  <TemplateQualityReview result={qualityResult} isLoading={isAnalyzing} locationValidationWarnings={parseResult?.locationWarnings ?? []} passingScore={PASSING_QUALITY_SCORE} originalFile={templateFile} />
+                  <div data-tour="ai-quality-review">
+                    <TemplateQualityReview result={qualityResult} isLoading={isAnalyzing} locationValidationWarnings={parseResult?.locationWarnings ?? []} passingScore={PASSING_QUALITY_SCORE} originalFile={templateFile} />
+                  </div>
                 </div>
 
                 {/* Country picker row */}
@@ -1285,6 +1287,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
           <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>
           <button
             type="submit"
+            data-tour="submit-project"
             className={`btn btn-primary gap-2 ${saving ? 'loading' : ''}`}
             disabled={!isValid || saving || success}
           >

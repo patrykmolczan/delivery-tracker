@@ -854,7 +854,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
             <div className="card-body gap-4">
               <Section icon={<Globe size={16} />} title="Countries & Job Counts">
                 {/* ── Parse from template ── */}
-                <div className="mb-3 p-3 bg-base-200 rounded-lg border border-base-300">
+                <div className="mb-3 p-3 bg-base-200 rounded-lg border border-base-300" data-tour="ai-quality-review">
                   <div className="flex items-center gap-3 flex-wrap">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <span className="text-lg">📊</span>
@@ -912,7 +912,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                     </div>
                   )}
                   {/* AI Quality Review Panel */}
-                  <div data-tour="ai-quality-review">
+                  <div>
                     <TemplateQualityReview result={qualityResult} isLoading={isAnalyzing} locationValidationWarnings={parseResult?.locationWarnings ?? []} passingScore={PASSING_QUALITY_SCORE} originalFile={templateFile} />
                   </div>
                 </div>

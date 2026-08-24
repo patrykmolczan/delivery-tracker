@@ -60,14 +60,14 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'project-status',
     view: 'table',
-    target: null,
+    target: '[data-tour="projects-table"]',
     title: 'View Status & Updates',
     body: 'Click any project row to open its full details — status, delivery estimate, notes, and history all live there.',
   },
   {
     id: 'request-changes',
     view: 'table',
-    target: null,
+    target: '[data-tour="projects-table"]',
     title: 'Need Something Changed?',
     body: 'Inside a project, use the "Request Changes" button to send feedback — your assigned analyst is notified right away.',
   },

@@ -71,14 +71,21 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ profile, view, n
 
   if (!active) return null
 
-  const finish = async () => {
+  // Permanently marks the tour as done (natural completion or explicit opt-out).
+  const complete = async () => {
     setActive(false)
     await markOnboardingComplete()
   }
 
+  // Closes the tour for this session only — no DB write, so it reappears
+  // next login. Used for the (X) button and clicking outside the modal.
+  const dismissForNow = () => {
+    setActive(false)
+  }
+
   const goNext = () => {
     if (isLastStep) {
-      void finish()
+      void complete()
     } else {
       setStepIndex(i => i + 1)
     }
@@ -120,9 +127,9 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ profile, view, n
         <div className="modal-box max-w-sm relative">
           <button
             className="btn btn-ghost btn-xs btn-square absolute right-3 top-3"
-            onClick={() => void finish()}
-            aria-label="Skip tour"
-            title="Skip tour"
+            onClick={dismissForNow}
+            aria-label="Remind me later"
+            title="Remind me later"
           >
             <X size={14} />
           </button>
@@ -153,8 +160,14 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ profile, view, n
               </button>
             </div>
           </div>
+          <button
+            className="btn btn-link btn-xs text-base-content/40 hover:text-base-content/70 no-underline hover:underline px-0 mt-2"
+            onClick={() => void complete()}
+          >
+            Don't show this again
+          </button>
         </div>
-        <div className="modal-backdrop" onClick={() => void finish()} />
+        <div className="modal-backdrop" onClick={dismissForNow} />
       </div>
     </>
   )

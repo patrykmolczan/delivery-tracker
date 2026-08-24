@@ -252,7 +252,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
       </div>
 
       {/* Table wrapper */}
-      <div className="rounded-xl border border-base-300/50 bg-base-200 overflow-hidden overflow-x-auto">
+      <div className="rounded-xl border border-base-300/50 bg-base-200 overflow-hidden overflow-x-auto" data-tour="projects-table">
         <div
           ref={parentRef}
           className="overflow-y-auto overflow-x-auto"

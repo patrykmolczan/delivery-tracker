@@ -148,7 +148,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ profile, view, n
     const idealLeft = rect.left + rect.width / 2 - CARD_WIDTH / 2
     const left = Math.min(Math.max(idealLeft, CARD_MARGIN), vw - CARD_WIDTH - CARD_MARGIN)
 
-    cardStyle = { position: 'fixed', top, left, width: CARD_WIDTH, zIndex: 10001 }
+    cardStyle = { position: 'fixed', top, left, width: CARD_WIDTH, zIndex: 10001, opacity: 1, visibility: 'visible' }
   } else {
     cardStyle = {
       position: 'fixed',
@@ -157,6 +157,8 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ profile, view, n
       transform: 'translate(-50%, -50%)',
       width: CARD_WIDTH,
       zIndex: 10001,
+      opacity: 1,
+      visibility: 'visible',
     }
   }
 

@@ -115,7 +115,9 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ profile, view, n
 
   const goNext = () => {
     if (isLastStep) {
-      void complete()
+      // Finishing all steps is session-only, same as (X)/backdrop — only the
+      // explicit "Don't show this again" button permanently completes the tour.
+      dismissForNow()
     } else {
       setStepIndex(i => i + 1)
     }

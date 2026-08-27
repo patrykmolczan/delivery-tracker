@@ -57,6 +57,19 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({ profile, view, n
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, stepIndex])
 
+  // Demo-only: auto-select a value on a <select> for this step, so the user
+  // watches the field populate and the dependent UI (e.g. template download)
+  // appear live instead of just reading about it. Skipped if already set.
+  useEffect(() => {
+    if (!active || !step.autoSelect) return
+    const { selector, value } = step.autoSelect
+    const el = document.querySelector(selector) as HTMLSelectElement | null
+    if (!el || el.value) return
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set
+    setter?.call(el, value)
+    el.dispatchEvent(new Event('change', { bubbles: true }))
+  }, [active, stepIndex, step.autoSelect])
+
   // Track the spotlighted element's position while this step is showing.
   // Also scrolls the target into view so steps never point at off-screen elements.
   useEffect(() => {

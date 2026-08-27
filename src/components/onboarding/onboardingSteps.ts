@@ -37,6 +37,13 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     body: 'Enter the project details as accurately as you can. New requests always start in "Under Review" status — your team will confirm details before work begins.',
   },
   {
+    id: 'project-type',
+    view: 'new-project',
+    target: '[data-tour="project-type-field"]',
+    title: 'Select Your Project Type',
+    body: 'You must select a Project Type here. Then download the matching template, fill it out, and upload it below — the Pay Intel (Rate Card) template or the Pay Intel (Right Sourcing) template is the ONLY accepted template. No other file or format will work.',
+  },
+  {
     id: 'ai-quality-review',
     view: 'new-project',
     target: '[data-tour="ai-quality-review"]',

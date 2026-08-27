@@ -815,18 +815,20 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                   </Field>
 
                   {/* Project Type with template download */}
-                  <Field label="Project Type" hint="Download template below">
-                    <select
-                      className="select select-bordered w-full"
-                      value={form.project_type ?? ''}
-                      onChange={e => set('project_type', e.target.value || null)}
-                    >
-                      <option value="">— Select project type —</option>
-                      {projectTypes.map(pt => (
-                        <option key={pt.id} value={pt.name}>{pt.name}</option>
-                      ))}
-                    </select>
-                  </Field>
+                  <div data-tour="project-type-field">
+                    <Field label="Project Type" hint="Download template below">
+                      <select
+                        className="select select-bordered w-full"
+                        value={form.project_type ?? ''}
+                        onChange={e => set('project_type', e.target.value || null)}
+                      >
+                        <option value="">— Select project type —</option>
+                        {projectTypes.map(pt => (
+                          <option key={pt.id} value={pt.name}>{pt.name}</option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
                 </div>
 
                 {/* Template download strip */}

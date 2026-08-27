@@ -12,6 +12,8 @@ export interface OnboardingStep {
   target: string | null
   title: string
   body: string
+  /** Optional: auto-select this value on a <select> matching selector when the step opens (demo only; skipped if the field already has a value). */
+  autoSelect?: { selector: string; value: string }
 }
 
 export const ONBOARDING_STEPS: OnboardingStep[] = [
@@ -41,7 +43,15 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     view: 'new-project',
     target: '[data-tour="project-type-field"]',
     title: 'Select Your Project Type',
-    body: 'You must select a Project Type here. Then download the matching template, fill it out, and upload it below — the Pay Intel (Rate Card) template or the Pay Intel (Right Sourcing) template is the ONLY accepted template. No other file or format will work.',
+    body: "You must select a Project Type here. We've picked Pay Intel (Right Sourcing) as an example — for your real request, choose whichever matches your project. The Pay Intel (Rate Card) template or the Pay Intel (Right Sourcing) template is the ONLY accepted template. No other file or format will work.",
+    autoSelect: { selector: '[data-tour="project-type-field"] select', value: 'Pay Intel (Right Sourcing)' },
+  },
+  {
+    id: 'template-download',
+    view: 'new-project',
+    target: '[data-tour="template-download-strip"]',
+    title: 'Download the Template',
+    body: 'Once a Project Type is selected, its template button appears right here. Click it to download the template, fill it out, then upload it below.',
   },
   {
     id: 'ai-quality-review',

@@ -835,16 +835,18 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                 {form.project_type && (() => {
                   const pt = projectTypes.find(p => p.name === form.project_type)
                   return pt?.template_url ? (
-                    <a
-                      href={pt.template_url}
-                      download={pt.template_label || pt.name}
-                      className="btn btn-ghost btn-sm gap-1.5 text-primary border border-primary/30 hover:bg-primary/10"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <Download size={14} />
-                      <span>Download {pt.template_label || `${pt.name} Template`}</span>
-                    </a>
+                    <div data-tour="template-download-strip">
+                      <a
+                        href={pt.template_url}
+                        download={pt.template_label || pt.name}
+                        className="btn btn-ghost btn-sm gap-1.5 text-primary border border-primary/30 hover:bg-primary/10"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <Download size={14} />
+                        <span>Download {pt.template_label || `${pt.name} Template`}</span>
+                      </a>
+                    </div>
                   ) : null
                 })()}
               </Section>

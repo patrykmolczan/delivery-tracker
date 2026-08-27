@@ -347,7 +347,7 @@ const Dashboard: React.FC = () => {
       <OnboardingTour profile={profile} view={view} navigate={navigate} />
 
       {/* Main content area */}
-      <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
+      <div className="flex-1 min-w-0 lg:ml-64 flex flex-col min-h-screen">
         {/* Top bar */}
         <div className="sticky top-0 z-20 bg-base-100/80 backdrop-blur border-b border-base-300 px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">

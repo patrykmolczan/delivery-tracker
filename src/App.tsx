@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import ChangePasswordModal from './components/ChangePasswordModal'
 import { LoginPage } from './pages/LoginPage'
@@ -62,6 +62,7 @@ const Dashboard: React.FC = () => {
   const [view, setView] = useState<ViewMode>('dashboard')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const autoSyncingRef = useRef(false) // background poll sync flag; not rendered, so button never animates for it
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [countriesMap, setCountriesMap] = useState<Map<string, string[]>>(new Map())
   const [statusLookups, setStatusLookups] = useState<LookupItem[]>([])
@@ -70,8 +71,11 @@ const Dashboard: React.FC = () => {
   const [dashViewType, setDashViewType] = useState<'all' | 'project' | 'one_off'>('project')
   const [dashFilters, setDashFilters] = useState<FilterState>({ search: '', status: [], owner: [], analyst: [], clientType: [], industry: [], country: [], dateFrom: '', dateTo: '' })
 
-  const loadData = async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true)
+  const loadData = async (isRefresh = false, isAuto = false) => {
+    if (isRefresh) {
+      if (isAuto) autoSyncingRef.current = true
+      else setRefreshing(true)
+    }
     else setLoading(true)
     try {
       // Fetch lookups first (tiny, fast), then projects once (no JOINs)
@@ -101,6 +105,7 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoading(false)
       setRefreshing(false)
+      autoSyncingRef.current = false
     }
   }
 
@@ -134,7 +139,7 @@ const Dashboard: React.FC = () => {
 
   // Poll for project changes every 30s (replaces Supabase Realtime channel)
   useEffect(() => {
-    const poll = pollTable('projects', () => { loadData(true) }, 10_000)
+    const poll = pollTable('projects', () => { loadData(true, true) }, 10_000)
     return () => { poll.unsubscribe() }
   }, [])
 

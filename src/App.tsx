@@ -609,6 +609,9 @@ const Dashboard: React.FC = () => {
             setSelectedProject(updated)
             setProjects(prev => prev.map(p => p.id === updated.id ? updated : p))
           }}
+          onDelete={() => {
+            setProjects(prev => prev.filter(p => p.id !== selectedProject.id))
+          }}
         />
       )}
     </div>

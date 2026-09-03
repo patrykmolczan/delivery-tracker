@@ -524,7 +524,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
 
       {/* Bulk action bar */}
       {showBulk && selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 p-3 bg-primary/10 border border-primary/30 rounded-xl flex-wrap">
+        <div className="sticky bottom-4 z-10 flex items-center gap-3 p-3 bg-primary/10 border border-primary/30 rounded-xl shadow-lg flex-wrap">
           <span className="text-sm font-semibold text-primary">{selectedIds.size} selected</span>
           <select
             className="select select-bordered select-sm bg-base-100 flex-1 min-w-[180px]"

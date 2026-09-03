@@ -143,11 +143,13 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   const [bulkStatusId, setBulkStatusId] = useState<number | ''>('')
   const [bulkApplying, setBulkApplying] = useState(false)
 
-  // Reset selection when projects list changes
+  // Reset selection only when the actual set of project IDs changes —
+  // not on every new array reference from background auto-refresh polling.
+  const projectIdsKey = React.useMemo(() => projects.map(p => p.id).join(','), [projects])
   React.useEffect(() => {
     setSelectedIds(new Set())
     setBulkStatusId('')
-  }, [projects])
+  }, [projectIdsKey])
 
   const showBulk = !!onBulkStatusUpdate && !!statusOptions && statusOptions.length > 0
 

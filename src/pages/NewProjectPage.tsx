@@ -748,7 +748,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                     </div>
 
                     {/* Selected client display */}
-                    {form.client_name && !clientDropOpen && !clientRequestMode && (
+                    {form.client_name && !clientDropOpen && !clientRequestMode && !clientRequestDone && (
                       <div className="mt-1 flex items-center gap-2">
                         <span className="badge badge-success badge-sm gap-1">✓ {form.client_name}</span>
                         <button type="button" className="text-xs text-base-content/40 hover:text-error" onClick={() => { set('client_name', ''); setClientSearch('') }}>change</button>

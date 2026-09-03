@@ -319,6 +319,16 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   const handleTemplateParse = async (file: File) => {
     if (!lookups) return
     setTemplateFile(file)
+    // Stage the template file so it uploads with the project on save
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      alert(`"${file.name}" is ${formatFileSize(file.size)} — max 2 MB per file, so it will not be attached to the project`)
+    } else {
+      setStagedFiles(prev =>
+        prev.some(f => f.name === file.name) || prev.length >= MAX_FILES_PER_PROJECT
+          ? prev
+          : [...prev, file]
+      )
+    }
     setIsParsing(true)
     setParseResult(null)
     setQualityResult(null)

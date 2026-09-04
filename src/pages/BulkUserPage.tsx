@@ -26,6 +26,7 @@
 
 import React, { useState, useRef, useCallback } from 'react'
 import Papa from 'papaparse'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   ArrowLeft, Download, Upload, Users, CheckCircle, XCircle,
   AlertTriangle, RefreshCw, FileText, UserPlus, UserCheck,
@@ -34,6 +35,14 @@ import {
 import { getAuthHeaders } from '../lib/supabase'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
+
+// Row count above which each preview/processing/results table switches from a
+// plain <tbody> map to a windowed render via @tanstack/react-virtual. Below
+// this threshold rendering is byte-for-byte identical to before — this only
+// engages for large CSV imports (e.g. 1,000+ rows) to keep the browser tab
+// responsive. Same library/pattern already used in ProjectTable.tsx.
+const VIRTUALIZE_THRESHOLD = 50
+const BULK_ROW_HEIGHT = 40
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -148,6 +157,48 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
   const failed     = rows.filter(r => r.processResult === 'failed').length
   const createdRows = rows.filter(r => r.action === 'create' && r.processResult === 'success')
   const welcomePending = createdRows.filter(r => !r.welcomeEmailSent).length
+
+  // ── Windowed rendering (large CSV imports) ──────────────────────────────
+  // Derived, densely-indexed arrays for the two tables that filter `rows`
+  // when rendering. Virtualizers need a real count + dense array, not a
+  // sparse .map(() => null) result.
+  const processingRows = rows.filter(r => r.action !== 'error')
+  // Carries each row's ORIGINAL index into `rows` — toggleReveal() and the
+  // welcome-email sender key off that original index, not a position in
+  // this filtered subset, so it must be preserved through virtualization.
+  const credentialRows = rows
+    .map((row, idx) => ({ row, idx }))
+    .filter(({ row }) => row.action === 'create' && row.processResult === 'success')
+
+  const previewParentRef = useRef<HTMLDivElement>(null)
+  const processingParentRef = useRef<HTMLDivElement>(null)
+  const credentialsParentRef = useRef<HTMLDivElement>(null)
+  const resultsParentRef = useRef<HTMLDivElement>(null)
+
+  const previewVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => previewParentRef.current,
+    estimateSize: () => BULK_ROW_HEIGHT,
+    overscan: 20,
+  })
+  const processingVirtualizer = useVirtualizer({
+    count: processingRows.length,
+    getScrollElement: () => processingParentRef.current,
+    estimateSize: () => BULK_ROW_HEIGHT,
+    overscan: 20,
+  })
+  const credentialsVirtualizer = useVirtualizer({
+    count: credentialRows.length,
+    getScrollElement: () => credentialsParentRef.current,
+    estimateSize: () => BULK_ROW_HEIGHT,
+    overscan: 20,
+  })
+  const resultsVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => resultsParentRef.current,
+    estimateSize: () => BULK_ROW_HEIGHT,
+    overscan: 20,
+  })
 
   // ── File handling ────────────────────────────────────────────────────────
   const processFile = useCallback(async (file: File) => {
@@ -389,6 +440,116 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  // ── Row renderers (shared between plain and windowed table bodies) ──────
+  // `rowProps` carries the virtualizer's `ref`/`data-index` when windowed;
+  // omitted entirely for the plain (non-windowed, under-threshold) render.
+  type RowProps = { ref?: (el: HTMLTableRowElement | null) => void; 'data-index'?: number }
+  const renderPreviewRow = (row: CsvRow, i: number, rowProps: RowProps = {}) => (
+    <tr key={i} className={row.action === 'error' ? 'bg-error/5' : ''} {...rowProps}>
+      <td className="text-base-content/40 text-xs">{i + 1}</td>
+      <td>
+        <span className={badgeClass(row.action!)}>
+          {row.action === 'create' && <UserPlus className="w-3 h-3" />}
+          {row.action === 'update' && <UserCheck className="w-3 h-3" />}
+          {row.action === 'error'  && <XCircle className="w-3 h-3" />}
+          {row.action}
+        </span>
+      </td>
+      <td className="font-mono text-xs">{row.email}</td>
+      <td className="text-sm">{row.full_name || <span className="text-base-content/30 italic">—</span>}</td>
+      <td>
+        {row.action === 'create'
+          ? <span className="badge badge-success badge-xs gap-1"><Shield className="w-2.5 h-2.5" />Auto-generated</span>
+          : <span className="text-base-content/30 text-xs italic">Not changed</span>
+        }
+      </td>
+      <td>
+        <span className={`badge badge-xs ${normalizeStatus(row.status) ? 'badge-success' : 'badge-ghost'}`}>
+          {normalizeStatus(row.status) ? 'active' : 'inactive'}
+        </span>
+      </td>
+      <td className="text-xs text-error">{row.errorMsg}</td>
+    </tr>
+  )
+
+  const renderProcessingRow = (row: CsvRow, i: number, rowProps: RowProps = {}) => (
+    <tr key={i} {...rowProps}>
+      <td className="font-mono text-xs">{row.email}</td>
+      <td><span className={badgeClass(row.action!)}>{row.action}</span></td>
+      <td>
+        {row.processResult ? (
+          <span className={resultBadgeClass(row.processResult)}>
+            {row.processResult === 'processing' && <span className="loading loading-spinner loading-xs" />}
+            {row.processResult}
+          </span>
+        ) : (
+          <span className="badge badge-ghost badge-xs">queued</span>
+        )}
+      </td>
+      <td className="text-xs text-base-content/60">{row.processMsg}</td>
+    </tr>
+  )
+
+  // `idx` MUST be the row's original index into `rows` (see credentialRows
+  // above) — toggleReveal(idx) and welcome-email tracking both key off it.
+  const renderCredentialRow = (row: CsvRow, idx: number, rowProps: RowProps = {}) => {
+    const revealed = showAllPasswords || row.passwordRevealed
+    return (
+      <tr key={idx} {...rowProps}>
+        <td className="font-mono text-xs">{row.email}</td>
+        <td className="text-sm">{row.full_name || '—'}</td>
+        <td>
+          <div className="flex items-center gap-2">
+            <span className={`font-mono text-sm font-bold text-primary transition-all ${revealed ? '' : 'blur-sm select-none'}`}>
+              {row.generatedPassword}
+            </span>
+            <button
+              className="btn btn-ghost btn-xs"
+              onClick={() => toggleReveal(idx)}
+              title={revealed ? 'Hide password' : 'Reveal password'}
+            >
+              {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </td>
+        <td>
+          {row.welcomeEmailSent
+            ? <span className="badge badge-success badge-xs gap-1"><CheckCircle className="w-3 h-3" /> Sent</span>
+            : row.welcomeEmailError
+              ? <span className="badge badge-error badge-xs" title={row.welcomeEmailError}>Failed</span>
+              : <span className="badge badge-ghost badge-xs">Pending</span>
+          }
+        </td>
+      </tr>
+    )
+  }
+
+  const renderResultRow = (row: CsvRow, i: number, rowProps: RowProps = {}) => (
+    <tr key={i} className={
+      row.processResult === 'failed' ? 'bg-error/5' :
+      row.action === 'error' ? 'bg-base-200/50 opacity-50' : ''
+    } {...rowProps}>
+      <td className="font-mono text-xs">{row.email}</td>
+      <td className="text-sm">{row.full_name || '—'}</td>
+      <td><span className={badgeClass(row.action!)}>{row.action}</span></td>
+      <td>
+        {row.processResult ? (
+          <span className={resultBadgeClass(row.processResult)}>
+            {row.processResult}
+          </span>
+        ) : (
+          <span className="badge badge-ghost badge-xs">skipped</span>
+        )}
+      </td>
+      <td>
+        <span className={`badge badge-xs ${normalizeStatus(row.status) ? 'badge-success' : 'badge-ghost'}`}>
+          {normalizeStatus(row.status) ? 'active' : 'inactive'}
+        </span>
+      </td>
+      <td className="text-xs text-base-content/60">{row.processMsg || row.errorMsg}</td>
+    </tr>
+  )
+
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
@@ -579,50 +740,62 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
 
           <div className="card bg-base-100 border border-base-300 shadow-sm">
             <div className="card-body p-0">
-              <div className="overflow-x-auto rounded-xl">
-                <table className="table table-sm">
-                  <thead className="bg-base-200 text-xs uppercase tracking-wide">
-                    <tr>
-                      <th>#</th>
-                      <th>Action</th>
-                      <th>Email</th>
-                      <th>Full Name</th>
-                      <th>Password</th>
-                      <th>Status</th>
-                      <th>Note</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row, i) => (
-                      <tr key={i} className={row.action === 'error' ? 'bg-error/5' : ''}>
-                        <td className="text-base-content/40 text-xs">{i + 1}</td>
-                        <td>
-                          <span className={badgeClass(row.action!)}>
-                            {row.action === 'create' && <UserPlus className="w-3 h-3" />}
-                            {row.action === 'update' && <UserCheck className="w-3 h-3" />}
-                            {row.action === 'error'  && <XCircle className="w-3 h-3" />}
-                            {row.action}
-                          </span>
-                        </td>
-                        <td className="font-mono text-xs">{row.email}</td>
-                        <td className="text-sm">{row.full_name || <span className="text-base-content/30 italic">—</span>}</td>
-                        <td>
-                          {row.action === 'create'
-                            ? <span className="badge badge-success badge-xs gap-1"><Shield className="w-2.5 h-2.5" />Auto-generated</span>
-                            : <span className="text-base-content/30 text-xs italic">Not changed</span>
-                          }
-                        </td>
-                        <td>
-                          <span className={`badge badge-xs ${normalizeStatus(row.status) ? 'badge-success' : 'badge-ghost'}`}>
-                            {normalizeStatus(row.status) ? 'active' : 'inactive'}
-                          </span>
-                        </td>
-                        <td className="text-xs text-error">{row.errorMsg}</td>
+              {rows.length <= VIRTUALIZE_THRESHOLD ? (
+                <div className="overflow-x-auto rounded-xl">
+                  <table className="table table-sm">
+                    <thead className="bg-base-200 text-xs uppercase tracking-wide">
+                      <tr>
+                        <th>#</th>
+                        <th>Action</th>
+                        <th>Email</th>
+                        <th>Full Name</th>
+                        <th>Password</th>
+                        <th>Status</th>
+                        <th>Note</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {rows.map((row, i) => renderPreviewRow(row, i))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div ref={previewParentRef} className="overflow-auto rounded-xl" style={{ height: 480 }}>
+                  <table className="table table-sm">
+                    <thead className="bg-base-200 text-xs uppercase tracking-wide sticky top-0 z-10">
+                      <tr>
+                        <th>#</th>
+                        <th>Action</th>
+                        <th>Email</th>
+                        <th>Full Name</th>
+                        <th>Password</th>
+                        <th>Status</th>
+                        <th>Note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const items = previewVirtualizer.getVirtualItems()
+                        const totalSize = previewVirtualizer.getTotalSize()
+                        const padTop = items.length > 0 ? items[0].start : 0
+                        const padBottom = items.length > 0 ? totalSize - items[items.length - 1].end : 0
+                        return (
+                          <>
+                            {padTop > 0 && <tr aria-hidden="true"><td colSpan={7} style={{ height: padTop, padding: 0, border: 'none' }} /></tr>}
+                            {items.map(virtualRow =>
+                              renderPreviewRow(rows[virtualRow.index], virtualRow.index, {
+                                ref: previewVirtualizer.measureElement,
+                                'data-index': virtualRow.index,
+                              })
+                            )}
+                            {padBottom > 0 && <tr aria-hidden="true"><td colSpan={7} style={{ height: padBottom, padding: 0, border: 'none' }} /></tr>}
+                          </>
+                        )
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
 
@@ -661,37 +834,56 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
               value={processedCount}
               max={toCreate + toUpdate}
             />
-            <div className="overflow-x-auto">
-              <table className="table table-xs">
-                <thead className="bg-base-200">
-                  <tr>
-                    <th>Email</th>
-                    <th>Action</th>
-                    <th>Status</th>
-                    <th>Message</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.filter(r => r.action !== 'error').map((row, i) => (
-                    <tr key={i}>
-                      <td className="font-mono text-xs">{row.email}</td>
-                      <td><span className={badgeClass(row.action!)}>{row.action}</span></td>
-                      <td>
-                        {row.processResult ? (
-                          <span className={resultBadgeClass(row.processResult)}>
-                            {row.processResult === 'processing' && <span className="loading loading-spinner loading-xs" />}
-                            {row.processResult}
-                          </span>
-                        ) : (
-                          <span className="badge badge-ghost badge-xs">queued</span>
-                        )}
-                      </td>
-                      <td className="text-xs text-base-content/60">{row.processMsg}</td>
+            {processingRows.length <= VIRTUALIZE_THRESHOLD ? (
+              <div className="overflow-x-auto">
+                <table className="table table-xs">
+                  <thead className="bg-base-200">
+                    <tr>
+                      <th>Email</th>
+                      <th>Action</th>
+                      <th>Status</th>
+                      <th>Message</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {processingRows.map((row, i) => renderProcessingRow(row, i))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div ref={processingParentRef} className="overflow-auto" style={{ height: 480 }}>
+                <table className="table table-xs">
+                  <thead className="bg-base-200 sticky top-0 z-10">
+                    <tr>
+                      <th>Email</th>
+                      <th>Action</th>
+                      <th>Status</th>
+                      <th>Message</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const items = processingVirtualizer.getVirtualItems()
+                      const totalSize = processingVirtualizer.getTotalSize()
+                      const padTop = items.length > 0 ? items[0].start : 0
+                      const padBottom = items.length > 0 ? totalSize - items[items.length - 1].end : 0
+                      return (
+                        <>
+                          {padTop > 0 && <tr aria-hidden="true"><td colSpan={4} style={{ height: padTop, padding: 0, border: 'none' }} /></tr>}
+                          {items.map(virtualRow =>
+                            renderProcessingRow(processingRows[virtualRow.index], virtualRow.index, {
+                              ref: processingVirtualizer.measureElement,
+                              'data-index': virtualRow.index,
+                            })
+                          )}
+                          {padBottom > 0 && <tr aria-hidden="true"><td colSpan={4} style={{ height: padBottom, padding: 0, border: 'none' }} /></tr>}
+                        </>
+                      )
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -746,52 +938,57 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
                   <span>These passwords will not be shown again after you leave this page. Send welcome emails or copy them now.</span>
                 </div>
 
-                <div className="overflow-x-auto rounded-lg border border-base-300">
-                  <table className="table table-sm">
-                    <thead className="bg-base-200 text-xs uppercase tracking-wide">
-                      <tr>
-                        <th>Email</th>
-                        <th>Full Name</th>
-                        <th>Temp Password</th>
-                        <th>Welcome Email</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((row, i) => {
-                        if (row.action !== 'create' || row.processResult !== 'success') return null
-                        const revealed = showAllPasswords || row.passwordRevealed
-                        return (
-                          <tr key={i}>
-                            <td className="font-mono text-xs">{row.email}</td>
-                            <td className="text-sm">{row.full_name || '—'}</td>
-                            <td>
-                              <div className="flex items-center gap-2">
-                                <span className={`font-mono text-sm font-bold text-primary transition-all ${revealed ? '' : 'blur-sm select-none'}`}>
-                                  {row.generatedPassword}
-                                </span>
-                                <button
-                                  className="btn btn-ghost btn-xs"
-                                  onClick={() => toggleReveal(i)}
-                                  title={revealed ? 'Hide password' : 'Reveal password'}
-                                >
-                                  {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                </button>
-                              </div>
-                            </td>
-                            <td>
-                              {row.welcomeEmailSent
-                                ? <span className="badge badge-success badge-xs gap-1"><CheckCircle className="w-3 h-3" /> Sent</span>
-                                : row.welcomeEmailError
-                                  ? <span className="badge badge-error badge-xs" title={row.welcomeEmailError}>Failed</span>
-                                  : <span className="badge badge-ghost badge-xs">Pending</span>
-                              }
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                {credentialRows.length <= VIRTUALIZE_THRESHOLD ? (
+                  <div className="overflow-x-auto rounded-lg border border-base-300">
+                    <table className="table table-sm">
+                      <thead className="bg-base-200 text-xs uppercase tracking-wide">
+                        <tr>
+                          <th>Email</th>
+                          <th>Full Name</th>
+                          <th>Temp Password</th>
+                          <th>Welcome Email</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {credentialRows.map(({ row, idx }) => renderCredentialRow(row, idx))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div ref={credentialsParentRef} className="overflow-auto rounded-lg border border-base-300" style={{ height: 480 }}>
+                    <table className="table table-sm">
+                      <thead className="bg-base-200 text-xs uppercase tracking-wide sticky top-0 z-10">
+                        <tr>
+                          <th>Email</th>
+                          <th>Full Name</th>
+                          <th>Temp Password</th>
+                          <th>Welcome Email</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          const items = credentialsVirtualizer.getVirtualItems()
+                          const totalSize = credentialsVirtualizer.getTotalSize()
+                          const padTop = items.length > 0 ? items[0].start : 0
+                          const padBottom = items.length > 0 ? totalSize - items[items.length - 1].end : 0
+                          return (
+                            <>
+                              {padTop > 0 && <tr aria-hidden="true"><td colSpan={4} style={{ height: padTop, padding: 0, border: 'none' }} /></tr>}
+                              {items.map(virtualRow => {
+                                const { row, idx } = credentialRows[virtualRow.index]
+                                return renderCredentialRow(row, idx, {
+                                  ref: credentialsVirtualizer.measureElement,
+                                  'data-index': virtualRow.index,
+                                })
+                              })}
+                              {padBottom > 0 && <tr aria-hidden="true"><td colSpan={4} style={{ height: padBottom, padding: 0, border: 'none' }} /></tr>}
+                            </>
+                          )
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
                 {/* Send Welcome Emails button */}
                 <div className="flex items-center gap-3 flex-wrap">
@@ -830,47 +1027,60 @@ export default function BulkUserPage({ onBack }: BulkUserPageProps) {
           {/* Full results table */}
           <div className="card bg-base-100 border border-base-300 shadow-sm">
             <div className="card-body p-0">
-              <div className="overflow-x-auto rounded-xl">
-                <table className="table table-sm">
-                  <thead className="bg-base-200 text-xs uppercase tracking-wide">
-                    <tr>
-                      <th>Email</th>
-                      <th>Full Name</th>
-                      <th>Action</th>
-                      <th>Result</th>
-                      <th>Active</th>
-                      <th>Message</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row, i) => (
-                      <tr key={i} className={
-                        row.processResult === 'failed' ? 'bg-error/5' :
-                        row.action === 'error' ? 'bg-base-200/50 opacity-50' : ''
-                      }>
-                        <td className="font-mono text-xs">{row.email}</td>
-                        <td className="text-sm">{row.full_name || '—'}</td>
-                        <td><span className={badgeClass(row.action!)}>{row.action}</span></td>
-                        <td>
-                          {row.processResult ? (
-                            <span className={resultBadgeClass(row.processResult)}>
-                              {row.processResult}
-                            </span>
-                          ) : (
-                            <span className="badge badge-ghost badge-xs">skipped</span>
-                          )}
-                        </td>
-                        <td>
-                          <span className={`badge badge-xs ${normalizeStatus(row.status) ? 'badge-success' : 'badge-ghost'}`}>
-                            {normalizeStatus(row.status) ? 'active' : 'inactive'}
-                          </span>
-                        </td>
-                        <td className="text-xs text-base-content/60">{row.processMsg || row.errorMsg}</td>
+              {rows.length <= VIRTUALIZE_THRESHOLD ? (
+                <div className="overflow-x-auto rounded-xl">
+                  <table className="table table-sm">
+                    <thead className="bg-base-200 text-xs uppercase tracking-wide">
+                      <tr>
+                        <th>Email</th>
+                        <th>Full Name</th>
+                        <th>Action</th>
+                        <th>Result</th>
+                        <th>Active</th>
+                        <th>Message</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {rows.map((row, i) => renderResultRow(row, i))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div ref={resultsParentRef} className="overflow-auto rounded-xl" style={{ height: 480 }}>
+                  <table className="table table-sm">
+                    <thead className="bg-base-200 text-xs uppercase tracking-wide sticky top-0 z-10">
+                      <tr>
+                        <th>Email</th>
+                        <th>Full Name</th>
+                        <th>Action</th>
+                        <th>Result</th>
+                        <th>Active</th>
+                        <th>Message</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const items = resultsVirtualizer.getVirtualItems()
+                        const totalSize = resultsVirtualizer.getTotalSize()
+                        const padTop = items.length > 0 ? items[0].start : 0
+                        const padBottom = items.length > 0 ? totalSize - items[items.length - 1].end : 0
+                        return (
+                          <>
+                            {padTop > 0 && <tr aria-hidden="true"><td colSpan={6} style={{ height: padTop, padding: 0, border: 'none' }} /></tr>}
+                            {items.map(virtualRow =>
+                              renderResultRow(rows[virtualRow.index], virtualRow.index, {
+                                ref: resultsVirtualizer.measureElement,
+                                'data-index': virtualRow.index,
+                              })
+                            )}
+                            {padBottom > 0 && <tr aria-hidden="true"><td colSpan={6} style={{ height: padBottom, padding: 0, border: 'none' }} /></tr>}
+                          </>
+                        )
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
 

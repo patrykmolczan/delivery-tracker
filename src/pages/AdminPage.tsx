@@ -322,7 +322,7 @@ export const AdminPage: React.FC = () => {
   const [deleteUserTarget, setDeleteUserTarget] = useState<UserProfile | null>(null)
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('')
   const [deleting, setDeleting] = useState(false)
-  const USERS_PER_PAGE = 25
+  const USERS_PER_PAGE = 15
 
   const uploadLogo = async (file: File) => {
     if (file.size > 2 * 1024 * 1024) {

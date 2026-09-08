@@ -525,9 +525,10 @@ export async function uploadProjectFile(
 export async function deleteProjectFile(
   fileId: string,
   storagePath: string,
-  _userId: string
+  _userId: string,
+  projectId: string
 ): Promise<void> {
-  await api(`delivery/files/${fileId}`, { method: 'DELETE' })
+  await api(`delivery/projects/${projectId}/files/${fileId}`, { method: 'DELETE' })
   await s3DeleteFile('project-files', storagePath)
 }
 

@@ -435,7 +435,7 @@ export const ProjectDetail: React.FC<{
     if (!window.confirm(`Delete "${f.file_name}"? This cannot be undone.`)) return
     setDeletingId(f.id)
     try {
-      await deleteProjectFile(f.id, f.storage_path, user.id)
+      await deleteProjectFile(f.id, f.storage_path, user.id, localProject.id)
       setFiles(prev => prev.filter(x => x.id !== f.id))
     } catch (err: any) {
       alert(`Delete failed: ${err.message}`)

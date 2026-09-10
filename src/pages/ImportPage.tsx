@@ -268,6 +268,14 @@ export const ImportPage: React.FC<Props> = ({ onDone }) => {
         <p className="text-sm text-base-content/60 mt-1">
           Upload the Delivery Tracker Excel file. Both <strong>Projects</strong> and <strong>One-off Job Requests</strong> tabs will be imported.
         </p>
+        <a
+          href="/templates/Delivery_Tracker_Import_Template.xlsx"
+          download="Delivery_Tracker_Import_Template.xlsx"
+          className="link link-primary text-sm inline-flex items-center gap-1 mt-2"
+        >
+          <FileSpreadsheet size={14} />
+          Download import template
+        </a>
       </div>
 
       {/* Result card */}

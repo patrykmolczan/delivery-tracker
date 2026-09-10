@@ -178,11 +178,14 @@ interface Props {
   onDone: () => void
 }
 
+const REPLACE_CONFIRM_PHRASE = 'DELETE IMPORTED DATA'
+
 export const ImportPage: React.FC<Props> = ({ onDone }) => {
-  const { isAdmin } = useAuth()
+  const { isAdmin, isSuperAdmin } = useAuth()
   const fileRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<Preview | null>(null)
-  const [replace, setReplace] = useState(true)
+  const [replace, setReplace] = useState(false)
+  const [replaceConfirmText, setReplaceConfirmText] = useState('')
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<{ insertedProjects: number; insertedOneOffs: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -237,6 +240,8 @@ export const ImportPage: React.FC<Props> = ({ onDone }) => {
 
   const handleConfirmImport = async () => {
     if (!preview) return
+    // Extra guard: destructive replace only ever sent when a super admin has typed the exact confirmation phrase
+    const confirmedReplace = isSuperAdmin && replace && replaceConfirmText === REPLACE_CONFIRM_PHRASE
     setImporting(true)
     setError(null)
     try {
@@ -247,12 +252,14 @@ export const ImportPage: React.FC<Props> = ({ onDone }) => {
         body: JSON.stringify({
           projects: preview.projects,
           oneOffs: preview.oneOffs,
-          replace,
+          replace: confirmedReplace,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Import failed')
       setResult(data)
+      setReplace(false)
+      setReplaceConfirmText('')
       setPreview(null)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Import failed')
@@ -375,26 +382,40 @@ export const ImportPage: React.FC<Props> = ({ onDone }) => {
               </div>
             )}
 
-            {/* Replace option */}
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                className="checkbox checkbox-warning checkbox-sm mt-0.5"
-                checked={replace}
-                onChange={e => setReplace(e.target.checked)}
-              />
-              <div>
-                <div className="text-sm font-medium">Replace previously imported data</div>
-                <div className="text-xs text-base-content/50">
-                  Deletes all existing imported records before inserting. Projects created in the app are untouched.
+            {/* Replace option — super admin only, destructive action requires typed confirmation */}
+            {isSuperAdmin && (
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-warning checkbox-sm mt-0.5"
+                  checked={replace}
+                  onChange={e => { setReplace(e.target.checked); setReplaceConfirmText('') }}
+                />
+                <div>
+                  <div className="text-sm font-medium">Replace previously imported data</div>
+                  <div className="text-xs text-base-content/50">
+                    Deletes all existing imported records before inserting. Projects created in the app are untouched.
+                  </div>
                 </div>
-              </div>
-            </label>
+              </label>
+            )}
 
             {replace && (
-              <div className="flex items-start gap-2 text-warning text-xs bg-warning/10 rounded-lg p-3">
-                <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
-                All previously imported projects and one-offs will be deleted and replaced.
+              <div className="flex flex-col gap-2 text-warning text-xs bg-warning/10 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+                  All previously imported projects and one-offs will be deleted and replaced. This cannot be undone.
+                </div>
+                <div>
+                  <div className="mb-1">Type <span className="font-mono font-semibold">{REPLACE_CONFIRM_PHRASE}</span> to confirm:</div>
+                  <input
+                    type="text"
+                    className="input input-bordered input-sm input-warning w-full"
+                    value={replaceConfirmText}
+                    onChange={e => setReplaceConfirmText(e.target.value)}
+                    placeholder={REPLACE_CONFIRM_PHRASE}
+                  />
+                </div>
               </div>
             )}
 
@@ -402,14 +423,14 @@ export const ImportPage: React.FC<Props> = ({ onDone }) => {
               <button
                 className="btn btn-primary gap-1.5"
                 onClick={handleConfirmImport}
-                disabled={importing}
+                disabled={importing || (replace && replaceConfirmText !== REPLACE_CONFIRM_PHRASE)}
               >
                 {importing ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
                 {importing ? `Importing ${(preview.projects.length + preview.oneOffs.length).toLocaleString()} records…` : 'Confirm Import'}
               </button>
               <button
                 className="btn btn-ghost"
-                onClick={() => { setPreview(null); if (fileRef.current) fileRef.current.value = '' }}
+                onClick={() => { setPreview(null); setReplace(false); setReplaceConfirmText(''); if (fileRef.current) fileRef.current.value = '' }}
                 disabled={importing}
               >
                 Cancel

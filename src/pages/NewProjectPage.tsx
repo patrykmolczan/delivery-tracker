@@ -318,15 +318,37 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   // ── Template file parser ──────────────────────────────────────────────────────
   const handleTemplateParse = async (file: File) => {
     if (!lookups) return
-    setTemplateFile(file)
+
+    // Read the file into memory once, immediately on pick, and use this in-memory
+    // copy for every later step (parsing, GPT quality review, and the eventual
+    // upload on Save). The original file handle can go stale (cloud-sync eviction,
+    // OS-level handle expiry) during the seconds-to-minutes gap before Save, which
+    // otherwise surfaces as a NotReadableError far later in the flow. Reading once
+    // here removes that window entirely — every downstream read is from memory.
+    let bufferedFile: File
+    try {
+      const buffer = await file.arrayBuffer()
+      bufferedFile = new File([buffer], file.name, { type: file.type, lastModified: file.lastModified })
+    } catch (err) {
+      setParseResult({
+        warnings: [`Could not read "${file.name}". If it's synced via iCloud/OneDrive/Dropbox, make sure it's fully downloaded to this device, then try selecting it again.`],
+        fuzzyMatches: [],
+        unmatchedCount: 0,
+        locationWarnings: [],
+      })
+      if (parseInputRef.current) parseInputRef.current.value = ''
+      return
+    }
+
+    setTemplateFile(bufferedFile)
     // Stage the template file so it uploads with the project on save
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      alert(`"${file.name}" is ${formatFileSize(file.size)} — max 2 MB per file, so it will not be attached to the project`)
+    if (bufferedFile.size > MAX_FILE_SIZE_BYTES) {
+      alert(`"${bufferedFile.name}" is ${formatFileSize(bufferedFile.size)} — max 2 MB per file, so it will not be attached to the project`)
     } else {
       setStagedFiles(prev =>
-        prev.some(f => f.name === file.name) || prev.length >= MAX_FILES_PER_PROJECT
+        prev.some(f => f.name === bufferedFile.name) || prev.length >= MAX_FILES_PER_PROJECT
           ? prev
-          : [...prev, file]
+          : [...prev, bufferedFile]
       )
     }
     setIsParsing(true)
@@ -334,7 +356,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     setQualityResult(null)
     try {
       const dbCountries: DBCountry[] = lookups.countries.map(c => ({ id: c.id, name: c.name }))
-      const result = await parseTemplateFile(file, form.project_type || '', dbCountries)
+      const result = await parseTemplateFile(bufferedFile, form.project_type || '', dbCountries)
 
       if (result.countries.length > 0 || result.totalJobs > 0) {
         // Build new project_countries list from parsed results
@@ -370,7 +392,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
       })
       // Fire quality analysis async — don't block the parse result display
       setIsAnalyzing(true)
-      analyzeTemplateQuality(file, form.project_type || '')
+      analyzeTemplateQuality(bufferedFile, form.project_type || '')
         .then(qr => setQualityResult(qr))
         .catch(() => setQualityResult(null))
         .finally(() => setIsAnalyzing(false))

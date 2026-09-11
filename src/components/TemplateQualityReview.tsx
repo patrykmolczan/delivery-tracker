@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react'
 import {
   Zap, Copy, Layers, AlertTriangle, MapPin, SplitSquareVertical,
   ChevronDown, ChevronUp, CheckCircle2, AlertCircle,
-  ChevronsUpDown, ChevronsDownUp, Download
+  ChevronsUpDown, ChevronsDownUp, Download, ShieldAlert
 } from 'lucide-react'
 import type { TemplateQualityResult } from '../lib/templateQualityAnalyzer'
 import ExportWithDescriptions from './ExportWithDescriptions'
@@ -31,6 +31,9 @@ function exportIssuesCSV(result: TemplateQualityResult, locationValidationWarnin
   })
   result.locationIssues.forEach(l => {
     rows.push(['Location', l.severity, l.jobTitle, l.issue, 'Ensure Country and State/Province are both filled in for this row.'])
+  })
+  ;(result.contentIssues || []).forEach(ci => {
+    rows.push(['Content Issue', ci.severity, ci.jobTitle, ci.issue, 'Replace with a genuine, benchmarkable job title.'])
   })
   locationValidationWarnings.forEach(w => {
     rows.push(['Location (Invalid Value)', 'critical', '', w, 'Replace with a valid state/province or country name. Country and State/Province are required; City is optional. \'Remote\' is not a valid location.'])
@@ -113,6 +116,7 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
     if (result.levelingIssues.length > 0) open.add('leveling')
     if (result.missingDataRows.length > 0) open.add('missing')
     if (result.locationIssues.length > 0) open.add('location')
+    if ((result.contentIssues || []).length > 0) open.add('content')
     if (locationValidationWarnings.length > 0) open.add('location')
   if ((result.multiLocationRows || []).length > 0) open.add('multiloc')
     return open
@@ -129,7 +133,7 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
   }
 
   const collapseAll = () => setOpenSections(new Set())
-  const expandAll  = () => setOpenSections(new Set(['duplicates', 'leveling', 'missing', 'location']))
+  const expandAll  = () => setOpenSections(new Set(['duplicates', 'leveling', 'missing', 'content', 'location']))
 
   if (!isLoading && !result && locationValidationWarnings.length === 0) return null
 
@@ -273,6 +277,7 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
             { label: 'resolve missing data', count: result.missingDataRows.length },
             { label: 'remove duplicates', count: result.duplicates.length },
             { label: 'fix location issues', count: result.locationIssues.length + locationValidationWarnings.length },
+            { label: 'fix flagged job titles', count: (result.contentIssues || []).length },
           ].filter(t => t.count > 0).sort((a, b) => b.count - a.count).slice(0, 3)
           if (tips.length === 0) return null
           return (
@@ -435,6 +440,40 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
                   </div>
                 )}
               </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Section 3.5: Content / Injection Issues ── */}
+      <div className="border-b border-base-300 bg-base-200/20">
+        <SectionHeader sectionKey="content" icon={ShieldAlert} label="Flagged Job Titles" count={(result.contentIssues || []).length} countColorClass="badge-error" />
+        {openSections.has('content') && (
+          <div className="px-4 pb-3">
+            <div className="flex items-start gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 mb-3 text-xs text-base-content/70">
+              <span className="text-primary mt-0.5 shrink-0">ℹ️</span>
+              <span>Every job title must describe a real, benchmarkable occupation. Titles containing offensive/nonsensical text, gibberish, or embedded code cannot be priced and must be corrected before submission.</span>
+            </div>
+            {(result.contentIssues || []).length === 0 ? (
+              <EmptyState text="No flagged job titles — all titles are benchmarkable" />
+            ) : (
+              <ExpandableList
+                items={result.contentIssues || []}
+                initialShow={4}
+                renderItem={(ci, i) => (
+                  <div key={i} className={`rounded-lg p-3 border-l-4 bg-base-200/50 ${ci.severity === 'critical' ? 'border-error' : 'border-warning'}`}>
+                    <div className="flex items-start gap-2">
+                      <span className={`badge badge-xs mt-0.5 shrink-0 ${ci.severity === 'critical' ? 'badge-error' : 'badge-warning'}`}>
+                        {ci.severity}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-base-content">#{ci.rowIndex} — {ci.jobTitle}</div>
+                        <div className="text-xs text-base-content/60 mt-0.5">{ci.issue}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              />
             )}
           </div>
         )}

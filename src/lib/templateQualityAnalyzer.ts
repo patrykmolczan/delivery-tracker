@@ -44,6 +44,7 @@ export interface ContentIssue {
   rowIndex: number
   jobTitle: string
   issue: string
+  suggestion?: string
   severity: 'critical' | 'warning'
 }
 
@@ -278,6 +279,7 @@ Return a JSON object with EXACTLY this structure:
       "rowIndex": <int>,
       "jobTitle": "<title>",
       "issue": "<why this title was flagged>",
+      "suggestion": "<clean, benchmarkable title to use instead, or empty string if none applies>",
       "severity": "critical" | "warning"
     }
   ]
@@ -288,7 +290,7 @@ Rules:
 - levelingIssues: flag ANY job title that contains a level modifier (Jr., Sr., Senior, Junior, II, III, IV, Lead as modifier, Staff as modifier, Principal as modifier, SME, Associate as entry-level modifier, Mid-Level, Entry-Level). These should be removed — Pay Intel delivers all 5 levels automatically. EXCEPTION: do NOT flag titles where the level IS the job (Manager, Director, VP, Head of, Senior Manager, Senior Director, C-suite, Team Lead). For each flagged title, provide the clean base title as the suggestion.
 - missingDataRows: ONLY include rows where country is blank/empty OR state/province is blank/empty OR description is blank/empty. Country and State/Province are both required fields. Do NOT include rows where only the Job Title column has data and all other fields are blank — those are annotation rows, not data rows.
 - locationIssues: flag rows missing country; flag rows where state/province is blank or contains a region/metro name instead of an actual state (e.g. "Bay Area" → flag and suggest "California"). Do NOT re-flag multi-location rows — those are handled separately. Do NOT suggest "remote" as a valid state/province value.
-- contentIssues: You are a Senior Compensation Data Analyst deciding if this title can be benchmarked at all. Flag as severity "critical" any Job Title that either (a) contains HTML/script markup, JavaScript event handlers, or code/SQL injection patterns (e.g. <script>, onerror=, onload=, javascript:, </, DROP TABLE, -- ;), or (b) does not describe a real, benchmarkable occupation — profanity, insults, offensive/nonsensical text, or gibberish (e.g. "asdf", random keyboard mashing) — because compensation data cannot be benchmarked against a title with no genuine job function. Flag as severity "warning" only vague/generic placeholder titles (e.g. "TBD", "Various", "Multiple Roles") that describe an incomplete-but-real submission rather than nonsense. Do NOT flag legitimate job titles just because they are unusual, non-English, or contain uncommon words.
+- contentIssues: You are a Senior Compensation Data Analyst deciding if this title can be benchmarked as-is. Flag as severity "critical" (suggestion: empty string) any Job Title that either (a) contains HTML/script markup, JavaScript event handlers, or code/SQL injection patterns (e.g. <script>, onerror=, onload=, javascript:, </, DROP TABLE, -- ;), or (b) does not describe any real occupation — profanity, insults, offensive/nonsensical text, or gibberish (e.g. "asdf", random keyboard mashing) — because there is no genuine job function to price. Flag as severity "warning" WITH a cleaned-up suggestion in these two cases: (c) vague/generic placeholder titles (e.g. "TBD", "Various", "Multiple Roles") — suggestion may be empty string if no real title can be inferred; (d) job ad / recruiter-style text embedded in the title cell — postings mixed with location, comp/perks, or filler language (e.g. "seeking Sr. Java Dev in Houston, TX - Sign on Bonus", "Now Hiring: Accountant, $25/hr") — extract and suggest the clean canonical base title only, e.g. "Java Developer", "Accountant" (strip level modifiers, location, pay, and filler words the same way levelingIssues does). Do NOT flag legitimate job titles just because they are unusual, non-English, or contain uncommon words.
 - Be concise in messages — max 120 chars per message field
 - overallScore: start at 100, subtract: 15 per critical duplicate group, 10 per warning duplicate, 5 per missing description row (max -30 total for descriptions), 10 per missing country row (max -20), 8 per leveling issue (title contains unnecessary level modifier that Pay Intel handles automatically), 25 per critical content issue (title cannot be benchmarked: injection pattern, profanity, or gibberish), 10 per warning content issue (vague/placeholder title)
 - issueCount: sum all items across all categories by their severity field`

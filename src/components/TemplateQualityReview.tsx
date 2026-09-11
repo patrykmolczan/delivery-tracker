@@ -33,7 +33,7 @@ function exportIssuesCSV(result: TemplateQualityResult, locationValidationWarnin
     rows.push(['Location', l.severity, l.jobTitle, l.issue, 'Ensure Country and State/Province are both filled in for this row.'])
   })
   ;(result.contentIssues || []).forEach(ci => {
-    rows.push(['Content Issue', ci.severity, ci.jobTitle, ci.issue, 'Replace with a genuine, benchmarkable job title.'])
+    rows.push(['Content Issue', ci.severity, ci.jobTitle, ci.issue, ci.suggestion || 'Replace with a genuine, benchmarkable job title.'])
   })
   locationValidationWarnings.forEach(w => {
     rows.push(['Location (Invalid Value)', 'critical', '', w, 'Replace with a valid state/province or country name. Country and State/Province are required; City is optional. \'Remote\' is not a valid location.'])
@@ -447,7 +447,7 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
 
       {/* ── Section 3.5: Content / Injection Issues ── */}
       <div className="border-b border-base-300 bg-base-200/20">
-        <SectionHeader sectionKey="content" icon={ShieldAlert} label="Flagged Job Titles" count={(result.contentIssues || []).length} countColorClass="badge-error" />
+        <SectionHeader sectionKey="content" icon={ShieldAlert} label="Dirty Job Title" count={(result.contentIssues || []).length} countColorClass="badge-error" />
         {openSections.has('content') && (
           <div className="px-4 pb-3">
             <div className="flex items-start gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 mb-3 text-xs text-base-content/70">
@@ -469,6 +469,9 @@ export function TemplateQualityReview({ result, isLoading, locationValidationWar
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold text-sm text-base-content">#{ci.rowIndex} — {ci.jobTitle}</div>
                         <div className="text-xs text-base-content/60 mt-0.5">{ci.issue}</div>
+                        {ci.suggestion && (
+                          <div className="text-xs text-primary mt-1">💡 {ci.suggestion}</div>
+                        )}
                       </div>
                     </div>
                   </div>

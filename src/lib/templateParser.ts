@@ -964,9 +964,35 @@ export async function parseTemplateFile(
         if (lower.includes('right sourcing') || lower.includes('rightsourcing')) {
           result = parseRightSourcing(wb, dbCountries)
         } else if (lower.includes('rate card') || lower.includes('ratecard') || lower.includes('pay intel')) {
+          // Matches the new 'Rate Card' project type name too (substring match),
+          // so this branch needed no change for the §2.3 rename.
           result = parseRateCard(wb, dbCountries)
         } else if (lower.includes('magnit') || lower.includes('vms')) {
           result = parseMagnitVMS(wb, dbCountries)
+        } else if (
+          lower.includes('rfp') ||
+          lower.includes('mra') ||
+          lower.includes('benchmark baseline')
+        ) {
+          // New project types (build plan §2.3/§2.5): RFP, MRA, Benchmark
+          // Baseline (MRM), Benchmark Baseline (MRM Refresh). None of these
+          // have a defined template layout yet — nobody has specified what
+          // sheet/column structure their uploaded files use, so there is no
+          // real parser to write here. Rather than silently guess via the
+          // generic fallback below (which could misreport country/job counts
+          // with no indication anything was uncertain), this is called out
+          // explicitly and the result is flagged so the "Auto-fill" panel
+          // tells the person to fill in countries manually instead of
+          // trusting a guess. Replace this branch with a real parser once the
+          // template format for these types is defined.
+          result = parseRateCard(wb, dbCountries)
+          result.parseWarnings = [
+            `No dedicated template parser exists yet for "${projectType}". ` +
+            'Countries and job counts were attempted using the Rate Card ' +
+            'layout as a best guess — please review the results below ' +
+            'carefully, or add countries manually.',
+            ...result.parseWarnings,
+          ]
         } else {
           // Unknown type — try Rate Card first, fallback to any sheet
           result = parseRateCard(wb, dbCountries)

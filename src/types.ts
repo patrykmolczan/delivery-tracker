@@ -5,6 +5,13 @@ export interface ProjectCountry {
   country_name: string
   job_count: number | null
   sort_order?: number
+  // ── Per-country assignment & completion (build plan §3) ──
+  assigned_user_id?: string | null
+  assigned_analyst_name?: string | null
+  assigned_at?: string | null
+  completed_at?: string | null
+  completed_by?: string | null
+  completed_by_name?: string | null
 }
 
 export interface ProjectTask {
@@ -102,6 +109,20 @@ export interface LookupItem {
   name: string
 }
 
+/**
+ * Client types carry two extra fields other lookups don't:
+ * - is_active: /api/lookups returns ALL client types (not just active ones)
+ *   so historical projects on a deactivated type still resolve a name via
+ *   buildLookupMaps/mapRow. The New Project form filters on this instead.
+ * - min_role: gates a type to admins/super_admins (e.g. "Pay Intel"). A
+ *   project referencing a gated type is enforced server-side too — see
+ *   routes/projects.js assertClientTypeAllowed.
+ */
+export interface ClientTypeLookupItem extends LookupItem {
+  is_active?: boolean
+  min_role?: 'user' | 'admin' | 'super_admin'
+}
+
 export interface StatusCount {
   status: string
   count: number
@@ -148,6 +169,7 @@ export type SortField = keyof Project
 
 export type ViewMode =
   | 'dashboard'
+  | 'my-requests'
   | 'projects'
   | 'table'
   | 'new-project'
@@ -155,6 +177,13 @@ export type ViewMode =
   | 'admin'
   | 'ai'
   | 'notifications'
+
+/**
+ * 'all' | 'project' | 'one_off' — shared between the Dashboard "Recent
+ * Activity" toggle and the All Projects / One-off Jobs tabs so both views
+ * can offer (and default to) the same "All" option without drifting apart.
+ */
+export type RecordTypeFilter = 'all' | 'project' | 'one_off'
 
 export interface UserProfile {
   id: string

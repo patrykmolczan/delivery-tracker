@@ -1,9 +1,9 @@
 import React, { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowUpDown, ArrowUp, ArrowDown, Edit2, Globe, Loader2 } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, Edit2, Globe, Loader2, CheckCircle2 } from 'lucide-react'
 import type { Project, SortState, SortField } from '../types'
-import { formatDate, getStatusColor } from '../lib/data'
+import { formatDate, getStatusColor, type ProjectCountrySummary } from '../lib/data'
 
 interface ProjectTableProps {
   projects: Project[]
@@ -13,9 +13,16 @@ interface ProjectTableProps {
   selectedId: string | null
   onEdit?: (project: Project) => void
   canEditProject?: (project: Project) => boolean
-  countriesMap?: Map<string, string[]>
+  countriesMap?: Map<string, ProjectCountrySummary[]>
   onBulkStatusUpdate?: (ids: string[], statusId: number) => Promise<void>
   statusOptions?: { id: number; name: string }[]
+  /**
+   * Column keys to hide from this table instance. The underlying data, sort
+   * logic, and filters are untouched — this only affects what renders here.
+   * Other consumers of `projects`/`filterProjects`/`sortProjects` (charts,
+   * filter dropdowns, exports) are unaffected.
+   */
+  hiddenColumns?: SortField[]
 }
 
 const ROW_HEIGHT = 44
@@ -59,7 +66,7 @@ const COL_WIDTHS = {
 
 // ─── Country hover popover ─────────────────────────────────────────────────────
 interface PopoverState {
-  countries: string[]
+  countries: ProjectCountrySummary[]
   rect: DOMRect
 }
 
@@ -68,9 +75,9 @@ const CountryPopover: React.FC<{
   onMouseEnter: () => void
   onMouseLeave: () => void
 }> = ({ popover, onMouseEnter, onMouseLeave }) => {
-  const POPOVER_W = 260
+  const POPOVER_W = 320
   const headerH = 44
-  const rowH = 32
+  const rowH = 40
   const estimatedH = Math.min(popover.countries.length * rowH + headerH + 12, 344)
 
   const vp = { w: window.innerWidth, h: window.innerHeight }
@@ -80,6 +87,8 @@ const CountryPopover: React.FC<{
     ? popover.rect.bottom + 6
     : popover.rect.top - estimatedH - 6
 
+  const completedCount = popover.countries.filter(c => c.completed_at).length
+
   return createPortal(
     <div
       className="fixed z-[9999] bg-base-100 border border-base-300 rounded-xl shadow-2xl overflow-hidden"
@@ -88,10 +97,15 @@ const CountryPopover: React.FC<{
       onMouseLeave={onMouseLeave}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-base-300 bg-base-200">
-        <Globe size={13} className="text-primary shrink-0" />
-        <span className="text-xs font-bold uppercase tracking-widest text-base-content/60">
-          {popover.countries.length} {popover.countries.length === 1 ? 'Country' : 'Countries'}
+      <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-base-300 bg-base-200">
+        <div className="flex items-center gap-2">
+          <Globe size={13} className="text-primary shrink-0" />
+          <span className="text-xs font-bold uppercase tracking-widest text-base-content/60">
+            {popover.countries.length} {popover.countries.length === 1 ? 'Country' : 'Countries'}
+          </span>
+        </div>
+        <span className="text-[10px] text-base-content/40 font-medium">
+          {completedCount} of {popover.countries.length} complete
         </span>
       </div>
       {/* Scrollable list */}
@@ -101,8 +115,17 @@ const CountryPopover: React.FC<{
             key={i}
             className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-primary/50 shrink-0" />
-            <span className="text-sm text-base-content/85 leading-tight">{c}</span>
+            {c.completed_at ? (
+              <CheckCircle2 size={13} className="text-success shrink-0" />
+            ) : (
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/50 shrink-0 mx-[3px]" />
+            )}
+            <span className="text-sm text-base-content/85 leading-tight flex-1 truncate">
+              {c.country_name}
+            </span>
+            <span className="text-xs text-base-content/40 shrink-0 truncate max-w-[110px]">
+              {c.assigned_analyst_name ?? 'Unassigned'}
+            </span>
           </div>
         ))}
       </div>
@@ -135,6 +158,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   countriesMap,
   onBulkStatusUpdate,
   statusOptions,
+  hiddenColumns,
 }) => {
   const parentRef = useRef<HTMLDivElement>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -142,6 +166,11 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkStatusId, setBulkStatusId] = useState<number | ''>('')
   const [bulkApplying, setBulkApplying] = useState(false)
+
+  // Columns to render in THIS instance. The full `columns` array, COL_WIDTHS,
+  // filtering, and sorting are untouched — this is purely a render filter.
+  const hidden = React.useMemo(() => new Set(hiddenColumns ?? []), [hiddenColumns])
+  const visibleColumns = React.useMemo(() => columns.filter(c => !hidden.has(c.key)), [hidden])
 
   // Reset selection only when the actual set of project IDs changes —
   // not on every new array reference from background auto-refresh polling.
@@ -217,7 +246,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
     return p.expected_delivery_date < new Date().toISOString().slice(0, 10)
   }
 
-  const showPopover = (e: React.MouseEvent<HTMLTableCellElement>, countries: string[]) => {
+  const showPopover = (e: React.MouseEvent<HTMLTableCellElement>, countries: ProjectCountrySummary[]) => {
     if (hideTimer.current) clearTimeout(hideTimer.current)
     setPopover({ countries, rect: e.currentTarget.getBoundingClientRect() })
   }
@@ -230,7 +259,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
     if (hideTimer.current) clearTimeout(hideTimer.current)
   }
 
-  const colCount = columns.length + (onEdit ? 1 : 0) + (showBulk ? 1 : 0)
+  const colCount = visibleColumns.length + (onEdit ? 1 : 0) + (showBulk ? 1 : 0)
 
   return (
     <div className="space-y-2">
@@ -264,7 +293,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
           <table className="table table-sm min-w-[950px] w-full">
             <colgroup>
               {showBulk && <col style={{ width: '32px' }} />}
-              {columns.map(col => (
+              {visibleColumns.map(col => (
                 <col key={col.key} style={{ width: COL_WIDTHS[col.key as keyof typeof COL_WIDTHS] }} />
               ))}
               {onEdit && <col style={{ width: COL_WIDTHS.actions }} />}
@@ -284,7 +313,7 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                     />
                   </th>
                 )}
-                {columns.map(col => (
+                {visibleColumns.map(col => (
                   <th
                     key={col.key}
                     className="cursor-pointer select-none px-2 py-3 transition-colors hover:bg-primary/10 group"
@@ -329,10 +358,11 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                   {virtualItems.map(virtualRow => {
                     const p = projects[virtualRow.index]
                     // Resolve all countries: prefer multi-country map, fall back to legacy single-country field
-                    const allCountries = (countriesMap?.get(p.id) && countriesMap.get(p.id)!.length > 0)
+                    const allCountries: ProjectCountrySummary[] = (countriesMap?.get(p.id) && countriesMap.get(p.id)!.length > 0)
                       ? countriesMap.get(p.id)!
-                      : (p.country ? [p.country] : [])
+                      : (p.country ? [{ country_id: p.country_id ?? -1, country_name: p.country, assigned_analyst_name: null, completed_at: null }] : [])
                     const hasMultiple = allCountries.length > 1
+                    const allCountriesComplete = allCountries.length > 0 && allCountries.every(c => !!c.completed_at)
 
                     return (
                       <tr
@@ -375,12 +405,14 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                           </span>
                         </td>
 
-                        {/* Owner */}
-                        <td className="font-medium text-base-content overflow-hidden">
-                          <span className="block truncate" title={p.project_owner ?? ''}>
-                            {p.project_owner || '—'}
-                          </span>
-                        </td>
+                        {/* Owner — hidden via hiddenColumns prop; data/sort logic intentionally retained */}
+                        {!hidden.has('project_owner') && (
+                          <td className="font-medium text-base-content overflow-hidden">
+                            <span className="block truncate" title={p.project_owner ?? ''}>
+                              {p.project_owner || '—'}
+                            </span>
+                          </td>
+                        )}
 
                         {/* Analyst */}
                         <td className="text-base-content/70 overflow-hidden">
@@ -466,12 +498,12 @@ export const ProjectTable: React.FC<ProjectTableProps> = ({
                           <div className="flex items-center gap-1 overflow-hidden">
                             <span
                               className="min-w-0 flex-1 truncate text-xs"
-                              title={allCountries[0] ?? ''}
+                              title={allCountries[0]?.country_name ?? ''}
                             >
-                              {allCountries[0] || '—'}
+                              {allCountries[0]?.country_name || '—'}
                             </span>
                             {hasMultiple && (
-                              <span className="badge badge-xs badge-primary shrink-0 font-semibold cursor-default">
+                              <span className={`badge badge-xs shrink-0 font-semibold cursor-default ${allCountriesComplete ? 'badge-success' : 'badge-primary'}`}>
                                 +{allCountries.length - 1}
                               </span>
                             )}

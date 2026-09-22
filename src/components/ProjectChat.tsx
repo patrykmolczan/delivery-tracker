@@ -9,14 +9,15 @@ import {
   markMessagesRead,
 } from '../lib/chat'
 import type { ProjectMessage } from '../lib/chat'
-import {
-  createNotification,
-  createNotificationsForAdmins,
-} from '../lib/data'
 
 interface Props {
   projectId: string
+  /** Kept in the contract for the caller (ProjectDetail); not consumed here —
+   * notification copy that used to read this now comes from routes/chat.js,
+   * which reads project_owner/client_name straight from the projects table. */
   projectName: string
+  /** Same as above — the client-side notify guard that used this was removed;
+   * see notifyOnChatMessage in routes/chat.js. */
   projectOwnerId: string | null
   onUnreadCountChange?: (count: number) => void
 }
@@ -44,11 +45,9 @@ function formatTimestamp(iso: string): string {
 
 export const ProjectChat: React.FC<Props> = ({
   projectId,
-  projectName,
-  projectOwnerId,
   onUnreadCountChange,
 }) => {
-  const { user, isAdmin, signOut } = useAuth()
+  const { user, profile, isAdmin, signOut } = useAuth()
   const [messages, setMessages] = useState<ProjectMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [input, setInput] = useState('')
@@ -129,28 +128,14 @@ export const ProjectChat: React.FC<Props> = ({
         if (prev.some((m) => m.id === msg.id)) return prev
         return [...prev, msg]
       })
-      // Fire in-app notifications
-      if (isAdmin) {
-        if (projectOwnerId && projectOwnerId !== user.id) {
-          createNotification({
-            userId: projectOwnerId,
-            type: 'chat_message',
-            title: 'New message from admin',
-            body: `${senderName}: ${text.slice(0, 80)}${text.length > 80 ? '…' : ''}`,
-            projectId,
-            projectName,
-          }).catch(() => {})
-        }
-      } else {
-        createNotificationsForAdmins({
-          type: 'chat_message',
-          title: `Message from ${senderName}`,
-          body: `${senderName}: ${text.slice(0, 80)}${text.length > 80 ? '…' : ''}`,
-          projectId,
-          projectName,
-          excludeUserId: user.id,
-        }).catch(() => {})
-      }
+      // Notifications on send are created server-side (routes/chat.js,
+      // notifyOnChatMessage) as part of the same POST — see the build plan
+      // §7.5. That path resolves profiles.id correctly on both sides of the
+      // self-notify comparison; this one couldn't, because projectOwnerId
+      // (projects.created_by) is a profiles.id while user.id here is the
+      // Cognito sub — comparing them was always true, so an admin chatting
+      // on their own project would notify themselves. Do not re-add
+      // client-side notification calls here.
     } catch (err: any) {
       setError(err.message || 'Failed to send message')
       setInput(text)
@@ -187,7 +172,7 @@ export const ProjectChat: React.FC<Props> = ({
           </div>
         ) : (
           messages.map((msg, i) => {
-            const isMe = msg.sender_id === user?.id
+            const isMe = msg.sender_id === profile?.id
             const prevMsg = messages[i - 1]
             const nextMsg = messages[i + 1]
             const showName =

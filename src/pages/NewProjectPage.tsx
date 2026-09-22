@@ -13,7 +13,7 @@ import {
   fetchAnalysts, fetchProjectTypes, fetchClients, submitClientRequest,
 } from '../lib/data'
 import type {
-  LookupItem, Project, ProjectFormData,
+  LookupItem, ClientTypeLookupItem, Project, ProjectFormData,
   ProjectCountryInput, ProjectTaskInput,
 } from '../types'
 import type { Client } from '../lib/data'
@@ -21,11 +21,16 @@ import type { ProjectType } from '../lib/data'
 import { parseTemplateFile, type DBCountry } from '../lib/templateParser'
 import { analyzeTemplateQuality, type TemplateQualityResult } from '../lib/templateQualityAnalyzer'
 import { TemplateQualityReview } from '../components/TemplateQualityReview'
+import { useAnnouncements } from '../hooks/useAnnouncements'
+import { AnnouncementSlot } from '../components/AnnouncementBanner'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** Minimum quality score to submit a new project. Change this one number to raise/lower the bar. */
 const PASSING_QUALITY_SCORE = 70
+
+/** Role ranking for the Client Type min_role gate (build plan §2.4). */
+const ROLE_RANK: Record<string, number> = { user: 0, admin: 1, super_admin: 2 }
 
 
 const EMPTY_FORM: ProjectFormData = {
@@ -127,9 +132,9 @@ interface Props {
 }
 
 export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel }) => {
-  const { user, profile, isAdmin, signOut } = useAuth()
+  const { user, profile, isAdmin, isSuperAdmin, signOut } = useAuth()
   const [form, setForm] = useState<ProjectFormData>(EMPTY_FORM)
-  const [lookups, setLookups] = useState<{ statuses: LookupItem[]; clientTypes: LookupItem[]; industries: LookupItem[]; countries: LookupItem[] } | null>(null)
+  const [lookups, setLookups] = useState<{ statuses: LookupItem[]; clientTypes: ClientTypeLookupItem[]; industries: LookupItem[]; countries: LookupItem[] } | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -153,6 +158,9 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
 
   // Project types list
   const [projectTypes, setProjectTypes] = useState<ProjectType[]>([])
+
+  // Client/Project type announcement banner — see src/lib/announcements.ts
+  const clientAnnouncements = useAnnouncements('new-project-client')
 
   // ETA prediction
   const [predStats, setPredStats] = useState<ReturnType<typeof buildPredictionStats> | null>(null)
@@ -293,6 +301,32 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     setForm(f => ({ ...f, [field]: value }))
     setTouched(t => ({ ...t, [field]: true }))
   }, [])
+
+  // Client Type options visible to the current user (build plan §2.2 + §2.4):
+  // - is_active !== false: /api/lookups now returns retired types too, so
+  //   historical projects still resolve a name; the create/edit form must
+  //   filter them out itself.
+  // - min_role: gates a type (e.g. "Pay Intel") to admins/super_admins. The
+  //   backend enforces this independently (routes/projects.js
+  //   assertClientTypeAllowed) — this is UX, not the security boundary.
+  // The currently-selected value is always included, even if it wouldn't
+  // otherwise qualify (deactivated, or gated above this user's role), so
+  // opening an existing project never silently blanks the field just by
+  // rendering the form — it's shown disabled instead, and the save handler
+  // only rejects it if the user actually changes it to something new they
+  // can't use.
+  const visibleClientTypes = React.useMemo(() => {
+    const rank = isSuperAdmin ? 2 : isAdmin ? 1 : 0
+    const all = lookups?.clientTypes ?? []
+    const qualifies = (ct: ClientTypeLookupItem) =>
+      ct.is_active !== false && ROLE_RANK[ct.min_role ?? 'user'] <= rank
+    const visible = all.filter(qualifies)
+    if (form.client_type_id != null && !visible.some(ct => ct.id === form.client_type_id)) {
+      const current = all.find(ct => ct.id === form.client_type_id)
+      if (current) return [...visible, current]
+    }
+    return visible
+  }, [lookups, isAdmin, isSuperAdmin, form.client_type_id])
 
   // ── Validation ───────────────────────────────────────────────────────────────
 
@@ -828,9 +862,15 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                       onChange={e => set('client_type_id', e.target.value ? parseInt(e.target.value) : null)}
                     >
                       <option value="">— Select client type —</option>
-                      {lookups!.clientTypes.map(ct => (
-                        <option key={ct.id} value={ct.id}>{ct.name}</option>
-                      ))}
+                      {visibleClientTypes.map(ct => {
+                        const rank = isSuperAdmin ? 2 : isAdmin ? 1 : 0
+                        const outOfReach = ct.is_active === false || ROLE_RANK[ct.min_role ?? 'user'] > rank
+                        return (
+                          <option key={ct.id} value={ct.id} disabled={outOfReach}>
+                            {ct.name}{outOfReach ? ' (current — read only)' : ''}
+                          </option>
+                        )
+                      })}
                     </select>
                   </Field>
                   <Field label="Industry">
@@ -862,6 +902,8 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                     </Field>
                   </div>
                 </div>
+
+                <AnnouncementSlot items={clientAnnouncements} />
 
                 {/* Template download strip */}
                 {form.project_type && (() => {
@@ -896,7 +938,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                       <span className="text-lg">📊</span>
                       <div>
                         <p className="text-sm font-semibold text-base-content">Auto-fill from template file</p>
-                        <p className="text-xs text-base-content/60">Upload a filled-in Rate Card, Right Sourcing, or Magnit VMS file to auto-populate countries &amp; job counts</p>
+                        <p className="text-xs text-base-content/60">Upload a filled-in Rate Card or Magnit VMS file to auto-populate countries &amp; job counts</p>
                       </div>
                     </div>
                     <input

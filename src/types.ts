@@ -6,7 +6,9 @@ export interface ProjectCountry {
   job_count: number | null
   sort_order?: number
   // ── Per-country assignment & completion (build plan §3) ──
-  assigned_user_id?: string | null
+  // assigned_analyst_id references the analysts reference table (active
+  // analysts only), not a profiles/login user.
+  assigned_analyst_id?: number | null
   assigned_analyst_name?: string | null
   assigned_at?: string | null
   completed_at?: string | null

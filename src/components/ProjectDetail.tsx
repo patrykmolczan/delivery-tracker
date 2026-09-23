@@ -40,9 +40,9 @@ import {
   fetchProjectOwnerEmail,
   assignCountryAnalyst,
   setCountryComplete,
-  fetchAssignableProfiles,
+  fetchAssignableAnalysts,
 } from '../lib/data'
-import type { ProfileSummary } from '../lib/data'
+import type { AnalystSummary } from '../lib/data'
 import { sendNotification } from '../lib/notifications'
 import { DeleteProjectModal } from './DeleteProjectModal'
 import { ProjectChat } from './ProjectChat'
@@ -162,7 +162,7 @@ export const ProjectDetail: React.FC<{
   const [projectCountries, setProjectCountries] = useState<ProjectCountry[]>([])
   const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([])
   // Per-country assignment/completion UI state (build plan §3.7)
-  const [assignableProfiles, setAssignableProfiles] = useState<ProfileSummary[]>([])
+  const [assignableAnalysts, setAssignableAnalysts] = useState<AnalystSummary[]>([])
   const [assigningCountryId, setAssigningCountryId] = useState<number | null>(null)
   const [togglingCountryId, setTogglingCountryId] = useState<number | null>(null)
 
@@ -194,10 +194,10 @@ export const ProjectDetail: React.FC<{
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
 
-  // Assignable people for the per-country picker — admin-only endpoint,
-  // so don't even attempt it for non-admins (build plan §3.6/§3.7).
+  // Assignable analysts for the per-country picker — active analysts only
+  // (build plan §3.6/§3.7). GET /api/analysts already filters is_active=true.
   useEffect(() => {
-    if (isAdmin) fetchAssignableProfiles().then(setAssignableProfiles).catch(() => {})
+    if (isAdmin) fetchAssignableAnalysts().then(setAssignableAnalysts).catch(() => {})
   }, [isAdmin])
 
   useEffect(() => {
@@ -366,18 +366,18 @@ export const ProjectDetail: React.FC<{
   // Assign (or unassign) an analyst to a country. Admin-only — the <select>
   // that calls this is only rendered for admins, and the server enforces it
   // independently. Optimistic update with rollback on failure.
-  const handleAssignCountry = async (c: ProjectCountry, userId: string | null) => {
+  const handleAssignCountry = async (c: ProjectCountry, analystId: number | null) => {
     setAssigningCountryId(c.country_id)
     const previous = projectCountries
     setProjectCountries(prev => prev.map(x => x.country_id === c.country_id
       ? {
           ...x,
-          assigned_user_id: userId,
-          assigned_analyst_name: assignableProfiles.find(a => a.id === userId)?.full_name ?? null,
+          assigned_analyst_id: analystId,
+          assigned_analyst_name: assignableAnalysts.find(a => a.id === analystId)?.name ?? null,
         }
       : x))
     try {
-      await assignCountryAnalyst(localProject.id, c.country_id, userId)
+      await assignCountryAnalyst(localProject.id, c.country_id, analystId)
       if (tab === 'history') loadHistory()
     } catch (err) {
       console.error('Failed to assign country analyst:', err)
@@ -1033,9 +1033,10 @@ export const ProjectDetail: React.FC<{
                   <div className="flex flex-col gap-1.5">
                     {projectCountries.map(c => {
                       const isComplete = !!c.completed_at
-                      // assigned_user_id is a profiles.id — compare against profile?.id,
-                      // never user?.id (Cognito sub). See build plan §0.4-B/§8.1.
-                      const canToggle = isAdmin || (!!c.assigned_user_id && c.assigned_user_id === profile?.id)
+                      // Analysts (analysts table) have no login of their own, so
+                      // there's no "assigned analyst" identity to compare against
+                      // the signed-in user — completion is admin-only.
+                      const canToggle = isAdmin
                       return (
                         <div
                           key={c.country_id}
@@ -1052,7 +1053,7 @@ export const ProjectDetail: React.FC<{
                             title={
                               canToggle
                                 ? (isComplete ? 'Mark as not complete' : 'Mark complete')
-                                : 'Only the assigned analyst or an admin can change this'
+                                : 'Only an admin can change this'
                             }
                           />
                           <div className="flex-1 min-w-0">
@@ -1076,13 +1077,17 @@ export const ProjectDetail: React.FC<{
                           {isAdmin ? (
                             <select
                               className="select select-bordered select-xs w-32 shrink-0"
-                              value={c.assigned_user_id ?? ''}
-                              onChange={e => handleAssignCountry(c, e.target.value || null)}
+                              // If the assigned analyst was deactivated since being
+                              // assigned, assigned_analyst_name comes back null from
+                              // the server — fall back to the "Unassigned" option
+                              // rather than showing a stale/invalid selection.
+                              value={c.assigned_analyst_name ? (c.assigned_analyst_id ?? '') : ''}
+                              onChange={e => handleAssignCountry(c, e.target.value ? Number(e.target.value) : null)}
                               disabled={assigningCountryId === c.country_id}
                             >
                               <option value="">Unassigned</option>
-                              {assignableProfiles.map(a => (
-                                <option key={a.id} value={a.id}>{a.full_name}</option>
+                              {assignableAnalysts.map(a => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
                               ))}
                             </select>
                           ) : (

@@ -99,6 +99,10 @@ const handler = async (event) => {
                     return (0, projects_1.getProjectCountries)(pid, user);
                 if (segs[3] === 'sync' && method === 'POST')
                     return (0, projects_1.syncProjectCountries)(pid, b(), user);
+                if (segs[3] && segs[4] === 'assign' && method === 'PATCH')
+                    return (0, projects_1.assignCountryAnalyst)(pid, segs[3], b(), user);
+                if (segs[3] && segs[4] === 'complete' && (method === 'POST' || method === 'DELETE'))
+                    return (0, projects_1.setCountryComplete)(pid, segs[3], method === 'POST', user);
             }
             if (segs[2] === 'tasks') {
                 if (method === 'GET')

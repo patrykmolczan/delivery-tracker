@@ -38,7 +38,11 @@ import {
   fetchNotificationSettings,
   updateProjectNotificationsEnabled,
   fetchProjectOwnerEmail,
+  assignCountryAnalyst,
+  setCountryComplete,
+  fetchAssignableProfiles,
 } from '../lib/data'
+import type { ProfileSummary } from '../lib/data'
 import { sendNotification } from '../lib/notifications'
 import { DeleteProjectModal } from './DeleteProjectModal'
 import { ProjectChat } from './ProjectChat'
@@ -136,7 +140,7 @@ export const ProjectDetail: React.FC<{
   onDelete?: () => void
   defaultTab?: 'details' | 'history' | 'files' | 'delivery' | 'review' | 'chat'
 }> = ({ project, onClose, onEdit, onStatusUpdated, onDelete, defaultTab }) => {
-  const { user, isAdmin, signOut } = useAuth()
+  const { user, profile, isAdmin, signOut } = useAuth()
   const [tab, setTab] = useState<'details' | 'history' | 'files' | 'delivery' | 'review' | 'chat'>(defaultTab ?? 'details')
   const [chatUnreadCount, setChatUnreadCount] = useState(0)
   const [statuses, setStatuses] = useState<LookupItem[]>([])
@@ -157,6 +161,10 @@ export const ProjectDetail: React.FC<{
   // ── Countries & Tasks state ──────────────────────────────────────────────────
   const [projectCountries, setProjectCountries] = useState<ProjectCountry[]>([])
   const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([])
+  // Per-country assignment/completion UI state (build plan §3.7)
+  const [assignableProfiles, setAssignableProfiles] = useState<ProfileSummary[]>([])
+  const [assigningCountryId, setAssigningCountryId] = useState<number | null>(null)
+  const [togglingCountryId, setTogglingCountryId] = useState<number | null>(null)
 
   // ── AI ETA state ───────────────────────────────────────────────────────────
   const [etaData, setEtaData] = useState<{
@@ -185,6 +193,12 @@ export const ProjectDetail: React.FC<{
   const [feedbackModalAction, setFeedbackModalAction] = useState<FeedbackActionType>('hold')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
+
+  // Assignable people for the per-country picker — admin-only endpoint,
+  // so don't even attempt it for non-admins (build plan §3.6/§3.7).
+  useEffect(() => {
+    if (isAdmin) fetchAssignableProfiles().then(setAssignableProfiles).catch(() => {})
+  }, [isAdmin])
 
   useEffect(() => {
     fetchProjectCountries(project.id).then(setProjectCountries).catch(() => {})
@@ -346,6 +360,57 @@ export const ProjectDetail: React.FC<{
       console.error('Failed to toggle notifications:', err)
     } finally {
       setNotifToggling(false)
+    }
+  }
+
+  // Assign (or unassign) an analyst to a country. Admin-only — the <select>
+  // that calls this is only rendered for admins, and the server enforces it
+  // independently. Optimistic update with rollback on failure.
+  const handleAssignCountry = async (c: ProjectCountry, userId: string | null) => {
+    setAssigningCountryId(c.country_id)
+    const previous = projectCountries
+    setProjectCountries(prev => prev.map(x => x.country_id === c.country_id
+      ? {
+          ...x,
+          assigned_user_id: userId,
+          assigned_analyst_name: assignableProfiles.find(a => a.id === userId)?.full_name ?? null,
+        }
+      : x))
+    try {
+      await assignCountryAnalyst(localProject.id, c.country_id, userId)
+      if (tab === 'history') loadHistory()
+    } catch (err) {
+      console.error('Failed to assign country analyst:', err)
+      setProjectCountries(previous) // roll back
+    } finally {
+      setAssigningCountryId(null)
+    }
+  }
+
+  // Mark a country complete/not-complete. Available to admins or the
+  // assigned analyst — the checkbox itself is disabled client-side for
+  // anyone else, and the server enforces the same rule independently.
+  const handleToggleCountryComplete = async (c: ProjectCountry) => {
+    const wasComplete = !!c.completed_at
+    setTogglingCountryId(c.country_id)
+    const previous = projectCountries
+    const myName = profile?.full_name ?? (user as any)?.user_metadata?.full_name ?? null
+    setProjectCountries(prev => prev.map(x => x.country_id === c.country_id
+      ? {
+          ...x,
+          completed_at: wasComplete ? null : new Date().toISOString(),
+          completed_by: wasComplete ? null : (profile?.id ?? null),
+          completed_by_name: wasComplete ? null : myName,
+        }
+      : x))
+    try {
+      await setCountryComplete(localProject.id, c.country_id, !wasComplete)
+      if (tab === 'history') loadHistory()
+    } catch (err) {
+      console.error('Failed to update country completion:', err)
+      setProjectCountries(previous) // roll back
+    } finally {
+      setTogglingCountryId(null)
     }
   }
 
@@ -954,21 +1019,80 @@ export const ProjectDetail: React.FC<{
             <Field icon={<Factory size={14} />} label="Industry" value={localProject.industry} />
             <Field icon={<Tag size={14} />} label="Project Type" value={localProject.project_type} />
 
-            {/* Multi-country breakdown */}
+            {/* Multi-country breakdown — with per-country assignment & completion */}
             {projectCountries.length > 1 ? (
               <div className="flex items-start gap-3 py-2">
                 <span className="mt-0.5 opacity-40"><Globe size={14} /></span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs text-base-content/50 uppercase tracking-wider mb-1">Countries</div>
-                  <div className="flex flex-col gap-1">
-                    {projectCountries.map(c => (
-                      <div key={c.country_id} className="flex items-center justify-between text-sm">
-                        <span>{c.country_name}</span>
-                        {c.job_count != null && (
-                          <span className="text-xs text-base-content/40 ml-2">{c.job_count.toLocaleString()} jobs</span>
-                        )}
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs text-base-content/50 uppercase tracking-wider">Countries</span>
+                    <span className="text-[10px] text-base-content/40">
+                      {projectCountries.filter(c => c.completed_at).length} of {projectCountries.length} complete
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {projectCountries.map(c => {
+                      const isComplete = !!c.completed_at
+                      // assigned_user_id is a profiles.id — compare against profile?.id,
+                      // never user?.id (Cognito sub). See build plan §0.4-B/§8.1.
+                      const canToggle = isAdmin || (!!c.assigned_user_id && c.assigned_user_id === profile?.id)
+                      return (
+                        <div
+                          key={c.country_id}
+                          className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 transition-colors ${
+                            isComplete ? 'border-success/30 bg-success/5' : 'border-base-300 bg-base-200/40'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-xs checkbox-success shrink-0"
+                            checked={isComplete}
+                            disabled={!canToggle || togglingCountryId === c.country_id}
+                            onChange={() => handleToggleCountryComplete(c)}
+                            title={
+                              canToggle
+                                ? (isComplete ? 'Mark as not complete' : 'Mark complete')
+                                : 'Only the assigned analyst or an admin can change this'
+                            }
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-sm truncate ${isComplete ? 'text-base-content/50 line-through' : ''}`}>
+                                {c.country_name}
+                              </span>
+                              {c.job_count != null && (
+                                <span className="text-xs text-base-content/40 shrink-0">
+                                  {c.job_count.toLocaleString()} jobs
+                                </span>
+                              )}
+                            </div>
+                            {isComplete && c.completed_by_name && (
+                              <div className="text-[10px] text-success/70 mt-0.5 truncate">
+                                Completed by {c.completed_by_name} · {formatDate(c.completed_at)}
+                              </div>
+                            )}
+                          </div>
+
+                          {isAdmin ? (
+                            <select
+                              className="select select-bordered select-xs w-32 shrink-0"
+                              value={c.assigned_user_id ?? ''}
+                              onChange={e => handleAssignCountry(c, e.target.value || null)}
+                              disabled={assigningCountryId === c.country_id}
+                            >
+                              <option value="">Unassigned</option>
+                              {assignableProfiles.map(a => (
+                                <option key={a.id} value={a.id}>{a.full_name}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="text-xs text-base-content/40 shrink-0 truncate max-w-[110px]">
+                              {c.assigned_analyst_name ?? 'Unassigned'}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
@@ -1960,7 +2084,7 @@ export const ProjectDetail: React.FC<{
                     projectName: localProject.project_owner,
                     excludeUserId: user.id,
                   }).catch(() => {})
-                } else if (localProject.created_by && localProject.created_by !== user.id) {
+                } else if (localProject.created_by && localProject.created_by !== profile?.id) {
                   createNotification({
                     userId: localProject.created_by,
                     type: 'checklist_resolved',

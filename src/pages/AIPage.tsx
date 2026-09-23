@@ -339,7 +339,7 @@ SCHEMA LEGEND — understand these fields before answering:
 - "Requestor": the person who submitted the request.
 - "Status": Completed | In Process | On Hold | Overdue | Cancelled.
 - "Days to complete" (days_to_complete): calendar days from Date Received to Date Delivered. Negative = delivered early. Positive = delivered late.
-- "Project Type": type of delivery work (e.g. "Pay Intel (Rate Card)", "Pay Intel (Right Sourcing)", "Magnit VMS").
+- "Project Type": type of delivery work (e.g. "Rate Card", "RFP", "MRA", "Benchmark Baseline (MRM)", "Magnit VMS").
 
 INSTRUCTIONS:
 - Answer based strictly on the data above. Do not guess or make up numbers.

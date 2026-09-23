@@ -43,8 +43,16 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     view: 'new-project',
     target: '[data-tour="project-type-field"]',
     title: 'Select Your Project Type',
-    body: "You must select a Project Type here. We've picked Pay Intel (Right Sourcing) as an example — for your real request, choose whichever matches your project. The Pay Intel (Rate Card) template or the Pay Intel (Right Sourcing) template is the ONLY accepted template. No other file or format will work.",
-    autoSelect: { selector: '[data-tour="project-type-field"] select', value: 'Pay Intel (Right Sourcing)' },
+    body: "You must select a Project Type here. We've picked Rate Card as an example — for your real request, choose whichever matches your project. Some project types require a specific template file — download it below, fill it out, then upload it.",
+    // NOTE: project types are data-driven (see AdminPage.tsx Client
+    // Types / Project Types manager), not a fixed enum, so this value must
+    // match an actual project_types.name row. Previously 'Pay Intel (Right
+    // Sourcing)', which no longer exists post-rename (build plan §2.3) —
+    // the <select> had no matching <option>, so el.value stayed empty and
+    // this step silently demoed nothing. 'Rate Card' is one of the new
+    // names (RFP, MRA, Benchmark Baseline (MRM), Benchmark Baseline (MRM
+    // Refresh), Rate Card) — update this if that name changes again.
+    autoSelect: { selector: '[data-tour="project-type-field"] select', value: 'Rate Card' },
   },
   {
     id: 'template-download',

@@ -14,14 +14,15 @@ import { ProjectDetail } from './components/ProjectDetail'
 import { Charts } from './components/Charts'
 import {
   fetchProjects, fetchStatusCounts, fetchOwnerCounts, buildLookupMaps, fetchLookups,
-  fetchFilterOptions, computeKPIs, filterProjects, sortProjects, fetchAllProjectCountries,
+  fetchFilterOptions, computeKPIs, filterProjects, filterByRecordType, sortProjects, fetchAllProjectCountryDetails,
   bulkUpdateProjectStatus, fetchAllAnalysts
 } from './lib/data'
 import { useLogo } from './hooks/useLogo'
-import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode, LookupItem } from './types'
+import type { ProjectCountrySummary } from './lib/data'
+import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode, LookupItem, RecordTypeFilter } from './types'
 import {
   LayoutDashboard, Table2, RefreshCw, LogOut, Lock, Truck, Loader2,
-  Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon, AlertTriangle
+  Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon, AlertTriangle, UserCircle
 } from 'lucide-react'
 import { useTheme } from './contexts/ThemeContext'
 import { getSession as cognitoGetSession } from './lib/cognitoAuth'
@@ -32,8 +33,17 @@ import { EntraCallbackPage } from './pages/EntraCallbackPage'
 import { CognitoCallbackPage } from './pages/CognitoCallbackPage'
 import { OnboardingTour } from './components/onboarding/OnboardingTour'
 
-const NAV_ITEMS: Array<{ id: ViewMode; label: string; icon: React.ReactNode; adminOnly?: boolean; superAdminOnly?: boolean }> = [
+const NAV_ITEMS: Array<{
+  id: ViewMode
+  label: string
+  icon: React.ReactNode
+  adminOnly?: boolean
+  superAdminOnly?: boolean
+  /** Hidden for admins and super-admins — they use Dashboard filters instead. */
+  nonAdminOnly?: boolean
+}> = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
+  { id: 'my-requests', label: 'My Requests', icon: <UserCircle size={16} />, nonAdminOnly: true },
   { id: 'table', label: 'All Projects', icon: <Table2 size={16} /> },
   { id: 'new-project', label: 'New Project', icon: <Plus size={16} /> },
   { id: 'import', label: 'Import Data', icon: <Upload size={16} /> },
@@ -64,11 +74,11 @@ const Dashboard: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false)
   const autoSyncingRef = useRef(false) // background poll sync flag; not rendered, so button never animates for it
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [countriesMap, setCountriesMap] = useState<Map<string, string[]>>(new Map())
+  const [countriesMap, setCountriesMap] = useState<Map<string, ProjectCountrySummary[]>>(new Map())
   const [statusLookups, setStatusLookups] = useState<LookupItem[]>([])
   const [showUnassignedOnly, setShowUnassignedOnly] = useState(false)
-  const [recordType, setRecordType] = useState<'project' | 'one_off'>('project')
-  const [dashViewType, setDashViewType] = useState<'all' | 'project' | 'one_off'>('project')
+  const [recordType, setRecordType] = useState<RecordTypeFilter>('all')
+  const [dashViewType, setDashViewType] = useState<RecordTypeFilter>('all')
   const [dashFilters, setDashFilters] = useState<FilterState>({ search: '', status: [], owner: [], analyst: [], clientType: [], industry: [], country: [], dateFrom: '', dateTo: '' })
 
   const loadData = async (isRefresh = false, isAuto = false) => {
@@ -99,7 +109,7 @@ const Dashboard: React.FC = () => {
       setOwnerCounts(oc)
       setFilterOptions(optsWithOwners)
       // Fire-and-forget — loads multi-country data for hover popover without blocking spinner
-      fetchAllProjectCountries().then(setCountriesMap).catch(console.warn)
+      fetchAllProjectCountryDetails().then(setCountriesMap).catch(console.warn)
     } catch (err) {
       console.error('Failed to load data:', err)
     } finally {
@@ -143,14 +153,30 @@ const Dashboard: React.FC = () => {
     return () => { poll.unsubscribe() }
   }, [])
 
-  // Tab-filtered subsets (Projects tab vs One-offs tab in table view)
+  // Tab-filtered subsets (All / Projects / One-offs tabs in table view)
   const tabProjects = useMemo(
-    () => projects.filter(p => ((p as any).record_type ?? 'project') === recordType),
+    () => filterByRecordType(projects, recordType),
     [projects, recordType]
   )
   const tabFiltered = useMemo(() => filterProjects(tabProjects, filters), [tabProjects, filters])
   const tabSorted = useMemo(() => sortProjects(tabFiltered, sort), [tabFiltered, sort])
-  const kpis = useMemo(() => computeKPIs(projects), [projects])
+  // "My Requests" — created_by is a profiles.id (set server-side from the JWT),
+  // NOT the Cognito sub. Compare against profile?.id, never user?.id — see the
+  // two ID spaces note in AuthContext / the build plan §0.4-B / §8.1. Falls
+  // back to a name match only when created_by is missing (legacy/imported
+  // rows), so it can never widen a row that already has real ownership.
+  const isMyRequest = React.useCallback((p: Project): boolean => {
+    if (p.created_by && profile?.id) return p.created_by === profile.id
+    const me = profile?.full_name?.trim().toLowerCase()
+    return !!me && p.requestor?.trim().toLowerCase() === me
+  }, [profile])
+  const myProjects = useMemo(() => projects.filter(isMyRequest), [projects, isMyRequest])
+  const dashBase = view === 'my-requests' ? myProjects : projects
+  const kpis = useMemo(() => computeKPIs(dashBase), [dashBase])
+  const myRequestsStatusCounts = useMemo(
+    () => view === 'my-requests' ? fetchStatusCounts(dashBase) : statusCounts,
+    [view, dashBase, statusCounts]
+  )
   const unassignedProjects = useMemo(() => {
     const twelveMonthsAgo = new Date()
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
@@ -172,10 +198,10 @@ const Dashboard: React.FC = () => {
     () => showUnassignedOnly ? sortProjects(unassignedProjects, sort) : tabSorted,
     [showUnassignedOnly, unassignedProjects, tabSorted, sort]
   )
-  const dashFiltered = useMemo(() => {
-    const base = dashViewType === 'all' ? projects : projects.filter(p => ((p as any).record_type ?? 'project') === dashViewType)
-    return filterProjects(base, dashFilters)
-  }, [projects, dashViewType, dashFilters])
+  const dashFiltered = useMemo(
+    () => filterProjects(filterByRecordType(dashBase, dashViewType), dashFilters),
+    [dashBase, dashViewType, dashFilters]
+  )
   const dashSorted = useMemo(() => sortProjects(dashFiltered, sort), [dashFiltered, sort])
 
   const navigate = (v: ViewMode) => {
@@ -211,7 +237,11 @@ const Dashboard: React.FC = () => {
     )
   }
 
-  const navItems = NAV_ITEMS.filter(item => (!item.adminOnly || isAdmin) && (!item.superAdminOnly || isSuperAdmin))
+  const navItems = NAV_ITEMS.filter(item =>
+    (!item.adminOnly || isAdmin) &&
+    (!item.superAdminOnly || isSuperAdmin) &&
+    (!item.nonAdminOnly || !isAdmin)
+  )
 
   return (
     <div className="min-h-screen bg-base-100 flex">
@@ -393,11 +423,13 @@ const Dashboard: React.FC = () => {
 
         {/* Page content */}
         <main className="flex-1 p-4 md:p-6">
-          {/* Dashboard View */}
-          {view === 'dashboard' && (
+          {/* Dashboard View / My Requests View — same layout, My Requests is
+              pre-filtered to the current user's own projects (see isMyRequest) */}
+          {(view === 'dashboard' || view === 'my-requests') && (
             <div className="space-y-6">
-              {/* Needs Assignment Banner — admin only */}
-              {isAdmin && unassignedProjects.length > 0 && (
+              {/* Needs Assignment Banner — admin only; never renders on My Requests
+                  since that nav item is nonAdminOnly, but the guard stays explicit */}
+              {isAdmin && view === 'dashboard' && unassignedProjects.length > 0 && (
                 <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-warning/40 bg-warning/10">
                   <div className="flex items-center gap-2.5">
                     <AlertTriangle size={15} className="text-warning flex-shrink-0" />
@@ -414,46 +446,76 @@ const Dashboard: React.FC = () => {
                   </button>
                 </div>
               )}
-              <KPICards kpis={kpis} />
-              <Charts statusCounts={statusCounts} ownerCounts={ownerCounts} />
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-base-content/60 uppercase tracking-wide">Recent Activity</span>
-                  <div className="flex rounded-xl border border-base-300 overflow-hidden text-xs">
-                    {(['all', 'project', 'one_off'] as const).map((v) => (
-                      <button
-                        key={v}
-                        className={`px-3 py-1.5 font-medium transition-colors ${dashViewType === v ? 'bg-primary text-primary-content' : 'bg-base-100 hover:bg-base-200 text-base-content/60'}`}
-                        onClick={() => setDashViewType(v)}
-                      >
-                        {v === 'all' ? 'All' : v === 'project' ? 'Projects' : 'One-offs'}
-                      </button>
-                    ))}
-                  </div>
+              {view === 'my-requests' && (
+                <div>
+                  <h2 className="text-xl font-bold">My Requests</h2>
+                  <p className="text-sm text-base-content/50 mt-0.5">
+                    {myProjects.length} project{myProjects.length !== 1 ? 's' : ''} you've submitted
+                  </p>
                 </div>
-                <FilterBar
-                  filters={dashFilters}
-                  onChange={setDashFilters}
-                  options={filterOptions}
-                  resultCount={dashFiltered.length}
-                  totalCount={projects.length}
-                />
-                <ProjectTable
-                  projects={dashSorted.slice(0, DASHBOARD_TABLE_ROWS)}
-                  sort={sort}
-                  onSort={setSort}
-                  onSelectProject={setSelectedProject}
-                  selectedId={selectedProject?.id || null}
-                  countriesMap={countriesMap}
-                />
-                {dashSorted.length > DASHBOARD_TABLE_ROWS && (
-                  <div className="text-center">
-                    <button className="btn btn-ghost btn-sm gap-1.5" onClick={() => navigate('table')}>
-                      View all {dashSorted.length} {dashViewType === 'one_off' ? 'one-off jobs' : dashViewType === 'all' ? 'records' : 'projects'} <ChevronRight size={14} />
-                    </button>
+              )}
+              {view === 'my-requests' && myProjects.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                  <Plus size={32} className="text-base-content/20" />
+                  <p className="text-sm font-medium text-base-content/60">You haven't submitted any requests yet</p>
+                  <button
+                    className="btn btn-primary btn-sm gap-1.5"
+                    onClick={() => { setEditProject(null); navigate('new-project') }}
+                  >
+                    <Plus size={14} /> New Project
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <KPICards kpis={kpis} />
+                  <Charts
+                    statusCounts={view === 'my-requests' ? myRequestsStatusCounts : statusCounts}
+                    ownerCounts={view === 'my-requests' ? [] : ownerCounts}
+                  />
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-base-content/60 uppercase tracking-wide">Recent Activity</span>
+                      <div className="flex rounded-xl border border-base-300 overflow-hidden text-xs">
+                        {(['all', 'project', 'one_off'] as const).map((v) => (
+                          <button
+                            key={v}
+                            className={`px-3 py-1.5 font-medium transition-colors ${dashViewType === v ? 'bg-primary text-primary-content' : 'bg-base-100 hover:bg-base-200 text-base-content/60'}`}
+                            onClick={() => setDashViewType(v)}
+                          >
+                            {v === 'all' ? 'All' : v === 'project' ? 'Projects' : 'One-offs'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <FilterBar
+                      filters={dashFilters}
+                      onChange={setDashFilters}
+                      options={filterOptions}
+                      resultCount={dashFiltered.length}
+                      totalCount={dashBase.length}
+                    />
+                    <ProjectTable
+                      projects={dashSorted.slice(0, DASHBOARD_TABLE_ROWS)}
+                      sort={sort}
+                      onSort={setSort}
+                      onSelectProject={setSelectedProject}
+                      selectedId={selectedProject?.id || null}
+                      countriesMap={countriesMap}
+                      hiddenColumns={['project_owner']}
+                    />
+                    {/* "View all" navigates to the unfiltered All Projects table, which
+                        has no "mine only" filter — showing it on My Requests would
+                        silently drop the user's scope, so it's hidden there instead. */}
+                    {view === 'dashboard' && dashSorted.length > DASHBOARD_TABLE_ROWS && (
+                      <div className="text-center">
+                        <button className="btn btn-ghost btn-sm gap-1.5" onClick={() => navigate('table')}>
+                          View all {dashSorted.length} {dashViewType === 'one_off' ? 'one-off jobs' : dashViewType === 'all' ? 'records' : 'projects'} <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </div>
           )}
 
@@ -463,22 +525,19 @@ const Dashboard: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-1">
                   <h2 className="text-xl font-bold">
-                    {recordType === 'project' ? 'Projects' : 'One-off Jobs'}
+                    {recordType === 'all' ? 'All Records' : recordType === 'project' ? 'Projects' : 'One-off Jobs'}
                   </h2>
                   {/* Record-type tabs */}
                   <div className="flex gap-0 rounded-lg overflow-hidden border border-base-300 w-fit text-sm">
-                    <button
-                      className={`px-4 py-1.5 font-medium transition-colors ${recordType === 'project' ? 'bg-primary text-primary-content' : 'bg-base-100 hover:bg-base-200'}`}
-                      onClick={() => { setRecordType('project'); setShowUnassignedOnly(false) }}
-                    >
-                      Projects
-                    </button>
-                    <button
-                      className={`px-4 py-1.5 font-medium transition-colors ${recordType === 'one_off' ? 'bg-primary text-primary-content' : 'bg-base-100 hover:bg-base-200'}`}
-                      onClick={() => { setRecordType('one_off'); setShowUnassignedOnly(false) }}
-                    >
-                      One-off Jobs
-                    </button>
+                    {(['all', 'project', 'one_off'] as const).map(v => (
+                      <button
+                        key={v}
+                        className={`px-4 py-1.5 font-medium transition-colors ${recordType === v ? 'bg-primary text-primary-content' : 'bg-base-100 hover:bg-base-200'}`}
+                        onClick={() => { setRecordType(v); setShowUnassignedOnly(false) }}
+                      >
+                        {v === 'all' ? 'All' : v === 'project' ? 'Projects' : 'One-offs'}
+                      </button>
+                    ))}
                   </div>
                 </div>
                 <button
@@ -494,7 +553,7 @@ const Dashboard: React.FC = () => {
                   <div className="flex items-center gap-2.5">
                     <AlertTriangle size={15} className="text-warning flex-shrink-0" />
                     <span className="font-semibold text-sm text-warning">
-                      {unassignedProjects.length} {recordType === 'one_off' ? 'one-off job' : 'project'}{unassignedProjects.length !== 1 ? 's' : ''} need{unassignedProjects.length === 1 ? 's' : ''} assignment
+                      {unassignedProjects.length} {recordType === 'one_off' ? 'one-off job' : recordType === 'all' ? 'record' : 'project'}{unassignedProjects.length !== 1 ? 's' : ''} need{unassignedProjects.length === 1 ? 's' : ''} assignment
                     </span>
                     <span className="hidden sm:inline text-xs text-base-content/50">— within the last 12 months</span>
                   </div>
@@ -542,10 +601,11 @@ const Dashboard: React.FC = () => {
                 onSelectProject={setSelectedProject}
                 selectedId={selectedProject?.id || null}
                 onEdit={handleEditProject}
-                canEditProject={(p) => isAdmin || p.created_by === user?.id}
+                canEditProject={(p) => isAdmin || p.created_by === profile?.id}
                 countriesMap={countriesMap}
                 statusOptions={isAdmin ? statusLookups : undefined}
                 onBulkStatusUpdate={isAdmin ? handleBulkStatusUpdate : undefined}
+                hiddenColumns={['project_owner']}
               />
             </div>
           )}
@@ -604,7 +664,7 @@ const Dashboard: React.FC = () => {
           project={selectedProject}
           defaultTab={selectedProjectTab}
           onClose={() => { setSelectedProject(null); setSelectedProjectTab(undefined) }}
-          onEdit={(isAdmin || selectedProject?.created_by === user?.id) ? () => handleEditProject(selectedProject!) : undefined}
+          onEdit={(isAdmin || selectedProject?.created_by === profile?.id) ? () => handleEditProject(selectedProject!) : undefined}
           onStatusUpdated={(updated) => {
             setSelectedProject(updated)
             setProjects(prev => prev.map(p => p.id === updated.id ? updated : p))

@@ -86,9 +86,9 @@ async function s3GetSignedUrl(bucket: string, storagePath: string): Promise<stri
 
 import type {
   Project, KPIData, StatusCount, OwnerCount, FilterState, SortState,
-  LookupItem, ProjectFeedback, ProjectFeedbackItem, ProjectFormData, ProjectCountry, ProjectCountryInput, ProjectTask,
+  LookupItem, ClientTypeLookupItem, ProjectFeedback, ProjectFeedbackItem, ProjectFormData, ProjectCountry, ProjectCountryInput, ProjectTask,
   ProjectETAHistory,
-  NotificationType, AppNotification} from '../types'
+  NotificationType, AppNotification, RecordTypeFilter} from '../types'
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
@@ -184,7 +184,7 @@ export async function fetchProjects(lookupMaps?: LookupMaps): Promise<Project[]>
 
 export async function fetchLookups(): Promise<{
   statuses: LookupItem[]
-  clientTypes: LookupItem[]
+  clientTypes: ClientTypeLookupItem[]
   industries: LookupItem[]
   countries: LookupItem[]
 }> {
@@ -280,11 +280,77 @@ export async function fetchAllProjectCountries(): Promise<Map<string, string[]>>
   return map
 }
 
+/**
+ * Richer bulk-countries fetch carrying assignment/completion, for the
+ * ProjectTable hover tooltip (build plan §3.5/§3.6). Kept separate from
+ * fetchAllProjectCountries (a plain name-list, threaded through App.tsx) so
+ * that function's existing signature and callers are undisturbed.
+ */
+export type ProjectCountrySummary = Pick<
+  ProjectCountry, 'country_id' | 'country_name' | 'assigned_analyst_name' | 'completed_at'
+>
+
+export async function fetchAllProjectCountryDetails(): Promise<Map<string, ProjectCountrySummary[]>> {
+  const rows = await api<Array<ProjectCountrySummary & { project_id: string }>>('projects/countries').catch(() => [])
+  const map = new Map<string, ProjectCountrySummary[]>()
+  for (const row of rows) {
+    if (!row.country_name) continue
+    const list = map.get(row.project_id) ?? []
+    list.push(row)
+    map.set(row.project_id, list)
+  }
+  return map
+}
+
 export async function syncProjectCountries(
   projectId: string,
   entries: ProjectCountryInput[]
 ): Promise<void> {
   await api(`projects/${projectId}/countries/sync`, { method: 'POST', body: { entries } })
+}
+
+/**
+ * Assign (or unassign, with assignedUserId null) a country to an analyst.
+ * Admin-only server-side. NOT wrapped in .catch(() => {}) — this is a
+ * user-initiated write; failures must surface (see build plan §8.2/§0.4).
+ */
+export async function assignCountryAnalyst(
+  projectId: string,
+  countryId: number,
+  assignedUserId: string | null,
+): Promise<ProjectCountry> {
+  return api<ProjectCountry>(
+    `projects/${projectId}/countries/${countryId}/assign`,
+    { method: 'PATCH', body: { assigned_user_id: assignedUserId } },
+  )
+}
+
+/**
+ * Mark a country complete/not-complete. Server enforces admin-or-assigned-analyst.
+ */
+export async function setCountryComplete(
+  projectId: string,
+  countryId: number,
+  complete: boolean,
+): Promise<ProjectCountry> {
+  return api<ProjectCountry>(
+    `projects/${projectId}/countries/${countryId}/complete`,
+    { method: complete ? 'POST' : 'DELETE' },
+  )
+}
+
+/** People a country can be assigned to. GET /api/profiles is admin-gated server-side. */
+export interface ProfileSummary {
+  id: string
+  email: string
+  full_name: string
+  role: 'user' | 'admin' | 'super_admin'
+  is_active: boolean
+}
+
+export async function fetchAssignableProfiles(): Promise<ProfileSummary[]> {
+  const rows = await api<ProfileSummary[]>('profiles').catch(() => [])
+  return rows.filter(p => p.is_active)
 }
 
 // ─── Project Tasks ─────────────────────────────────────────────────────────────
@@ -391,6 +457,18 @@ export function computeKPIs(projects: Project[]): KPIData {
     avgDaysToComplete: avgDays, overdue: overdue.length,
     totalJobs, completionRate, deliveredThisMonth,
   }
+}
+
+/**
+ * Shared record-type filter for the 'all' | 'project' | 'one_off' toggle used
+ * by both the Dashboard "Recent Activity" view and the All Projects /
+ * One-off Jobs tabs. Extracted so the two can't drift apart — previously the
+ * Dashboard handled 'all' inline while the All Projects tab didn't support it
+ * at all.
+ */
+export function filterByRecordType(projects: Project[], type: RecordTypeFilter): Project[] {
+  if (type === 'all') return projects
+  return projects.filter(p => (p.record_type ?? 'project') === type)
 }
 
 export function filterProjects(projects: Project[], filters: FilterState): Project[] {
@@ -680,6 +758,7 @@ export interface ClientType {
   id: number
   name: string
   is_active: boolean
+  min_role?: 'user' | 'admin' | 'super_admin'
 }
 
 export async function fetchClientTypesAdmin(): Promise<ClientType[]> {
@@ -871,7 +950,13 @@ export async function updateProjectNotificationsEnabled(projectId: string, enabl
 }
 
 export async function fetchProjectOwnerEmail(userId: string): Promise<string | null> {
-  const data = await api<{ email: string | null }>(`settings/profiles/owner-email/${userId}`).catch(() => null)
+  // NOTE: this previously called `settings/profiles/owner-email/${userId}`, which
+  // the router parses into the /settings branch (only handles PATCH) and 404s —
+  // silently, because of the .catch(() => null) below. The correct route is
+  // `profiles/owner-email/:id` (see index.js:334-338 / routes/settings.js
+  // getOwnerEmail). This was causing every email notification send in
+  // ProjectDetail to silently no-op.
+  const data = await api<{ email: string | null }>(`profiles/owner-email/${userId}`).catch(() => null)
   return data?.email ?? null
 }
 
@@ -1135,17 +1220,24 @@ export async function createNotification(params: {
   projectId?: string | null
   projectName?: string | null
 }): Promise<void> {
-  api('notifications', {
-    method: 'POST',
-    body: {
-      user_id: params.userId,
-      type: params.type,
-      title: params.title,
-      body: params.body,
-      project_id: params.projectId ?? null,
-      project_name: params.projectName ?? null,
-    },
-  }).catch(() => {})
+  try {
+    await api('notifications', {
+      method: 'POST',
+      body: {
+        user_id: params.userId,
+        type: params.type,
+        title: params.title,
+        body: params.body,
+        project_id: params.projectId ?? null,
+        project_name: params.projectName ?? null,
+      },
+    })
+  } catch (err) {
+    // Was previously .catch(() => {}) with no await — a 500 here was
+    // indistinguishable from success. Surfacing it is what let §7's chat
+    // notification bug get diagnosed at all; keep it visible.
+    console.error('[notifications] createNotification failed', err)
+  }
 }
 
 export async function createNotificationsForAdmins(params: {
@@ -1156,17 +1248,21 @@ export async function createNotificationsForAdmins(params: {
   projectName?: string | null
   excludeUserId?: string
 }): Promise<void> {
-  api('notifications/for-admins', {
-    method: 'POST',
-    body: {
-      type: params.type,
-      title: params.title,
-      body: params.body,
-      project_id: params.projectId ?? null,
-      project_name: params.projectName ?? null,
-      exclude_user_id: params.excludeUserId,
-    },
-  }).catch(() => {})
+  try {
+    await api('notifications/for-admins', {
+      method: 'POST',
+      body: {
+        type: params.type,
+        title: params.title,
+        body: params.body,
+        project_id: params.projectId ?? null,
+        project_name: params.projectName ?? null,
+        exclude_user_id: params.excludeUserId,
+      },
+    })
+  } catch (err) {
+    console.error('[notifications] createNotificationsForAdmins failed', err)
+  }
 }
 
 export async function fetchNotifications(limit = 50, unreadOnly = false): Promise<AppNotification[]> {

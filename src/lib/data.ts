@@ -310,23 +310,25 @@ export async function syncProjectCountries(
 }
 
 /**
- * Assign (or unassign, with assignedUserId null) a country to an analyst.
- * Admin-only server-side. NOT wrapped in .catch(() => {}) — this is a
- * user-initiated write; failures must surface (see build plan §8.2/§0.4).
+ * Assign (or unassign, with assignedAnalystId null) a country to an analyst
+ * from the analysts reference table. Admin-only server-side. NOT wrapped in
+ * .catch(() => {}) — this is a user-initiated write; failures must surface
+ * (see build plan §8.2/§0.4).
  */
 export async function assignCountryAnalyst(
   projectId: string,
   countryId: number,
-  assignedUserId: string | null,
+  assignedAnalystId: number | null,
 ): Promise<ProjectCountry> {
   return api<ProjectCountry>(
     `projects/${projectId}/countries/${countryId}/assign`,
-    { method: 'PATCH', body: { assigned_user_id: assignedUserId } },
+    { method: 'PATCH', body: { assigned_analyst_id: assignedAnalystId } },
   )
 }
 
 /**
- * Mark a country complete/not-complete. Server enforces admin-or-assigned-analyst.
+ * Mark a country complete/not-complete. Admin-only — analysts have no
+ * login, so there's no "assigned analyst" identity for the server to permit.
  */
 export async function setCountryComplete(
   projectId: string,
@@ -339,18 +341,18 @@ export async function setCountryComplete(
   )
 }
 
-/** People a country can be assigned to. GET /api/profiles is admin-gated server-side. */
-export interface ProfileSummary {
-  id: string
-  email: string
-  full_name: string
-  role: 'user' | 'admin' | 'super_admin'
+/**
+ * Analysts a country can be assigned to. GET /api/analysts already
+ * filters to is_active=true server-side, so no client-side filtering here.
+ */
+export interface AnalystSummary {
+  id: number
+  name: string
   is_active: boolean
 }
 
-export async function fetchAssignableProfiles(): Promise<ProfileSummary[]> {
-  const rows = await api<ProfileSummary[]>('profiles').catch(() => [])
-  return rows.filter(p => p.is_active)
+export async function fetchAssignableAnalysts(): Promise<AnalystSummary[]> {
+  return api<AnalystSummary[]>('analysts').catch(() => [])
 }
 
 // ─── Project Tasks ─────────────────────────────────────────────────────────────

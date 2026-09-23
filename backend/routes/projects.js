@@ -10,6 +10,8 @@ exports.deleteProject = deleteProject;
 exports.getProjectCountries = getProjectCountries;
 exports.getAllProjectCountries = getAllProjectCountries;
 exports.syncProjectCountries = syncProjectCountries;
+exports.assignCountryAnalyst = assignCountryAnalyst;
+exports.setCountryComplete = setCountryComplete;
 exports.getProjectTasks = getProjectTasks;
 exports.syncProjectTasksRoute = syncProjectTasksRoute;
 exports.getProjectHistory = getProjectHistory;
@@ -290,12 +292,20 @@ async function deleteProject(projectId, user) {
     }
 }
 // ── Project Countries ─────────────────────────────────────────────────────────
+// Note: assigned_analyst_name is computed here, not stored — it comes from a
+// LEFT JOIN gated on analysts.is_active, so a deactivated ("deleted") analyst
+// automatically reads back as NULL (UI falls back to "Unassigned") with no
+// separate cleanup step required.
+const PROJECT_COUNTRY_SELECT = `
+  SELECT pc.*, c.name as country_name,
+         CASE WHEN a.is_active THEN a.name ELSE NULL END as assigned_analyst_name
+  FROM public.project_countries pc
+  LEFT JOIN public.countries c ON c.id = pc.country_id
+  LEFT JOIN public.analysts a ON a.id = pc.assigned_analyst_id
+`;
 async function getProjectCountries(projectId, _user) {
     try {
-        const rows = await (0, db_1.query)(`SELECT pc.*, c.name as country_name
-       FROM public.project_countries pc
-       LEFT JOIN public.countries c ON c.id = pc.country_id
-       WHERE pc.project_id=$1 ORDER BY pc.sort_order`, [projectId]);
+        const rows = await (0, db_1.query)(`${PROJECT_COUNTRY_SELECT} WHERE pc.project_id=$1 ORDER BY pc.sort_order`, [projectId]);
         return (0, response_1.ok)(rows);
     }
     catch (e) {
@@ -304,9 +314,11 @@ async function getProjectCountries(projectId, _user) {
 }
 async function getAllProjectCountries(_body, _user) {
     try {
-        const rows = await (0, db_1.query)(`SELECT pc.project_id, c.name as country_name
+        const rows = await (0, db_1.query)(`SELECT pc.project_id, c.name as country_name,
+         CASE WHEN a.is_active THEN a.name ELSE NULL END as assigned_analyst_name
        FROM public.project_countries pc
        LEFT JOIN public.countries c ON c.id = pc.country_id
+       LEFT JOIN public.analysts a ON a.id = pc.assigned_analyst_id
        ORDER BY pc.sort_order`);
         return (0, response_1.ok)(rows);
     }
@@ -323,13 +335,78 @@ async function syncProjectCountries(projectId, body, _user) {
         return (0, response_1.serverError)(e);
     }
 }
+// Diff-based sync (not delete-all-then-insert): removed countries are deleted,
+// but countries that remain are upserted in place so their assignment/
+// completion data survives an edit to job counts or ordering.
 async function syncCountries(projectId, entries) {
-    await (0, db_1.query)('DELETE FROM public.project_countries WHERE project_id=$1', [projectId]);
-    if (!entries.length)
-        return;
+    const existing = await (0, db_1.query)('SELECT country_id FROM public.project_countries WHERE project_id=$1', [projectId]);
+    const existingIds = new Set(existing.map(r => r.country_id));
+    const incomingIds = new Set(entries.map(e => e.country_id));
+    const toDelete = [...existingIds].filter(id => !incomingIds.has(id));
+    if (toDelete.length) {
+        const ph = toDelete.map((_, i) => `$${i + 2}`).join(',');
+        await (0, db_1.query)(`DELETE FROM public.project_countries WHERE project_id=$1 AND country_id IN (${ph})`, [projectId, ...toDelete]);
+    }
     for (let i = 0; i < entries.length; i++) {
         const e = entries[i];
-        await (0, db_1.query)('INSERT INTO public.project_countries (project_id, country_id, job_count, sort_order) VALUES ($1,$2,$3,$4)', [projectId, e.country_id, e.job_count ? parseInt(e.job_count) : null, i]);
+        await (0, db_1.query)(`INSERT INTO public.project_countries (project_id, country_id, job_count, sort_order)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (project_id, country_id)
+       DO UPDATE SET job_count=EXCLUDED.job_count, sort_order=EXCLUDED.sort_order`, [projectId, e.country_id, e.job_count ? parseInt(e.job_count) : null, i]);
+    }
+}
+// Assign (or unassign, with assigned_analyst_id null) an analyst from the
+// analysts table to a country. Admin-only.
+async function assignCountryAnalyst(projectId, countryId, body, user) {
+    if (!(0, auth_1.isAdmin)(user))
+        return (0, response_1.forbidden)();
+    try {
+        const analystId = body.assigned_analyst_id ?? null;
+        if (analystId !== null) {
+            const analyst = await (0, db_1.queryOne)('SELECT id FROM public.analysts WHERE id=$1 AND is_active=true', [analystId]);
+            if (!analyst)
+                return (0, response_1.err)('Analyst not found or inactive', 400);
+        }
+        const profileRow = await (0, db_1.queryOne)('SELECT id FROM public.profiles WHERE cognito_id = $1', [user.sub]).catch(() => null);
+        const assignedBy = profileRow?.id ?? null;
+        const updated = await (0, db_1.queryOne)(`UPDATE public.project_countries
+         SET assigned_analyst_id=$1,
+             assigned_at = CASE WHEN $1::int IS NULL THEN NULL ELSE now() END,
+             assigned_by=$2
+       WHERE project_id=$3 AND country_id=$4
+       RETURNING id`, [analystId, assignedBy, projectId, countryId]);
+        if (!updated)
+            return (0, response_1.notFound)('Project country');
+        const row = await (0, db_1.queryOne)(`${PROJECT_COUNTRY_SELECT} WHERE pc.id=$1`, [updated.id]);
+        return (0, response_1.ok)(row);
+    }
+    catch (e) {
+        return (0, response_1.serverError)(e);
+    }
+}
+// Mark a country complete/not-complete. Admin-only — analysts are a plain
+// reference list (no login), so unlike other assignment fields there is no
+// logged-in "assigned analyst" identity to permit here.
+async function setCountryComplete(projectId, countryId, complete, user) {
+    if (!(0, auth_1.isAdmin)(user))
+        return (0, response_1.forbidden)();
+    try {
+        const profileRow = await (0, db_1.queryOne)('SELECT id, full_name FROM public.profiles WHERE cognito_id = $1', [user.sub]).catch(() => null);
+        const completedBy = complete ? (profileRow?.id ?? null) : null;
+        const completedByName = complete ? (profileRow?.full_name ?? null) : null;
+        const updated = await (0, db_1.queryOne)(`UPDATE public.project_countries
+         SET completed_at = CASE WHEN $1 THEN now() ELSE NULL END,
+             completed_by=$2,
+             completed_by_name=$3
+       WHERE project_id=$4 AND country_id=$5
+       RETURNING id`, [complete, completedBy, completedByName, projectId, countryId]);
+        if (!updated)
+            return (0, response_1.notFound)('Project country');
+        const row = await (0, db_1.queryOne)(`${PROJECT_COUNTRY_SELECT} WHERE pc.id=$1`, [updated.id]);
+        return (0, response_1.ok)(row);
+    }
+    catch (e) {
+        return (0, response_1.serverError)(e);
     }
 }
 // ── Project Tasks ─────────────────────────────────────────────────────────────

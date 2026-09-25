@@ -59,7 +59,7 @@ const Dashboard: React.FC = () => {
   const [showChangePassword, setShowChangePassword] = useState(false)
   const isSSOUser = !!(user?.user_metadata?.sso_provider)
   const { logoUrl } = useLogo()
-  const { theme, setTheme } = useTheme()
+  const { theme, mode, glass, setMode, setGlass } = useTheme()
   const [projects, setProjects] = useState<Project[]>([])
   const [statusCounts, setStatusCounts] = useState<StatusCount[]>([])
   const [ownerCounts, setOwnerCounts] = useState<OwnerCount[]>([])
@@ -261,7 +261,7 @@ const Dashboard: React.FC = () => {
         <div className="p-4 border-b border-base-300 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             {logoUrl ? (
-              <div className={`rounded-md px-1.5 py-0.5 mr-1 transition-colors ${theme !== 'light' ? 'bg-white/90' : 'bg-transparent'}`}>
+              <div className={`rounded-md px-1.5 py-0.5 mr-1 transition-colors ${(theme === 'dark' || theme === 'glass') ? 'bg-white/90' : 'bg-transparent'}`}>
                 <img
                   src={logoUrl}
                   alt="Logo"
@@ -328,13 +328,12 @@ const Dashboard: React.FC = () => {
               {([
                 { value: 'light', label: 'Light', icon: Sun },
                 { value: 'dark', label: 'Dark', icon: Moon },
-                { value: 'glass', label: 'Glass', icon: Droplets },
               ] as const).map(({ value, label, icon: Icon }) => (
                 <button
                   key={value}
-                  onClick={() => setTheme(value)}
+                  onClick={() => setMode(value)}
                   className={`flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
-                    theme === value
+                    mode === value
                       ? 'bg-base-100 text-base-content shadow-sm'
                       : 'text-base-content/50 hover:text-base-content'
                   }`}
@@ -345,6 +344,23 @@ const Dashboard: React.FC = () => {
                 </button>
               ))}
             </div>
+            {/* Glass is a visual treatment layered onto Light/Dark, not a
+                third mode — keeping it a single small switch means this row
+                never needs to grow, however many treatments Glass gains
+                later (e.g. this already covers both glass-on-dark and the
+                glass-on-light variant with zero new UI). */}
+            <label className="flex items-center justify-between gap-2 mt-1.5 px-0.5 cursor-pointer">
+              <span className="flex items-center gap-1.5 text-xs text-base-content/60">
+                <Droplets size={12} />
+                Glass
+              </span>
+              <input
+                type="checkbox"
+                className="toggle toggle-sm"
+                checked={glass}
+                onChange={e => setGlass(e.target.checked)}
+              />
+            </label>
           </div>
           <div className="flex gap-2 mt-1">
             <button

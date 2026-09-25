@@ -4,7 +4,7 @@ import {
   UserPlus, Shield, User, CheckCircle2, Edit2, Save, X, AlertCircle,
   Loader2, RefreshCw, Users, Plus, Trash2, Tag, Layers, Upload, Download,
   Search, ChevronLeft, ChevronRight, UserX, UserCheck, Bell, Mail, Image,
-  Database, HardDrive, ExternalLink,
+  Database, HardDrive, ExternalLink, XCircle,
 } from 'lucide-react'
 import { getAuthHeaders } from '../lib/supabase'
 import { getSession as cognitoGetSession } from '../lib/cognitoAuth'
@@ -12,7 +12,7 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   fetchAllAnalysts, createAnalyst, updateAnalyst, deactivateAnalyst, reactivateAnalyst,
   fetchClientTypesAdmin, createClientType, updateClientType, deactivateClientType,
-  fetchProjectTypes, createProjectType, updateProjectType, deactivateProjectType,
+  fetchProjectTypes, createProjectType, updateProjectType, deactivateProjectType, deleteProjectType,
   fetchNotificationSettings, updateNotificationSetting,
   fetchAppSettings, updateAppSetting,
   fetchAllClients, createClient, updateClient, deactivateClient, importClients,
@@ -45,11 +45,12 @@ interface ManagedListProps {
   onRemove: (item: ListItem) => Promise<void>
   withTemplateUpload?: boolean
   templateItems?: ProjectType[]
+  onHardDelete?: (item: ListItem) => void
 }
 
 const ManagedList: React.FC<ManagedListProps> = ({
   title, subtitle, icon, items, loading, error, onClearError,
-  onAdd, onEdit, onRemove, withTemplateUpload = false, templateItems = [],
+  onAdd, onEdit, onRemove, withTemplateUpload = false, templateItems = [], onHardDelete,
 }) => {
   const [newName, setNewName] = useState('')
   const [newFile, setNewFile] = useState<File | null>(null)
@@ -236,10 +237,19 @@ const ManagedList: React.FC<ManagedListProps> = ({
                     <button
                       className="btn btn-ghost btn-xs text-error/60 hover:text-error hover:bg-error/10"
                       onClick={() => onRemove(item)}
-                      title="Remove"
+                      title="Deactivate (hides from dropdowns, name stays reserved)"
                     >
                       <Trash2 size={11} />
                     </button>
+                    {onHardDelete && (
+                      <button
+                        className="btn btn-ghost btn-xs text-error hover:bg-error/20"
+                        onClick={() => onHardDelete(item)}
+                        title="Permanently delete (frees up the name for reuse)"
+                      >
+                        <XCircle size={11} />
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -788,7 +798,7 @@ export const AdminPage: React.FC = () => {
       setProjectTypes(prev => [...prev, created])
       showSuccess(`Project Type "${created.name}" added!`)
     } catch (err: any) {
-      setPtError(err.message?.includes('unique') ? 'A project type with that name already exists.' : err.message || 'Failed to add project type')
+      setPtError((err.message?.includes('unique') || err.message?.includes('already exists')) ? 'A project type with that name already exists.' : err.message || 'Failed to add project type')
       throw err
     }
   }
@@ -812,6 +822,26 @@ export const AdminPage: React.FC = () => {
       setProjectTypes(prev => prev.filter(pt => pt.id !== item.id))
       showSuccess(`Project Type "${item.name}" removed.`)
     } catch (err: any) { setPtError(err.message || 'Failed to remove project type') }
+  }
+
+  const [deleteProjectTypeTarget, setDeleteProjectTypeTarget] = useState<ListItem | null>(null)
+  const [deleteConfirmPtName, setDeleteConfirmPtName] = useState('')
+  const [deletingProjectType, setDeletingProjectType] = useState(false)
+
+  const handleDeleteProjectType = async () => {
+    if (!deleteProjectTypeTarget || deleteConfirmPtName.trim() !== deleteProjectTypeTarget.name) return
+    setDeletingProjectType(true)
+    try {
+      await deleteProjectType(deleteProjectTypeTarget.id)
+      setProjectTypes(prev => prev.filter(pt => pt.id !== deleteProjectTypeTarget.id))
+      showSuccess(`Project Type "${deleteProjectTypeTarget.name}" permanently deleted.`)
+      setDeleteProjectTypeTarget(null)
+      setDeleteConfirmPtName('')
+    } catch (err: any) {
+      setPtError(err.message || 'Failed to delete project type')
+    } finally {
+      setDeletingProjectType(false)
+    }
   }
 
   // Filtered + paginated users
@@ -1373,6 +1403,7 @@ export const AdminPage: React.FC = () => {
           onAdd={handleAddProjectType}
           onEdit={handleEditProjectType}
           onRemove={handleRemoveProjectType}
+          onHardDelete={isSuperAdmin ? (item) => { setDeleteProjectTypeTarget(item); setDeleteConfirmPtName('') } : undefined}
           withTemplateUpload
           templateItems={projectTypes}
         />
@@ -1893,6 +1924,46 @@ export const AdminPage: React.FC = () => {
 
       {/* ── SSO / Authentication Settings — Microsoft Entra ID ── */}
       <AdminEntraSSO />
+
+            {/* ── Delete Project Type Modal ─────────────────────────────────────── */}
+      {deleteProjectTypeTarget && (
+        <div className="modal modal-open">
+          <div className="modal-box max-w-md">
+            <h3 className="font-bold text-lg flex items-center gap-2 text-error">
+              <XCircle size={18} /> Permanently Delete Project Type
+            </h3>
+            <p className="py-3 text-sm text-base-content/70">
+              This will permanently remove <strong>{deleteProjectTypeTarget.name}</strong> and free up its name for reuse. Existing projects already using this type keep their data. <span className="text-error font-semibold">This cannot be undone.</span>
+            </p>
+            <p className="text-sm mb-2 font-medium">Type the project type name to confirm:</p>
+            <input
+              className="input input-bordered input-sm w-full"
+              placeholder={deleteProjectTypeTarget.name}
+              value={deleteConfirmPtName}
+              onChange={e => setDeleteConfirmPtName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && deleteConfirmPtName.trim() === deleteProjectTypeTarget.name) handleDeleteProjectType() }}
+              autoFocus
+            />
+            <div className="modal-action">
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => { setDeleteProjectTypeTarget(null); setDeleteConfirmPtName('') }}
+                disabled={deletingProjectType}
+              >
+                Cancel
+              </button>
+              <button
+                className={`btn btn-error btn-sm gap-1.5 ${deletingProjectType ? 'loading' : ''}`}
+                disabled={deleteConfirmPtName.trim() !== deleteProjectTypeTarget.name || deletingProjectType}
+                onClick={handleDeleteProjectType}
+              >
+                {!deletingProjectType && <XCircle size={13} />} Delete Permanently
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => { if (!deletingProjectType) { setDeleteProjectTypeTarget(null); setDeleteConfirmPtName('') } }} />
+        </div>
+      )}
 
             {/* ── Delete User Modal ─────────────────────────────────────────────── */}
       {deleteUserTarget && (

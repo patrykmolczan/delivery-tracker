@@ -11,6 +11,7 @@ import {
   uploadProjectFile, MAX_FILE_SIZE_BYTES, MAX_FILES_PER_PROJECT,
   fetchProjectCountries, fetchProjectTasks, formatFileSize,
   fetchAnalysts, fetchProjectTypes, fetchClients, submitClientRequest,
+  getProjectTypeTemplateUrl,
 } from '../lib/data'
 import type {
   LookupItem, ClientTypeLookupItem, Project, ProjectFormData,
@@ -139,6 +140,25 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [showQualityWarning, setShowQualityWarning] = useState(false)
+  const [templateDownloading, setTemplateDownloading] = useState(false)
+
+  const handleTemplateDownload = async (pt: ProjectType) => {
+    if (!pt.template_url) return
+    setTemplateDownloading(true)
+    try {
+      const url = await getProjectTypeTemplateUrl(pt.template_url)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = pt.template_label || pt.name
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    } catch (err: any) {
+      alert(`Download failed: ${err.message}`)
+    } finally {
+      setTemplateDownloading(false)
+    }
+  }
   const [showNoTemplateWarning, setShowNoTemplateWarning] = useState(false)
   const pendingFormRef = useRef<ProjectFormData | null>(null)
   const pendingUserRef = useRef<any>(null)
@@ -910,16 +930,15 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                   const pt = projectTypes.find(p => p.name === form.project_type)
                   return pt?.template_url ? (
                     <div data-tour="template-download-strip">
-                      <a
-                        href={pt.template_url}
-                        download={pt.template_label || pt.name}
-                        className="btn btn-ghost btn-sm gap-1.5 text-primary border border-primary/30 hover:bg-primary/10"
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => handleTemplateDownload(pt)}
+                        disabled={templateDownloading}
+                        className={`btn btn-ghost btn-sm gap-1.5 text-primary border border-primary/30 hover:bg-primary/10 ${templateDownloading ? 'loading' : ''}`}
                       >
-                        <Download size={14} />
+                        {!templateDownloading && <Download size={14} />}
                         <span>Download {pt.template_label || `${pt.name} Template`}</span>
-                      </a>
+                      </button>
                     </div>
                   ) : null
                 })()}

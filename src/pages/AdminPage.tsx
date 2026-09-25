@@ -18,6 +18,7 @@ import {
   fetchAllClients, createClient, updateClient, deactivateClient, importClients,
   fetchClientRequests, approveClientRequest, rejectClientRequest,
   fetchAdminBackups, fetchAdminBackupDownloadUrl, runAdminBackup,
+  getProjectTypeTemplateUrl,
 } from '../lib/data'
 import type { BackupFile } from '../lib/data'
 import type { Analyst, ClientType, ProjectType, Client, ClientRequest } from '../lib/data'
@@ -57,8 +58,27 @@ const ManagedList: React.FC<ManagedListProps> = ({
   const [editName, setEditName] = useState('')
   const [editFile, setEditFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
+  const [downloadingTemplateId, setDownloadingTemplateId] = useState<number | null>(null)
   const addFileRef = useRef<HTMLInputElement>(null)
   const editFileRef = useRef<HTMLInputElement>(null)
+
+  const handleTemplateDownload = async (pt: ProjectType) => {
+    if (!pt.template_url) return
+    setDownloadingTemplateId(pt.id)
+    try {
+      const url = await getProjectTypeTemplateUrl(pt.template_url)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = pt.template_label || pt.name
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    } catch (err: any) {
+      alert(`Download failed: ${err.message}`)
+    } finally {
+      setDownloadingTemplateId(null)
+    }
+  }
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -194,16 +214,15 @@ const ManagedList: React.FC<ManagedListProps> = ({
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-sm font-medium truncate">{item.name}</span>
                     {pt?.template_url && (
-                      <a
-                        href={pt.template_url}
-                        download={pt.template_label || pt.name}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn btn-ghost btn-xs gap-1 text-primary/70 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                      <button
+                        type="button"
+                        onClick={() => handleTemplateDownload(pt)}
+                        disabled={downloadingTemplateId === pt.id}
+                        className={`btn btn-ghost btn-xs gap-1 text-primary/70 hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity ${downloadingTemplateId === pt.id ? 'loading' : ''}`}
                         title="Download template"
                       >
-                        <Download size={11} /> Template
-                      </a>
+                        {downloadingTemplateId !== pt.id && <Download size={11} />} Template
+                      </button>
                     )}
                   </div>
                   <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">

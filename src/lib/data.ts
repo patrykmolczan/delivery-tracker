@@ -616,6 +616,16 @@ export async function getProjectFileUrl(storagePath: string): Promise<string> {
   return s3GetSignedUrl('project-files', storagePath)
 }
 
+// template_url on ProjectType is already a full storage key (e.g. "project-type-templates/xyz.xlsx"),
+// so it must be resolved through the private-bucket presigned-download flow, not linked to directly.
+export async function getProjectTypeTemplateUrl(templateKey: string): Promise<string> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE}/api/storage/download-url?key=${encodeURIComponent(templateKey)}`, { headers })
+  if (!res.ok) throw new Error('Could not generate download link')
+  const { downloadUrl } = await res.json()
+  return downloadUrl
+}
+
 // ─── AI Prediction Utilities ───────────────────────────────────────────────────
 
 export interface PredictionStats {

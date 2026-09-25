@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Bell, CheckCheck, ExternalLink, X, Check } from 'lucide-react'
 import { pollTable } from '../lib/pollingClient'
 import type { AppNotification } from '../types'
@@ -62,7 +63,10 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(false)
-  const panelRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const portalRef = useRef<HTMLDivElement>(null)
+  const [panelPos, setPanelPos] = useState<{ top: number; right: number } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -90,7 +94,10 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
   useEffect(() => {
     if (!open) return
     const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+      const insideButton = containerRef.current?.contains(target)
+      const insidePanel = portalRef.current?.contains(target)
+      if (!insideButton && !insidePanel) {
         setOpen(false)
       }
     }
@@ -124,14 +131,21 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
   }
 
   const handleToggle = () => {
-    if (!open) load()
+    if (!open) {
+      load()
+      const rect = buttonRef.current?.getBoundingClientRect()
+      if (rect) {
+        setPanelPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right })
+      }
+    }
     setOpen(prev => !prev)
   }
 
   return (
-    <div className="relative" ref={panelRef}>
+    <div className="relative" ref={containerRef}>
       {/* Bell button */}
       <button
+        ref={buttonRef}
         className="btn btn-ghost btn-sm btn-square relative"
         onClick={handleToggle}
         aria-label="Notifications"
@@ -144,9 +158,15 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
         )}
       </button>
 
-      {/* Dropdown panel */}
-      {open && (
-        <div className="glass-surface absolute right-0 top-10 w-80 bg-base-100 border border-base-300 rounded-xl shadow-xl z-50 overflow-hidden">
+      {/* Dropdown panel — portaled to document.body (see comment above buttonRef/
+          containerRef) so its own backdrop-filter isn't nested inside the header's
+          stacking context and can correctly blur the real page behind it. */}
+      {open && panelPos && createPortal(
+        <div
+          ref={portalRef}
+          className="glass-surface fixed w-80 bg-base-100 border border-base-300 rounded-xl shadow-xl z-50 overflow-hidden"
+          style={{ top: panelPos.top, right: panelPos.right }}
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-base-300">
             <div className="flex items-center gap-2">
@@ -238,7 +258,8 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
               View all notifications
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -849,6 +849,10 @@ export async function deactivateProjectType(id: number): Promise<void> {
   await api(`project-types/${id}/deactivate`, { method: 'PATCH' })
 }
 
+export async function deleteProjectType(id: number): Promise<void> {
+  await api(`project-types/${id}`, { method: 'DELETE' })
+}
+
 // ─── Delivery Files ───────────────────────────────────────────────────────────
 
 export const MAX_DELIVERY_FILES = 25

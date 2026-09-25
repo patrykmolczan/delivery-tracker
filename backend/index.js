@@ -156,6 +156,8 @@ const handler = async (event) => {
             const tid = segs[1];
             if (!segs[2] && method === 'PATCH')
                 return (0, analysts_1.updateProjectType)(tid, b(), user);
+            if (!segs[2] && method === 'DELETE')
+                return (0, analysts_1.deleteProjectType)(tid, user);
             if (segs[2] === 'deactivate' && method === 'PATCH')
                 return (0, analysts_1.deactivateProjectType)(tid, user);
         }

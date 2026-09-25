@@ -14,6 +14,7 @@ exports.getProjectTypes = getProjectTypes;
 exports.createProjectType = createProjectType;
 exports.updateProjectType = updateProjectType;
 exports.deactivateProjectType = deactivateProjectType;
+exports.deleteProjectType = deleteProjectType;
 /**
  * routes/analysts.ts — CRUD for analysts table
  */
@@ -143,6 +144,8 @@ async function createProjectType(body, user) {
         return (0, response_1.ok)(row, 201);
     }
     catch (e) {
+        if (e.code === '23505')
+            return (0, response_1.err)('A project type with this name already exists.', 409);
         return (0, response_1.serverError)(e);
     }
 }
@@ -165,6 +168,8 @@ async function updateProjectType(id, body, user) {
         return (0, response_1.ok)({ success: true });
     }
     catch (e) {
+        if (e.code === '23505')
+            return (0, response_1.err)('A project type with this name already exists.', 409);
         return (0, response_1.serverError)(e);
     }
 }
@@ -173,6 +178,17 @@ async function deactivateProjectType(id, user) {
         return (0, response_1.forbidden)();
     try {
         await (0, db_1.query)("UPDATE public.project_types SET is_active=false WHERE id=$1", [id]);
+        return (0, response_1.ok)({ success: true });
+    }
+    catch (e) {
+        return (0, response_1.serverError)(e);
+    }
+}
+async function deleteProjectType(id, user) {
+    if (!(0, auth_1.isSuperAdmin)(user))
+        return (0, response_1.forbidden)();
+    try {
+        await (0, db_1.query)("DELETE FROM public.project_types WHERE id=$1", [id]);
         return (0, response_1.ok)({ success: true });
     }
     catch (e) {

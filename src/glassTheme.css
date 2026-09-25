@@ -1,14 +1,23 @@
 /**
- * glassTheme.css — a third theme, alongside daisyUI's built-in "light" and
- * "dark", using the same mechanism those two already use in this project:
- * this app imports daisyUI's pre-built stylesheet directly
- * (`@import "daisyui/daisyui.css"` in index.css) rather than running it as a
- * Tailwind CSS-first plugin, so daisyUI's newer `@plugin "daisyui/theme"`
- * authoring syntax doesn't apply here. The built-in themes are shipped as
- * plain `[data-theme="X"] { --color-*: ... }` blocks (see
- * node_modules/daisyui/theme/{light,dark}.css) — this file follows that same
- * pattern for `[data-theme="glass"]`, so it behaves identically to a
+ * glassTheme.css — two themes, "glass" (dark) and "glass-light", alongside
+ * daisyUI's built-in "light" and "dark", using the same mechanism those two
+ * already use in this project: this app imports daisyUI's pre-built
+ * stylesheet directly (`@import "daisyui/daisyui.css"` in index.css) rather
+ * than running it as a Tailwind CSS-first plugin, so daisyUI's newer
+ * `@plugin "daisyui/theme"` authoring syntax doesn't apply here. The
+ * built-in themes are shipped as plain `[data-theme="X"] { --color-*: ... }`
+ * blocks (see node_modules/daisyui/theme/{light,dark}.css) — this file
+ * follows that same pattern, so both variants behave identically to a
  * first-party theme with no build changes required.
+ *
+ * UI note: Glass is a visual treatment layered onto a base light/dark mode,
+ * not a third/fourth mutually-exclusive option — see the doc comment on
+ * ThemeContext's `glass` field for why. The sidebar's Appearance control is
+ * a 2-button Light/Dark switch plus one small Glass toggle; `data-theme`
+ * itself still needs a distinct value per combination (glass has a
+ * different token palette depending on whether it's paired with light or
+ * dark), hence four possible values even though the UI only ever shows
+ * three controls.
  *
  * daisyUI itself has no built-in "glass" THEME to start from, but it does
  * ship a `.glass` utility CLASS (node_modules/daisyui/utilities/glass.css) —
@@ -27,6 +36,8 @@
  * Page backdrop: glassmorphism is only visible over something colorful
  * behind it — a flat background makes the blur pointless — hence the
  * gradient body background below, which the translucent panels blur/reveal.
+ * Dark glass gets a moody, saturated gradient; light glass gets a softer,
+ * pastel one, since the same vivid gradient would fight with dark text.
  *
  * Performance: backdrop-filter is real GPU cost, and virtualized tables in
  * this app render many rows. Blur is therefore applied ONLY to structural,
@@ -53,7 +64,7 @@
  * it needs `.glass-surface` too, or it will have the same bug.
  */
 
-/* ── Theme tokens ────────────────────────────────────────────────────────── */
+/* ── Theme tokens: glass (dark) ──────────────────────────────────────────── */
 [data-theme="glass"] {
   color-scheme: dark;
 
@@ -84,7 +95,46 @@
   --color-error-content: oklch(18% 0.06 20);
 
   /* Slightly rounder than light/dark's 0.5rem — softer corners read as more
-     "material"/glass-like. */
+     "material"/glass-like. Shared by both glass variants. */
+  --radius-selector: 0.75rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* ── Theme tokens: glass-light ────────────────────────────────────────────
+   Same structure as "glass" above, mirrored for a light base: light
+   translucent surfaces, dark content text, same radius/sizing tokens. */
+[data-theme="glass-light"] {
+  color-scheme: light;
+
+  --color-base-100: oklch(97% 0.01 260 / 0.6);
+  --color-base-200: oklch(93% 0.015 260 / 0.55);
+  --color-base-300: oklch(89% 0.02 260 / 0.5);
+  --color-base-content: oklch(24% 0.03 260);
+
+  --color-primary: oklch(52% 0.19 255);
+  --color-primary-content: oklch(97% 0.02 255);
+  --color-secondary: oklch(58% 0.2 320);
+  --color-secondary-content: oklch(97% 0.02 320);
+  --color-accent: oklch(60% 0.14 190);
+  --color-accent-content: oklch(97% 0.02 190);
+  --color-neutral: oklch(88% 0.01 260);
+  --color-neutral-content: oklch(24% 0.03 260);
+
+  --color-info: oklch(56% 0.16 230);
+  --color-info-content: oklch(97% 0.02 230);
+  --color-success: oklch(52% 0.15 155);
+  --color-success-content: oklch(97% 0.02 155);
+  --color-warning: oklch(68% 0.17 85);
+  --color-warning-content: oklch(22% 0.06 85);
+  --color-error: oklch(56% 0.2 20);
+  --color-error-content: oklch(97% 0.02 20);
+
   --radius-selector: 0.75rem;
   --radius-field: 0.5rem;
   --radius-box: 1rem;
@@ -108,6 +158,17 @@
   background-attachment: fixed;
 }
 
+/* Softer, pastel version for the light variant — the same vivid gradient
+   used for dark glass would be too loud behind dark text and small badges. */
+[data-theme="glass-light"] body {
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 0%, oklch(85% 0.08 280 / 0.6), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 100% 20%, oklch(88% 0.07 200 / 0.5), transparent 60%),
+    radial-gradient(ellipse 90% 70% at 50% 100%, oklch(84% 0.08 330 / 0.45), transparent 60%),
+    oklch(96% 0.01 260);
+  background-attachment: fixed;
+}
+
 /* ── Frosted surfaces ────────────────────────────────────────────────────
    Composed from daisyUI's own built-in `.glass` utility recipe
    (node_modules/daisyui/utilities/glass.css) rather than a bespoke one: a
@@ -127,6 +188,12 @@
    applied on top of the translucent solid fill from --color-base-100/200/300
    above, instead of replacing it — legible everywhere, still visibly glass.
 
+   [data-theme^="glass"] (a "starts with" attribute selector) matches BOTH
+   "glass" and "glass-light" with one rule, since the frosting mechanism
+   itself is identical between the two variants — only the underlying
+   --color-* and --glass-* token values differ, and those are already scoped
+   per exact theme name above/below.
+
    .card and .modal-box are existing daisyUI classes already used
    consistently for panels throughout this codebase (KPI cards, chart
    panels, dialogs) — no component files need to change for those. .stat
@@ -137,10 +204,10 @@
    individual table rows — anything that can repeat dozens of times on one
    screen; backdrop-filter is real GPU cost and virtualized tables here can
    render a lot of rows. */
-[data-theme="glass"] .card,
-[data-theme="glass"] .stat,
-[data-theme="glass"] .modal-box,
-[data-theme="glass"] .glass-surface {
+[data-theme^="glass"] .card,
+[data-theme^="glass"] .stat,
+[data-theme^="glass"] .modal-box,
+[data-theme^="glass"] .glass-surface {
   --glass-blur: 20px;
   --glass-opacity: 22%;
   --glass-reflect-opacity: 6%;
@@ -157,14 +224,35 @@
   text-shadow: 0 1px oklch(0% 0 0 / var(--glass-text-shadow-opacity));
 }
 
+/* Light-glass override: a white sheen/reflection barely reads against an
+   already-light, near-white surface the way it does against dark glass, and
+   a dark drop-shadow (rather than the shared rule's black-at-low-opacity,
+   which is nearly invisible on light backgrounds) is what actually gives
+   light glass its edge definition. Placed after the shared rule above so
+   these values win for the properties they redeclare, while everything
+   else in the shared rule (blur, backdrop-filter itself) still applies. */
+[data-theme="glass-light"] .card,
+[data-theme="glass-light"] .stat,
+[data-theme="glass-light"] .modal-box,
+[data-theme="glass-light"] .glass-surface {
+  --glass-opacity: 45%;
+  --glass-reflect-opacity: 12%;
+  --glass-border-opacity: 55%;
+  --glass-text-shadow-opacity: 0%;
+  box-shadow:
+    0 0 0 1px oklch(100% 0 0 / var(--glass-border-opacity)) inset,
+    0 8px 32px oklch(30% 0.03 260 / 0.14);
+  text-shadow: none;
+}
+
 /* Graceful degradation: browsers without backdrop-filter support (or with
    it disabled) fall back to the plain translucent fill from --color-base-*
    above, without the sheen layers — still legible, just not frosted. */
 @supports not (backdrop-filter: blur(1px)) {
-  [data-theme="glass"] .card,
-  [data-theme="glass"] .stat,
-  [data-theme="glass"] .modal-box,
-  [data-theme="glass"] .glass-surface {
+  [data-theme^="glass"] .card,
+  [data-theme^="glass"] .stat,
+  [data-theme^="glass"] .modal-box,
+  [data-theme^="glass"] .glass-surface {
     background-image: none;
     box-shadow: 0 0 0 1px oklch(100% 0 0 / 0.12);
     text-shadow: none;
@@ -175,10 +263,10 @@
    GPU cost + the visual motion of content shifting behind it) but keep the
    rest of the theme, rather than ignoring the preference entirely. */
 @media (prefers-reduced-motion: reduce), (prefers-reduced-transparency: reduce) {
-  [data-theme="glass"] .card,
-  [data-theme="glass"] .stat,
-  [data-theme="glass"] .modal-box,
-  [data-theme="glass"] .glass-surface {
+  [data-theme^="glass"] .card,
+  [data-theme^="glass"] .stat,
+  [data-theme^="glass"] .modal-box,
+  [data-theme^="glass"] .glass-surface {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }

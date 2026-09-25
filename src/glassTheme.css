@@ -1,0 +1,172 @@
+/**
+ * glassTheme.css — a third theme, alongside daisyUI's built-in "light" and
+ * "dark", using the same mechanism those two already use in this project:
+ * this app imports daisyUI's pre-built stylesheet directly
+ * (`@import "daisyui/daisyui.css"` in index.css) rather than running it as a
+ * Tailwind CSS-first plugin, so daisyUI's newer `@plugin "daisyui/theme"`
+ * authoring syntax doesn't apply here. The built-in themes are shipped as
+ * plain `[data-theme="X"] { --color-*: ... }` blocks (see
+ * node_modules/daisyui/theme/{light,dark}.css) — this file follows that same
+ * pattern for `[data-theme="glass"]`, so it behaves identically to a
+ * first-party theme with no build changes required.
+ *
+ * daisyUI itself has no built-in "glass" THEME to start from, but it does
+ * ship a `.glass` utility CLASS (node_modules/daisyui/utilities/glass.css) —
+ * a diagonal light-sheen gradient, a reflection highlight streak, an inset
+ * "glass edge" via box-shadow, and an automatic text-shadow, all through
+ * tunable custom properties (--glass-blur, --glass-opacity, etc). The
+ * "Frosted surfaces" rules below are composed from that recipe rather than a
+ * bespoke one, reusing the same custom-property names — with one deliberate
+ * departure: the stock utility sets `background-color: transparent` and
+ * relies entirely on whatever's blurred behind it, which risks WCAG contrast
+ * failures on a data-dense dashboard sitting over a gradient that shifts
+ * color across the screen. Here the sheen is layered as `background-image`
+ * on top of a translucent solid fill (the --color-base-100/200/300 tokens
+ * below) instead of replacing it — legible everywhere, still visibly glass.
+ *
+ * Page backdrop: glassmorphism is only visible over something colorful
+ * behind it — a flat background makes the blur pointless — hence the
+ * gradient body background below, which the translucent panels blur/reveal.
+ *
+ * Performance: backdrop-filter is real GPU cost, and virtualized tables in
+ * this app render many rows. Blur is therefore applied ONLY to structural,
+ * non-repeating surfaces (cards, stat boxes, modals, the sidebar, the top
+ * bar, the one table-shell container) via `.card`, `.stat`, `.modal-box`
+ * (existing daisyUI classes, already used consistently for exactly these
+ * surfaces throughout the app) and a small opt-in `.glass-surface` marker
+ * class added to the handful of bespoke shell containers that aren't
+ * daisyUI components. It is deliberately NOT applied to `.btn`, `.badge`,
+ * `.checkbox`, `.input`, individual table rows, or anything else that can
+ * appear dozens of times on one screen.
+ */
+
+/* ── Theme tokens ────────────────────────────────────────────────────────── */
+[data-theme="glass"] {
+  color-scheme: dark;
+
+  /* Base surfaces: translucent so the gradient body background (below)
+     shows and blurs through them. Values carry an alpha channel via oklch's
+     `/ <alpha>` syntax, same color space daisyUI's own built-in themes use. */
+  --color-base-100: oklch(28% 0.03 265 / 0.62);
+  --color-base-200: oklch(24% 0.03 265 / 0.55);
+  --color-base-300: oklch(20% 0.03 265 / 0.5);
+  --color-base-content: oklch(97% 0.01 260);
+
+  --color-primary: oklch(72% 0.16 255);
+  --color-primary-content: oklch(18% 0.04 255);
+  --color-secondary: oklch(75% 0.17 320);
+  --color-secondary-content: oklch(18% 0.05 320);
+  --color-accent: oklch(80% 0.15 190);
+  --color-accent-content: oklch(18% 0.04 190);
+  --color-neutral: oklch(30% 0.02 265);
+  --color-neutral-content: oklch(94% 0.01 265);
+
+  --color-info: oklch(78% 0.12 230);
+  --color-info-content: oklch(20% 0.05 230);
+  --color-success: oklch(78% 0.16 155);
+  --color-success-content: oklch(18% 0.06 155);
+  --color-warning: oklch(84% 0.16 85);
+  --color-warning-content: oklch(22% 0.06 85);
+  --color-error: oklch(74% 0.18 20);
+  --color-error-content: oklch(18% 0.06 20);
+
+  /* Slightly rounder than light/dark's 0.5rem — softer corners read as more
+     "material"/glass-like. */
+  --radius-selector: 0.75rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* ── Page backdrop ───────────────────────────────────────────────────────
+   Fixed so it doesn't scroll away from behind the translucent panels;
+   colorful and varied on purpose — glassmorphism has nothing to blur over a
+   flat background. */
+[data-theme="glass"] body {
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 0%, oklch(45% 0.14 280 / 0.55), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 100% 20%, oklch(50% 0.14 200 / 0.45), transparent 60%),
+    radial-gradient(ellipse 90% 70% at 50% 100%, oklch(40% 0.13 330 / 0.4), transparent 60%),
+    oklch(16% 0.02 265);
+  background-attachment: fixed;
+}
+
+/* ── Frosted surfaces ────────────────────────────────────────────────────
+   Composed from daisyUI's own built-in `.glass` utility recipe
+   (node_modules/daisyui/utilities/glass.css) rather than a bespoke one: a
+   diagonal light-sheen gradient, a reflection highlight streak, an inset
+   "glass edge" border via box-shadow, and a subtle text-shadow for
+   legibility — all through the same tunable custom properties daisyUI
+   itself uses (--glass-blur, --glass-opacity, etc.), so anyone extending
+   this theme later can tune it the way daisyUI's own docs describe.
+
+   One deliberate departure from the stock utility: daisyUI's `.glass` sets
+   `background-color: transparent` and relies entirely on whatever's blurred
+   behind it. That's fine for a decorative card over a fixed background, but
+   risky here — this app's panels are full of small text, numbers and status
+   badges sitting over a gradient backdrop that shifts color across the
+   screen, and several glassmorphism guides specifically warn this can fail
+   WCAG contrast at the extremes. So `background-image` (the gradients) is
+   applied on top of the translucent solid fill from --color-base-100/200/300
+   above, instead of replacing it — legible everywhere, still visibly glass.
+
+   .card and .modal-box are existing daisyUI classes already used
+   consistently for panels throughout this codebase (KPI cards, chart
+   panels, dialogs) — no component files need to change for those. .stat
+   covers daisyUI's stat-block component. .glass-surface is an explicit,
+   opt-in marker added to the few bespoke shell containers (sidebar, top
+   bar, the table's outer wrapper) that aren't built from daisyUI classes.
+   Deliberately NOT applied to .btn, .badge, .checkbox, .input, or
+   individual table rows — anything that can repeat dozens of times on one
+   screen; backdrop-filter is real GPU cost and virtualized tables here can
+   render a lot of rows. */
+[data-theme="glass"] .card,
+[data-theme="glass"] .stat,
+[data-theme="glass"] .modal-box,
+[data-theme="glass"] .glass-surface {
+  --glass-blur: 20px;
+  --glass-opacity: 22%;
+  --glass-reflect-opacity: 6%;
+  --glass-border-opacity: 14%;
+  --glass-text-shadow-opacity: 8%;
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  background-image:
+    linear-gradient(135deg, oklch(100% 0 0 / var(--glass-opacity)) 0%, oklch(0% 0 0 / 0) 100%),
+    linear-gradient(100deg, oklch(100% 0 0 / var(--glass-reflect-opacity)) 25%, oklch(0% 0 0 / 0) 25%);
+  box-shadow:
+    0 0 0 1px oklch(100% 0 0 / var(--glass-border-opacity)) inset,
+    0 8px 32px oklch(0% 0 0 / 0.28);
+  text-shadow: 0 1px oklch(0% 0 0 / var(--glass-text-shadow-opacity));
+}
+
+/* Graceful degradation: browsers without backdrop-filter support (or with
+   it disabled) fall back to the plain translucent fill from --color-base-*
+   above, without the sheen layers — still legible, just not frosted. */
+@supports not (backdrop-filter: blur(1px)) {
+  [data-theme="glass"] .card,
+  [data-theme="glass"] .stat,
+  [data-theme="glass"] .modal-box,
+  [data-theme="glass"] .glass-surface {
+    background-image: none;
+    box-shadow: 0 0 0 1px oklch(100% 0 0 / 0.12);
+    text-shadow: none;
+  }
+}
+
+/* Respect reduced-motion/transparency preferences: drop the blur (heaviest
+   GPU cost + the visual motion of content shifting behind it) but keep the
+   rest of the theme, rather than ignoring the preference entirely. */
+@media (prefers-reduced-motion: reduce), (prefers-reduced-transparency: reduce) {
+  [data-theme="glass"] .card,
+  [data-theme="glass"] .stat,
+  [data-theme="glass"] .modal-box,
+  [data-theme="glass"] .glass-surface {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

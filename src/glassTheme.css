@@ -268,6 +268,26 @@
   }
 }
 
+/* Native <select> dropdown popups are rendered by the OS/browser chrome using the
+   select's own computed background-color, not by our DOM/CSS stacking context — there is
+   nothing meaningful for backdrop-filter to blur behind that OS-level popup. daisyUI's
+   `.select` class (and the native <select> nested inside it, which reads `background:
+   inherit`) sources its background directly from --color-base-100, which carries an alpha
+   channel in both glass themes for the frosted-panel effect above. Confirmed live via
+   getComputedStyle on a real production <select>: it returned `oklch(97% .01 260 / 0.6)`,
+   the exact translucent token value — so every native select's open dropdown list renders
+   visibly see-through in production, no blur possible. Force an opaque background
+   specifically for `.select` in both glass themes, matching this file's existing intent
+   that form controls stay solid/non-blurred (see "Frosted surfaces" comment above) — this
+   one selector was simply missing an explicit override. Scoped to `.select` only; does not
+   touch `.card`/`.stat`/`.modal-box`/`.glass-surface` treatment above. */
+[data-theme="glass"] .select {
+  background-color: oklch(28% 0.03 265);
+}
+[data-theme="glass-light"] .select {
+  background-color: oklch(97% 0.01 260);
+}
+
 /* Respect reduced-motion/transparency preferences: drop the blur (heaviest
    GPU cost + the visual motion of content shifting behind it) but keep the
    rest of the theme, rather than ignoring the preference entirely. */

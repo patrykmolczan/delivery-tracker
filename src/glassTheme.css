@@ -30,14 +30,27 @@
  *
  * Performance: backdrop-filter is real GPU cost, and virtualized tables in
  * this app render many rows. Blur is therefore applied ONLY to structural,
- * non-repeating surfaces (cards, stat boxes, modals, the sidebar, the top
- * bar, the one table-shell container) via `.card`, `.stat`, `.modal-box`
- * (existing daisyUI classes, already used consistently for exactly these
- * surfaces throughout the app) and a small opt-in `.glass-surface` marker
- * class added to the handful of bespoke shell containers that aren't
- * daisyUI components. It is deliberately NOT applied to `.btn`, `.badge`,
- * `.checkbox`, `.input`, individual table rows, or anything else that can
- * appear dozens of times on one screen.
+ * non-repeating surfaces: `.card`, `.stat`, `.modal-box` (existing daisyUI
+ * classes, already used consistently for exactly these surfaces — no
+ * component changes needed for those) and `.glass-surface`, an explicit
+ * marker class added to every hand-rolled panel in the app that doesn't use
+ * those daisyUI classes: the project detail slide-over, the sidebar, the top
+ * bar, the projects table shell and its country popover, the notification
+ * panel, the filter/country dropdowns, the two rich-text-editor popovers,
+ * and the four bespoke modal dialogs (delete/feedback/change-password/text-
+ * presets). This list was produced by grepping the whole codebase for every
+ * `fixed`/`absolute`-positioned element carrying a base-surface background,
+ * not guessed — search `glass-surface` to see the authoritative, current
+ * set. It is deliberately NOT applied to `.btn`, `.badge`, `.checkbox`,
+ * `.input`, individual table rows, or anything else that can appear dozens
+ * of times on one screen.
+ *
+ * A first pass at this theme only covered `.card`/`.stat`/`.modal-box` plus
+ * three shell containers, and missed every hand-rolled dialog/dropdown in
+ * the app — visible as unreadable, un-blurred double-exposed text where a
+ * panel with a translucent-but-unfrosted background sat over busy content.
+ * If a new overlay panel is added later and doesn't use `.card`/`.modal-box`,
+ * it needs `.glass-surface` too, or it will have the same bug.
  */
 
 /* ── Theme tokens ────────────────────────────────────────────────────────── */

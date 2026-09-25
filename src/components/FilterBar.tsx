@@ -51,7 +51,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({ label, value, options, onChan
         <ChevronDown size={11} className="flex-shrink-0 opacity-50" />
       </button>
       {open && options.length > 0 && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg min-w-full max-h-52 overflow-y-auto">
+        <div className="glass-surface absolute top-full left-0 mt-1 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg min-w-full max-h-52 overflow-y-auto">
           {options.map(opt => (
             <label
               key={opt}

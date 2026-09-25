@@ -147,7 +147,7 @@ export const ProjectFeedbackModal: React.FC<Props> = ({
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={!submitting ? onClose : undefined}
       />
-      <div className="relative bg-base-100 rounded-2xl shadow-2xl w-full max-w-xl border border-base-300 overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="glass-surface relative bg-base-100 rounded-2xl shadow-2xl w-full max-w-xl border border-base-300 overflow-hidden flex flex-col max-h-[90vh]">
 
         {/* ── Header ────────────────────────────────────────────────────── */}
         <div className={`bg-gradient-to-br ${cfg.headerGradient} border-b border-base-300 px-6 py-5 shrink-0`}>

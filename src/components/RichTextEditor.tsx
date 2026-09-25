@@ -211,7 +211,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
             Aa <ChevronDown size={10} />
           </button>
           {sizeOpen && (
-            <div className="absolute top-8 left-0 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg py-1 min-w-[110px]">
+            <div className="glass-surface absolute top-8 left-0 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg py-1 min-w-[110px]">
               {FONT_SIZES.map(({ label, value }) => (
                 <button
                   key={label}
@@ -243,7 +243,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
             <ChevronDown size={10} />
           </button>
           {colorOpen && (
-            <div className="absolute top-8 left-0 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg p-2">
+            <div className="glass-surface absolute top-8 left-0 z-50 bg-base-100 border border-base-300 rounded-lg shadow-lg p-2">
               <div className="grid grid-cols-5 gap-1.5">
                 {COLORS.map(({ label, value }) => (
                   <button

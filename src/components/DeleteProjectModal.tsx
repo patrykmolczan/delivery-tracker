@@ -32,7 +32,7 @@ export const DeleteProjectModal: React.FC<Props> = ({ projectName, onConfirm, on
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={!deleting ? onClose : undefined}
       />
-      <div className="relative bg-base-100 rounded-2xl shadow-2xl w-full max-w-md border border-base-300 overflow-hidden">
+      <div className="glass-surface relative bg-base-100 rounded-2xl shadow-2xl w-full max-w-md border border-base-300 overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-error/15 to-error/5 border-b border-error/20 px-6 py-5">
           <div className="flex items-center gap-3">

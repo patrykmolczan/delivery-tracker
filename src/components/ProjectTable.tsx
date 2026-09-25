@@ -91,7 +91,7 @@ const CountryPopover: React.FC<{
 
   return createPortal(
     <div
-      className="fixed z-[9999] bg-base-100 border border-base-300 rounded-xl shadow-2xl overflow-hidden"
+      className="glass-surface fixed z-[9999] bg-base-100 border border-base-300 rounded-xl shadow-2xl overflow-hidden"
       style={{ top, left, width: POPOVER_W }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}

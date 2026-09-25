@@ -64,6 +64,15 @@
  * it needs `.glass-surface` too, or it will have the same bug.
  */
 
+/* IMPORTANT — declaration order below is deliberate, not stylistic: this app's
+ * Vite/Tailwind v4 build pipeline (Lightning CSS) silently drops the standard
+ * `backdrop-filter` declaration during minification when a rule locally defines its
+ * own custom properties (like --glass-blur here) AND declares `backdrop-filter`
+ * BEFORE `-webkit-backdrop-filter`. Declaring `-webkit-backdrop-filter` FIRST avoids
+ * the bug (matches daisyUI's own `.glass` utility, which survives minification for
+ * the same reason). Confirmed by diffing the minified prod bundle. If you reorder
+ * these back, the blur silently vanishes in production only — dev/build both look
+ * fine, so this is easy to reintroduce by accident. Do not reorder. */
 /* ── Theme tokens: glass (dark) ──────────────────────────────────────────── */
 [data-theme="glass"] {
   color-scheme: dark;
@@ -213,8 +222,8 @@
   --glass-reflect-opacity: 6%;
   --glass-border-opacity: 14%;
   --glass-text-shadow-opacity: 8%;
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
   background-image:
     linear-gradient(135deg, oklch(100% 0 0 / var(--glass-opacity)) 0%, oklch(0% 0 0 / 0) 100%),
     linear-gradient(100deg, oklch(100% 0 0 / var(--glass-reflect-opacity)) 25%, oklch(0% 0 0 / 0) 25%);
@@ -267,7 +276,7 @@
   [data-theme^="glass"] .stat,
   [data-theme^="glass"] .modal-box,
   [data-theme^="glass"] .glass-surface {
-    backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 }

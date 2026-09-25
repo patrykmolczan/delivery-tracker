@@ -767,7 +767,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                       />
                       {/* Dropdown */}
                       {clientDropOpen && (
-                        <div className="absolute z-50 w-full mt-1 bg-base-100 border border-base-300 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                        <div className="glass-surface absolute z-50 w-full mt-1 bg-base-100 border border-base-300 rounded-xl shadow-lg max-h-56 overflow-y-auto">
                           {(() => {
                             const q = (clientSearch || '').toLowerCase()
                             const allFiltered = clients.filter(c => c.name.toLowerCase().includes(q))

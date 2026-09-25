@@ -806,7 +806,7 @@ export const ProjectDetail: React.FC<{
   // ────────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed inset-y-0 right-0 bg-base-100 border-l border-base-300 shadow-2xl z-50 flex flex-col" style={{ width: panelWidth }}>
+    <div className="glass-surface fixed inset-y-0 right-0 bg-base-100 border-l border-base-300 shadow-2xl z-50 flex flex-col" style={{ width: panelWidth }}>
       {/* Resize handle */}
       <div
         onMouseDown={onResizeStart}

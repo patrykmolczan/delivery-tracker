@@ -234,7 +234,7 @@ export const TextPresets: React.FC<TextPresetsProps> = ({ onInsert }) => {
 
       {showModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="relative bg-base-100 rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[88vh]">
+          <div className="glass-surface relative bg-base-100 rounded-2xl shadow-2xl w-full max-w-lg mx-4 flex flex-col max-h-[88vh]">
 
             {/* Header */}
             <div className="flex items-start justify-between p-5 border-b border-base-300">

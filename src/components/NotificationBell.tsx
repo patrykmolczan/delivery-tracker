@@ -146,7 +146,7 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
 
       {/* Dropdown panel */}
       {open && (
-        <div className="absolute right-0 top-10 w-80 bg-base-100 border border-base-300 rounded-xl shadow-xl z-50 overflow-hidden">
+        <div className="glass-surface absolute right-0 top-10 w-80 bg-base-100 border border-base-300 rounded-xl shadow-xl z-50 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-base-300">
             <div className="flex items-center gap-2">

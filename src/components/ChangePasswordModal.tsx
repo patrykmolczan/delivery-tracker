@@ -65,7 +65,7 @@ export default function ChangePasswordModal({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-base-100 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 relative">
+      <div className="glass-surface bg-base-100 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 relative">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-5">

@@ -22,7 +22,7 @@ import type { ProjectCountrySummary } from './lib/data'
 import type { Project, FilterState, SortState, StatusCount, OwnerCount, ViewMode, LookupItem, RecordTypeFilter } from './types'
 import {
   LayoutDashboard, Table2, RefreshCw, LogOut, Lock, Truck, Loader2,
-  Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon, AlertTriangle, UserCircle
+  Plus, Upload, Shield, Sparkles, Menu, X, ChevronRight, Sun, Moon, Droplets, AlertTriangle, UserCircle
 } from 'lucide-react'
 import { useTheme } from './contexts/ThemeContext'
 import { getSession as cognitoGetSession } from './lib/cognitoAuth'
@@ -59,7 +59,7 @@ const Dashboard: React.FC = () => {
   const [showChangePassword, setShowChangePassword] = useState(false)
   const isSSOUser = !!(user?.user_metadata?.sso_provider)
   const { logoUrl } = useLogo()
-  const { isDark, toggleTheme } = useTheme()
+  const { theme, setTheme } = useTheme()
   const [projects, setProjects] = useState<Project[]>([])
   const [statusCounts, setStatusCounts] = useState<StatusCount[]>([])
   const [ownerCounts, setOwnerCounts] = useState<OwnerCount[]>([])
@@ -254,14 +254,14 @@ const Dashboard: React.FC = () => {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed top-0 left-0 h-full w-64 bg-base-200 border-r border-base-300 z-40 flex flex-col
+      <aside className={`glass-surface fixed top-0 left-0 h-full w-64 bg-base-200 border-r border-base-300 z-40 flex flex-col
         transition-transform duration-200 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         {/* Logo */}
         <div className="p-4 border-b border-base-300 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             {logoUrl ? (
-              <div className={`rounded-md px-1.5 py-0.5 mr-1 transition-colors ${isDark ? 'bg-white/90' : 'bg-transparent'}`}>
+              <div className={`rounded-md px-1.5 py-0.5 mr-1 transition-colors ${theme !== 'light' ? 'bg-white/90' : 'bg-transparent'}`}>
                 <img
                   src={logoUrl}
                   alt="Logo"
@@ -325,30 +325,25 @@ const Dashboard: React.FC = () => {
           <div className="flex items-center justify-between px-2 py-1.5 mb-1">
             <span className="text-xs text-base-content/50 font-medium">Appearance</span>
             <div className="flex items-center gap-0.5 bg-base-300 rounded-lg p-0.5">
-              <button
-                onClick={() => { if (isDark) toggleTheme() }}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
-                  !isDark
-                    ? 'bg-base-100 text-base-content shadow-sm'
-                    : 'text-base-content/50 hover:text-base-content'
-                }`}
-                title="Light mode"
-              >
-                <Sun size={11} />
-                Light
-              </button>
-              <button
-                onClick={() => { if (!isDark) toggleTheme() }}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
-                  isDark
-                    ? 'bg-base-100 text-base-content shadow-sm'
-                    : 'text-base-content/50 hover:text-base-content'
-                }`}
-                title="Dark mode"
-              >
-                <Moon size={11} />
-                Dark
-              </button>
+              {([
+                { value: 'light', label: 'Light', icon: Sun },
+                { value: 'dark', label: 'Dark', icon: Moon },
+                { value: 'glass', label: 'Glass', icon: Droplets },
+              ] as const).map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  onClick={() => setTheme(value)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
+                    theme === value
+                      ? 'bg-base-100 text-base-content shadow-sm'
+                      : 'text-base-content/50 hover:text-base-content'
+                  }`}
+                  title={`${label} mode`}
+                >
+                  <Icon size={11} />
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
           <div className="flex gap-2 mt-1">
@@ -384,7 +379,7 @@ const Dashboard: React.FC = () => {
       {/* Main content area */}
       <div className="flex-1 min-w-0 lg:ml-64 flex flex-col min-h-screen">
         {/* Top bar */}
-        <div className="sticky top-0 z-20 bg-base-100/80 backdrop-blur border-b border-base-300 px-4 h-14 flex items-center justify-between">
+        <div className="glass-surface sticky top-0 z-20 bg-base-100/80 backdrop-blur border-b border-base-300 px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button className="btn btn-ghost btn-sm btn-square lg:hidden" onClick={() => setSidebarOpen(true)}>
               <Menu size={18} />

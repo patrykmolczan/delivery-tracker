@@ -322,9 +322,9 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           {/* Theme Toggle */}
-          <div className="flex items-center justify-between px-2 py-1.5 mb-1">
+          <div className="px-2 py-1.5 mb-1">
             <span className="text-xs text-base-content/50 font-medium">Appearance</span>
-            <div className="flex items-center gap-0.5 bg-base-300 rounded-lg p-0.5">
+            <div className="flex items-center gap-0.5 bg-base-300 rounded-lg p-0.5 mt-1.5">
               {([
                 { value: 'light', label: 'Light', icon: Sun },
                 { value: 'dark', label: 'Dark', icon: Moon },
@@ -333,7 +333,7 @@ const Dashboard: React.FC = () => {
                 <button
                   key={value}
                   onClick={() => setTheme(value)}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
+                  className={`flex-1 flex items-center justify-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all ${
                     theme === value
                       ? 'bg-base-100 text-base-content shadow-sm'
                       : 'text-base-content/50 hover:text-base-content'

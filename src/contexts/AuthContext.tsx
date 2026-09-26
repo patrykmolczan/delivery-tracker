@@ -60,6 +60,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const initialized = useRef(false)
+  // Tracks whether this tab has ever held an authenticated Cognito session.
+  // Guards the visibility-change handler below so it only treats "no session"
+  // as an *expired* session (and force-redirects) for tabs that were actually
+  // logged in — not for the login page itself, where getSession() is always
+  // null before the user has signed in at all.
+  const wasAuthenticated = useRef(false)
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -102,6 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const cogUser = await getSession()
         if (cogUser) {
+          wasAuthenticated.current = true
           const profileData = await fetchProfileFromLambda(cogUser.idToken)
           setProfile(profileData)
           setUser(buildAppUser(cogUser, profileData))
@@ -118,8 +125,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (document.visibilityState !== 'visible') return
       try {
         const cogUser = await getSession()
-        if (!cogUser) {
-          // Session expired while tab was in background — clean up and redirect
+        if (cogUser) {
+          wasAuthenticated.current = true
+          return
+        }
+        if (!cogUser && wasAuthenticated.current) {
+          // Session expired while tab was in background — clean up and redirect.
+          // Only reachable for tabs that were actually logged in; a tab sitting
+          // on the login page (never authenticated) simply does nothing here,
+          // instead of force-reloading and wiping whatever the user was typing.
           cognitoSignOut()
           try {
             const prefix = 'CognitoIdentityServiceProvider'

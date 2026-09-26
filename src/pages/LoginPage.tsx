@@ -187,6 +187,7 @@ export const LoginPage: React.FC = () => {
     // COGNITO_DOMAIN and COGNITO_CONFIG.ClientId are now sourced from env vars
     // via the centralised cognitoAuth module (audit C-1, M-4). If either env var
     // is missing the module throws at app load — no silent production fallback.
+    setLoading(true)
     const clientId = COGNITO_CONFIG.ClientId
     const redirectUri = encodeURIComponent(`${window.location.origin}/auth/callback`)
     window.location.href = `${COGNITO_DOMAIN}/oauth2/authorize?client_id=${clientId}&response_type=code&scope=openid+email+profile&redirect_uri=${redirectUri}&identity_provider=IAMIdentityCenter`
@@ -1164,6 +1165,7 @@ export const LoginPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleSSOSignIn}
+                      disabled={loading}
                       style={{
                         width: '100%',
                         padding: '9px',
@@ -1173,7 +1175,8 @@ export const LoginPage: React.FC = () => {
                         color: rp.ssoColor,
                         fontSize: 13,
                         fontWeight: 500,
-                        cursor: 'pointer',
+                        cursor: loading ? 'default' : 'pointer',
+                        opacity: loading ? 0.7 : 1,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1182,8 +1185,8 @@ export const LoginPage: React.FC = () => {
                         transition: 'border-color 0.2s, color 0.35s',
                       }}
                     >
-                      <VpnKeyRounded sx={{ fontSize: 17 }} />
-                      Sign in with SSO
+                      {loading ? <AutorenewRounded sx={{ fontSize: 17 }} className="animate-spin" /> : <VpnKeyRounded sx={{ fontSize: 17 }} />}
+                      {loading ? 'Redirecting to SSO…' : 'Sign in with SSO'}
                     </button>
                   </>
                 )}

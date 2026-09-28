@@ -30,6 +30,7 @@ const forgotPassword_1 = require("./routes/forgotPassword");
 const import_1 = require("./routes/import");
 const backups_1 = require("./routes/backups");
 const loginAttempts_1 = require("./routes/loginAttempts");
+const session_1 = require("./routes/session");
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function body(event) {
     try {
@@ -371,6 +372,12 @@ const handler = async (event) => {
         // ── /auth/change-password (authenticated user sets own password) ──────────
         if (segs[0] === 'auth' && segs[1] === 'change-password' && method === 'POST')
             return (0, users_1.changeOwnPassword)(b(), user);
+        // ── /session (public — no auth) ───────────────────────────────────────────
+        // Store/refresh/clear the HttpOnly refresh-token cookie. Used by both
+        // password and SSO logins (see CognitoCallbackPage.tsx, cognitoAuth.ts,
+        // AuthContext.tsx). Does not touch or participate in the SSO handshake.
+        if (segs[0] === 'session' && method === 'POST')
+            return (0, session_1.handleSession)(b(), event);
         // ── /login-attempts ─────────────────────────────────────────────────────
         // POST is public (no auth) — called from the login/SSO callback pages
         // before any session exists, to record a passive debugging audit trail.

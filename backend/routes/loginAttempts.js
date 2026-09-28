@@ -42,6 +42,16 @@ function _checkRateLimit(ip) {
     return false;
 }
 
+// Only the last RETENTION_DAYS of history is kept / shown.
+const RETENTION_DAYS = 30;
+async function purgeOldLoginAttempts() {
+    try {
+        await query(`DELETE FROM login_attempts WHERE created_at < NOW() - INTERVAL '${RETENTION_DAYS} days'`);
+    } catch (e) {
+        console.error('[login-attempts] purge failed:', e);
+    }
+}
+
 const MAX_LEN = 500;
 function clip(s) {
     if (typeof s !== 'string') return null;
@@ -65,6 +75,8 @@ async function recordLoginAttempt(body, ip) {
              VALUES ($1, $2, $3, $4, $5)`,
             [clip(email.toLowerCase()), clip(method) || 'sso', success, clip(reason), clip(userAgent)]
         );
+        // Opportunistic retention purge (~1 in 20 inserts); never affects the response.
+        if (Math.random() < 0.05) await purgeOldLoginAttempts();
         return ok({ recorded: true });
     } catch (e) {
         // Never let audit logging surface as a real error to a login attempt.
@@ -80,15 +92,16 @@ async function getLoginAttempts(params, user) {
         const email = params?.email ? String(params.email).toLowerCase().trim() : null;
         const limitNum = parseInt(params?.limit, 10);
         const limit = Number.isFinite(limitNum) ? Math.min(Math.max(limitNum, 1), 200) : 50;
+        await purgeOldLoginAttempts();
         const rows = email
             ? await query(
                 `SELECT id, email, method, success, reason, user_agent, created_at
-                 FROM login_attempts WHERE email = $1 ORDER BY created_at DESC LIMIT $2`,
+                 FROM login_attempts WHERE email = $1 AND created_at >= NOW() - INTERVAL '30 days' ORDER BY created_at DESC LIMIT $2`,
                 [email, limit]
               )
             : await query(
                 `SELECT id, email, method, success, reason, user_agent, created_at
-                 FROM login_attempts ORDER BY created_at DESC LIMIT $1`,
+                 FROM login_attempts WHERE created_at >= NOW() - INTERVAL '30 days' ORDER BY created_at DESC LIMIT $1`,
                 [limit]
               );
         return ok(rows);

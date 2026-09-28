@@ -4,6 +4,7 @@ exports.getNotifications = getNotifications;
 exports.getUnreadCount = getUnreadCount;
 exports.markRead = markRead;
 exports.markAllRead = markAllRead;
+exports.markUnread = markUnread;
 exports.deleteNotification = deleteNotification;
 exports.createNotification = createNotification;
 exports.createNotificationsForAdmins = createNotificationsForAdmins;
@@ -32,7 +33,7 @@ async function getNotifications(body, user) {
         const profileId = await resolveProfileId(user.sub);
         if (!profileId) return (0, response_1.ok)([]);
         const limit = body?.limit ?? 50;
-        const unreadOnly = body?.unread_only ?? false;
+        const unreadOnly = body?.unread_only === true || body?.unread_only === 'true';
         let sql = 'SELECT * FROM public.notifications WHERE user_id=$1';
         const params = [profileId];
         if (unreadOnly) sql += ' AND is_read=false';
@@ -67,6 +68,21 @@ async function markRead(id, user) {
         if (!profileId) return (0, response_1.ok)({ success: true });
         await (0, db_1.query)(
             'UPDATE public.notifications SET is_read=true WHERE id=$1 AND user_id=$2',
+            [id, profileId]
+        );
+        return (0, response_1.ok)({ success: true });
+    }
+    catch (e) {
+        return (0, response_1.serverError)(e);
+    }
+}
+
+async function markUnread(id, user) {
+    try {
+        const profileId = await resolveProfileId(user.sub);
+        if (!profileId) return (0, response_1.ok)({ success: true });
+        await (0, db_1.query)(
+            'UPDATE public.notifications SET is_read=false WHERE id=$1 AND user_id=$2',
             [id, profileId]
         );
         return (0, response_1.ok)({ success: true });

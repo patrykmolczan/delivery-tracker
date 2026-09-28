@@ -1296,6 +1296,11 @@ export async function markNotificationRead(id: string): Promise<void> {
   api(`notifications/${id}/read`, { method: 'POST' }).catch(() => {})
 }
 
+/** Awaited read/unread toggle — throws on failure so the caller can revert its optimistic UI. */
+export async function setNotificationRead(id: string, isRead: boolean): Promise<void> {
+  await api(`notifications/${id}/${isRead ? 'read' : 'unread'}`, { method: 'POST' })
+}
+
 export async function markAllNotificationsRead(): Promise<void> {
   api('notifications/mark-all-read', { method: 'POST' }).catch(() => {})
 }

@@ -84,6 +84,12 @@ export const NotificationBell: React.FC<Props> = ({ onViewAll, onProjectOpen }) 
   // Initial load
   useEffect(() => { load() }, [load])
 
+  // Refresh immediately when the inbox page changes read/unread/delete state
+  useEffect(() => {
+    window.addEventListener('notifications:changed', load)
+    return () => window.removeEventListener('notifications:changed', load)
+  }, [load])
+
   // Poll for new notifications every 15s (replaces Supabase Realtime channel)
   useEffect(() => {
     const poll = pollTable('notifications', load, 15_000)

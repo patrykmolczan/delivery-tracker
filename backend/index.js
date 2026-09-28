@@ -220,6 +220,8 @@ const handler = async (event) => {
                 return (0, notifications_1.deleteNotification)(nid, user);
             if (segs[2] === 'read' && method === 'POST')
                 return (0, notifications_1.markRead)(nid, user);
+            if (segs[2] === 'unread' && method === 'POST')
+                return (0, notifications_1.markUnread)(nid, user);
         }
         // ── Storage (S3 presigned URLs) ──────────────────────────────────────────
         if (segs[0] === 'storage') {

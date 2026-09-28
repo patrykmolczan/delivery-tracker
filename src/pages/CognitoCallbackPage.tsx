@@ -137,6 +137,11 @@ const CognitoCallbackPage: React.FC = () => {
         const payloadB64 = id_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
         const idPayload  = JSON.parse(atob(payloadB64))
 
+        // Parse access token payload too — needed only to mirror the SDK's own
+        // clock-drift formula below (min of both tokens' issued-at claims).
+        const accessPayloadB64 = access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+        const accessPayload    = JSON.parse(atob(accessPayloadB64))
+
         // Cognito SDK uses cognito:username as the localStorage key
         const username = idPayload['cognito:username'] || idPayload.sub
         attemptEmail = idPayload.email || username
@@ -151,7 +156,17 @@ const CognitoCallbackPage: React.FC = () => {
         splitStorage.setItem(`${prefix}.LastAuthUser`,            username)
         splitStorage.setItem(`${prefix}.${username}.idToken`,     id_token)
         splitStorage.setItem(`${prefix}.${username}.accessToken`, access_token)
-        splitStorage.setItem(`${prefix}.${username}.clockDrift`,  '0')
+        // Clock-drift fix: compute drift the same way amazon-cognito-identity-js's
+        // own calculateClockDrift() does for password logins — now (device clock)
+        // minus the earlier of the two tokens' issued-at claims — instead of
+        // hardcoding 0. A hardcoded 0 made getSession()'s isValid() check use the
+        // device's raw clock with no skew correction, so any user with a clock off
+        // by more than the token lifetime would see a freshly-issued, valid SSO
+        // session immediately appear "expired" and get bounced back to login.
+        const nowSec = Math.floor(Date.now() / 1000)
+        const tokenIat = Math.min(idPayload.iat ?? nowSec, accessPayload.iat ?? nowSec)
+        const clockDrift = nowSec - tokenIat
+        splitStorage.setItem(`${prefix}.${username}.clockDrift`,  String(clockDrift))
         // refreshToken intentionally NOT written to splitStorage (blocked in N+1).
 
         if (refresh_token) {

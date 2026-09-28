@@ -1365,3 +1365,21 @@ export async function runAdminBackup(): Promise<{ key: string; size: number }> {
   const data = await api<{ key: string; size: number }>('admin/backups/run', { method: 'POST' })
   return data
 }
+
+// ─── Login attempt audit trail (Admin → Users → Login History) ────────────
+
+export interface LoginAttempt {
+  id: string
+  email: string
+  method: 'sso' | 'password'
+  success: boolean
+  reason: string | null
+  user_agent: string | null
+  created_at: string
+}
+
+/** GET /api/login-attempts?email=... — super-admin only. Passive debugging
+ *  audit trail; does not read from or affect the SSO/login flow itself. */
+export async function fetchLoginAttempts(email: string, limit = 50): Promise<LoginAttempt[]> {
+  return api<LoginAttempt[]>('login-attempts', { query: { email, limit: String(limit) } })
+}

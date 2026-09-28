@@ -5,6 +5,31 @@ import { splitStorage } from '../lib/splitStorage'
 import { useLogo } from '../hooks/useLogo'
 
 /**
+ * Passive login-attempt audit trail (Admin → Users → Login History).
+ * Fire-and-forget only — never awaited by the real sign-in flow, and any
+ * failure here is swallowed silently. This must never affect, delay, or
+ * block an actual SSO login. Does not read from or alter any SSO state.
+ */
+const LOGIN_ATTEMPTS_API_BASE = import.meta.env.VITE_API_BASE_URL || ''
+function reportLoginAttempt(args: { email?: string; success: boolean; reason?: string }) {
+  try {
+    fetch(`${LOGIN_ATTEMPTS_API_BASE}/api/login-attempts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: args.email || 'unknown',
+        method: 'sso',
+        success: args.success,
+        reason: args.reason,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+      }),
+    }).catch(() => {})
+  } catch {
+    // no-op — audit logging must never break login
+  }
+}
+
+/**
  * CognitoCallbackPage
  * Handles the OAuth 2.0 authorization code callback from Cognito hosted UI.
  * Route: /auth/callback
@@ -60,14 +85,20 @@ const CognitoCallbackPage: React.FC = () => {
     const errorDesc  = params.get('error_description')
 
     if (errorParam) {
-      setError(errorDesc ? decodeURIComponent(errorDesc) : errorParam)
+      const msg = errorDesc ? decodeURIComponent(errorDesc) : errorParam
+      setError(msg)
+      reportLoginAttempt({ success: false, reason: msg })
       return
     }
 
     if (!code) {
-      setError('No authorization code received from identity provider.')
+      const msg = 'No authorization code received from identity provider.'
+      setError(msg)
+      reportLoginAttempt({ success: false, reason: msg })
       return
     }
+
+    let attemptEmail: string | undefined
 
     const exchange = async () => {
       try {
@@ -108,6 +139,7 @@ const CognitoCallbackPage: React.FC = () => {
 
         // Cognito SDK uses cognito:username as the localStorage key
         const username = idPayload['cognito:username'] || idPayload.sub
+        attemptEmail = idPayload.email || username
 
         // -- Step 2: Secure tokens (AUTH-1 Sprint N+1) -----------------------
         // access/ID tokens -> sessionStorage via splitStorage (tab-scoped).
@@ -140,6 +172,8 @@ const CognitoCallbackPage: React.FC = () => {
           }
         }
 
+        reportLoginAttempt({ email: attemptEmail, success: true })
+
         // ── Step 3: Pause so user can appreciate the completed screen ─────
         setStep(3)
         await new Promise(r => setTimeout(r, 1500))
@@ -151,6 +185,7 @@ const CognitoCallbackPage: React.FC = () => {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         setError(msg)
+        reportLoginAttempt({ email: attemptEmail, success: false, reason: msg })
       }
     }
 

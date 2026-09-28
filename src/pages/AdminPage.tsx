@@ -4,7 +4,7 @@ import {
   UserPlus, Shield, User, CheckCircle2, Edit2, Save, X, AlertCircle,
   Loader2, RefreshCw, Users, Plus, Trash2, Tag, Layers, Upload, Download,
   Search, ChevronLeft, ChevronRight, UserX, UserCheck, Bell, Mail, Image,
-  Database, HardDrive, ExternalLink, XCircle,
+  Database, HardDrive, ExternalLink, XCircle, History,
 } from 'lucide-react'
 import { getAuthHeaders } from '../lib/supabase'
 import { getSession as cognitoGetSession } from '../lib/cognitoAuth'
@@ -18,9 +18,9 @@ import {
   fetchAllClients, createClient, updateClient, deactivateClient, importClients,
   fetchClientRequests, approveClientRequest, rejectClientRequest,
   fetchAdminBackups, fetchAdminBackupDownloadUrl, runAdminBackup,
-  getProjectTypeTemplateUrl,
+  getProjectTypeTemplateUrl, fetchLoginAttempts,
 } from '../lib/data'
-import type { BackupFile } from '../lib/data'
+import type { BackupFile, LoginAttempt } from '../lib/data'
 import type { Analyst, ClientType, ProjectType, Client, ClientRequest } from '../lib/data'
 import type { UserProfile } from '../types'
 import { AdminEntraSSO } from '../components/sso/AdminEntraSSO'
@@ -352,6 +352,12 @@ export const AdminPage: React.FC = () => {
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('')
   const [deleting, setDeleting] = useState(false)
   const USERS_PER_PAGE = 15
+
+  // Login history (Admin → Users → Login History) — super-admin only
+  const [loginHistoryTarget, setLoginHistoryTarget] = useState<UserProfile | null>(null)
+  const [loginHistoryRows, setLoginHistoryRows] = useState<LoginAttempt[]>([])
+  const [loginHistoryLoading, setLoginHistoryLoading] = useState(false)
+  const [loginHistoryError, setLoginHistoryError] = useState<string | null>(null)
 
   const uploadLogo = async (file: File) => {
     if (file.size > 2 * 1024 * 1024) {
@@ -714,6 +720,21 @@ export const AdminPage: React.FC = () => {
       setError(err.message || 'Failed to delete user')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const openLoginHistory = async (u: UserProfile) => {
+    setLoginHistoryTarget(u)
+    setLoginHistoryRows([])
+    setLoginHistoryError(null)
+    setLoginHistoryLoading(true)
+    try {
+      const rows = await fetchLoginAttempts(u.email)
+      setLoginHistoryRows(rows)
+    } catch (err: any) {
+      setLoginHistoryError(err.message || 'Failed to load login history')
+    } finally {
+      setLoginHistoryLoading(false)
     }
   }
 
@@ -1623,6 +1644,15 @@ export const AdminPage: React.FC = () => {
                                 )}
                                 {isSuperAdmin && (
                                   <button
+                                    className="btn btn-ghost btn-xs gap-1 text-info/70 hover:text-info hover:bg-info/10"
+                                    onClick={() => openLoginHistory(user)}
+                                    title="View login attempt history"
+                                  >
+                                    <History size={12} />
+                                  </button>
+                                )}
+                                {isSuperAdmin && (
+                                  <button
                                     className="btn btn-ghost btn-xs text-error/50 hover:text-error hover:bg-error/10"
                                     onClick={() => { setDeleteUserTarget(user); setDeleteConfirmEmail('') }}
                                     title="Permanently delete user"
@@ -2002,6 +2032,64 @@ export const AdminPage: React.FC = () => {
             </div>
           </div>
           <div className="modal-backdrop" onClick={() => { if (!deleting) { setDeleteUserTarget(null); setDeleteConfirmEmail('') } }} />
+        </div>
+      )}
+
+      {/* ── Login History Modal (super-admin only) ────────────────────────── */}
+      {loginHistoryTarget && (
+        <div className="modal modal-open">
+          <div className="modal-box max-w-2xl">
+            <h3 className="font-bold text-lg flex items-center gap-2">
+              <History size={18} className="text-info" /> Login History
+            </h3>
+            <p className="py-1 text-sm text-base-content/60">
+              {loginHistoryTarget.full_name || loginHistoryTarget.email} · <span className="font-mono text-xs">{loginHistoryTarget.email}</span>
+            </p>
+            <p className="text-xs text-base-content/40 mb-3">
+              Passive audit trail. SSO failures rejected by the identity provider before reaching this app may show as "unknown" — match by timestamp instead.
+            </p>
+            {loginHistoryLoading ? (
+              <div className="flex items-center justify-center h-24"><Loader2 size={22} className="animate-spin text-primary" /></div>
+            ) : loginHistoryError ? (
+              <div className="alert alert-error text-sm">{loginHistoryError}</div>
+            ) : loginHistoryRows.length === 0 ? (
+              <div className="text-center py-10 text-base-content/40">
+                <History size={28} className="mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No login attempts recorded for this user yet.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                <table className="table table-xs">
+                  <thead>
+                    <tr className="bg-base-300/50">
+                      <th>When</th>
+                      <th>Method</th>
+                      <th>Result</th>
+                      <th>Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loginHistoryRows.map(row => (
+                      <tr key={row.id}>
+                        <td className="text-xs text-base-content/60 whitespace-nowrap">{new Date(row.created_at).toLocaleString('en-US')}</td>
+                        <td className="uppercase text-xs">{row.method}</td>
+                        <td>
+                          <span className={`badge badge-sm ${row.success ? 'badge-success' : 'badge-error'}`}>
+                            {row.success ? 'Success' : 'Failed'}
+                          </span>
+                        </td>
+                        <td className="text-xs text-base-content/70">{row.reason || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="modal-action">
+              <button className="btn btn-ghost btn-sm" onClick={() => setLoginHistoryTarget(null)}>Close</button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => setLoginHistoryTarget(null)} />
         </div>
       )}
     </div>

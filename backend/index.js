@@ -29,6 +29,7 @@ const sendWelcome_1 = require("./routes/sendWelcome");
 const forgotPassword_1 = require("./routes/forgotPassword");
 const import_1 = require("./routes/import");
 const backups_1 = require("./routes/backups");
+const loginAttempts_1 = require("./routes/loginAttempts");
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function body(event) {
     try {
@@ -370,6 +371,16 @@ const handler = async (event) => {
         // ── /auth/change-password (authenticated user sets own password) ──────────
         if (segs[0] === 'auth' && segs[1] === 'change-password' && method === 'POST')
             return (0, users_1.changeOwnPassword)(b(), user);
+        // ── /login-attempts ─────────────────────────────────────────────────────
+        // POST is public (no auth) — called from the login/SSO callback pages
+        // before any session exists, to record a passive debugging audit trail.
+        // GET is super-admin only — query history, optionally by ?email=
+        if (segs[0] === 'login-attempts') {
+            if (method === 'POST')
+                return (0, loginAttempts_1.recordLoginAttempt)(b(), event.requestContext?.http?.sourceIp ?? event.headers?.['x-forwarded-for']?.split(',')[0]?.trim() ?? '');
+            if (method === 'GET')
+                return (0, loginAttempts_1.getLoginAttempts)(q(), user);
+        }
         // ── /users ──────────────────────────────────────────────────────────────
         if (segs[0] === 'users') {
             if (!segs[1]) {

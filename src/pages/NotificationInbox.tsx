@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Bell, CheckCheck, Trash2, ExternalLink, Filter } from 'lucide-react'
+import { Bell, CheckCheck, Trash2, ExternalLink, Filter, Mail, MailOpen } from 'lucide-react'
 import type { AppNotification } from '../types'
 import {
   fetchNotifications,
   markNotificationRead,
   markAllNotificationsRead,
   deleteNotification,
+  setNotificationRead,
 } from '../lib/data'
+
+// Tells the header bell to refresh its unread badge immediately (it otherwise polls every 15s)
+const notifyBell = () => window.dispatchEvent(new Event('notifications:changed'))
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function relativeTime(dateStr: string): string {
@@ -104,9 +108,23 @@ export const NotificationInbox: React.FC<Props> = ({ onProjectOpen }) => {
     if (!n.is_read) {
       await markNotificationRead(n.id).catch(() => {})
       setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x))
+      notifyBell()
     }
     if (n.project_id && onProjectOpen) {
       onProjectOpen(n.project_id, getNotifTab(n.type))
+    }
+  }
+
+  // Toggle read <-> unread without navigating. Optimistic; reverts if the server call fails.
+  const handleToggleRead = async (e: React.MouseEvent, n: AppNotification) => {
+    e.stopPropagation()
+    const next = !n.is_read
+    setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: next } : x))
+    try {
+      await setNotificationRead(n.id, next)
+      notifyBell()
+    } catch {
+      setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, is_read: n.is_read } : x))
     }
   }
 
@@ -114,11 +132,13 @@ export const NotificationInbox: React.FC<Props> = ({ onProjectOpen }) => {
     e.stopPropagation()
     await deleteNotification(id).catch(() => {})
     setNotifications(prev => prev.filter(x => x.id !== id))
+    notifyBell()
   }
 
   const handleMarkAllRead = async () => {
     await markAllNotificationsRead().catch(() => {})
     setNotifications(prev => prev.map(x => ({ ...x, is_read: true })))
+    notifyBell()
   }
 
   // Filter
@@ -260,6 +280,14 @@ export const NotificationInbox: React.FC<Props> = ({ onProjectOpen }) => {
                     {n.project_id && (
                       <ExternalLink size={13} className="text-base-content/20" />
                     )}
+                    <button
+                      onClick={e => handleToggleRead(e, n)}
+                      className="btn btn-ghost btn-xs btn-square text-base-content/40 hover:text-primary"
+                      title={n.is_read ? 'Mark as unread' : 'Mark as read'}
+                      aria-label={n.is_read ? 'Mark as unread' : 'Mark as read'}
+                    >
+                      {n.is_read ? <Mail size={13} /> : <MailOpen size={13} />}
+                    </button>
                     <button
                       onClick={e => handleDelete(e, n.id)}
                       className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 hover:btn-error ml-1"

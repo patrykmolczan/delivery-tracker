@@ -1380,6 +1380,6 @@ export interface LoginAttempt {
 
 /** GET /api/login-attempts?email=... — super-admin only. Passive debugging
  *  audit trail; does not read from or affect the SSO/login flow itself. */
-export async function fetchLoginAttempts(email: string, limit = 50): Promise<LoginAttempt[]> {
+export async function fetchLoginAttempts(email: string, limit = 200): Promise<LoginAttempt[]> {
   return api<LoginAttempt[]>('login-attempts', { query: { email, limit: String(limit) } })
 }

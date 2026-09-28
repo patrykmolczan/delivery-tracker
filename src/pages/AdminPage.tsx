@@ -2058,14 +2058,16 @@ export const AdminPage: React.FC = () => {
                 <p className="text-sm">No login attempts recorded for this user yet.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto max-h-96 overflow-y-auto">
+              <>
+              {/* Viewport sized to the header + 10 rows (30px + 10 rows × 28–29px); anything beyond scrolls, header stays pinned. */}
+              <div className="overflow-x-auto overflow-y-auto overscroll-contain max-h-[322px]">
                 <table className="table table-xs">
                   <thead>
-                    <tr className="bg-base-300/50">
-                      <th>When</th>
-                      <th>Method</th>
-                      <th>Result</th>
-                      <th>Reason</th>
+                    <tr>
+                      <th className="sticky top-0 z-10 bg-base-200">When</th>
+                      <th className="sticky top-0 z-10 bg-base-200">Method</th>
+                      <th className="sticky top-0 z-10 bg-base-200">Result</th>
+                      <th className="sticky top-0 z-10 bg-base-200">Reason</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2084,6 +2086,11 @@ export const AdminPage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+              <p className="text-xs text-base-content/40 mt-2">
+                {loginHistoryRows.length} attempt{loginHistoryRows.length === 1 ? '' : 's'} in the last 30 days
+                {loginHistoryRows.length > 10 ? ' — scroll for older entries' : ''}
+              </p>
+              </>
             )}
             <div className="modal-action">
               <button className="btn btn-ghost btn-sm" onClick={() => setLoginHistoryTarget(null)}>Close</button>

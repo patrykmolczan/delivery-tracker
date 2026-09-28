@@ -121,15 +121,27 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => { loadData() }, [])
 
-  // SAFETY NET: if loadData() hangs for >12s, force sign-out so AuthContext clears
-  // the session and AppInner renders LoginPage — no redirect loop possible.
+  // SAFETY NET: if loadData() is still running after 45s, stop blocking the UI.
+  //
+  // This previously force-signed-out any user whose dashboard load simply took
+  // longer than 12s — e.g. downloading the ~1.8MB /api/projects payload over a
+  // slow VPN or cellular link — even though their Cognito session was completely
+  // valid. That was the cause of the "SSO succeeds but I get kicked back to the
+  // login page" reports (2026-09-28 SSO audit). A slow network is not an expired
+  // session, so this no longer touches the session at all: it only releases the
+  // blocking spinner so the dashboard and its Refresh button become usable, and
+  // any still-in-flight request populates the page normally when it lands.
+  //
+  // Genuinely expired/dead sessions are still caught — unchanged — by the
+  // periodic 30s session-expiry check directly below, which signs out as before.
+  //
   // Do NOT call cognitoAuth.getSession() here — it can itself hang when the SDK
   // is stuck retrying a dead token refresh (exactly the scenario we're trying to escape).
   useEffect(() => {
     if (!loading) return
     const timer = setTimeout(() => {
-      signOut()
-    }, 12000)
+      setLoading(false)
+    }, 45000)
     return () => clearTimeout(timer)
   }, [loading])
 

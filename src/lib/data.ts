@@ -636,9 +636,19 @@ export interface PredictionStats {
   byJobRange: Record<string, { avg: number; count: number }>
 }
 
-export function buildPredictionStats(projects: Project[]): PredictionStats {
+/** Only projects delivered within this many days feed the AI Delivery Estimate. */
+export const PREDICTION_WINDOW_DAYS = 90
+
+export function buildPredictionStats(projects: Project[], now: Date = new Date()): PredictionStats {
   const MAX_DAYS = 365
-  const completed = projects.filter(p => p.status === 'Completed' && p.days_to_complete && p.days_to_complete > 0 && p.days_to_complete <= MAX_DAYS)
+  // Rolling window ending today, as a local YYYY-MM-DD string so it compares directly with date_delivered
+  const cutoffDate = new Date(now)
+  cutoffDate.setDate(cutoffDate.getDate() - PREDICTION_WINDOW_DAYS)
+  const cutoff = `${cutoffDate.getFullYear()}-${String(cutoffDate.getMonth() + 1).padStart(2, '0')}-${String(cutoffDate.getDate()).padStart(2, '0')}`
+  const completed = projects.filter(p =>
+    p.status === 'Completed' && p.days_to_complete && p.days_to_complete > 0 && p.days_to_complete <= MAX_DAYS &&
+    !!p.date_delivered && String(p.date_delivered).slice(0, 10) >= cutoff
+  )
   const days = completed.map(p => p.days_to_complete as number).sort((a, b) => a - b)
 
   const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0
@@ -692,7 +702,10 @@ export function predictDeliveryTime(
   industry?: string,
   country?: string,
   jobCount?: number
-): { estimate: number; confidence: string; breakdown: string } {
+): { estimate: number; confidence: string; breakdown: string } | null {
+  // No completed projects in the window — there is nothing to base an estimate on
+  if (stats.overall.count === 0) return null
+
   const weights: Array<{ days: number; weight: number; label: string }> = []
 
   if (clientType && stats.byClientType[clientType]) {
@@ -719,7 +732,7 @@ export function predictDeliveryTime(
     return {
       estimate: stats.overall.median,
       confidence: 'Low',
-      breakdown: `Based on overall average of ${stats.overall.count} completed projects`
+      breakdown: `Based on overall average of ${stats.overall.count} projects completed in the last ${PREDICTION_WINDOW_DAYS} days`
     }
   }
 

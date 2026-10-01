@@ -44,6 +44,30 @@ function sanitize(v) {
         return null;
     return String(v).replace(/<[^>]*>/g, '').trim() || null;
 }
+// ── Client Type role gate ─────────────────────────────────────────────────────
+// client_types.min_role gates a type (e.g. "Pay Intel") to admins/super_admins.
+// Returns null when allowed, or a 403 response when the caller's role is too low.
+const ROLE_RANK = { user: 0, admin: 1, super_admin: 2 };
+async function assertClientTypeAllowed(clientTypeId, user) {
+    if (clientTypeId == null || clientTypeId === '')
+        return null;
+    let row;
+    try {
+        row = await (0, db_1.queryOne)('SELECT min_role FROM public.client_types WHERE id=$1', [clientTypeId]);
+    }
+    catch (e) {
+        // 42703 = undefined_column: the min_role migration has not been applied yet,
+        // so no type is gated. Any other error is a real failure and must surface.
+        if (e && e.code === '42703')
+            return null;
+        throw e;
+    }
+    if (!row)
+        return null;
+    if ((ROLE_RANK[user?.role] ?? 0) >= (ROLE_RANK[row.min_role] ?? 0))
+        return null;
+    return (0, response_1.err)('This client type is restricted to Admins and Analysts', 403);
+}
 /** GET /api/projects — paginated fetch (avoids 6MB Lambda limit)
  *  Query params: limit (default 2000), offset (default 0), count_only (boolean)
  */
@@ -79,6 +103,9 @@ async function getProject(projectId, _user) {
 async function createProject(body, user) {
     try {
         const form = body;
+        const clientTypeDenied = await assertClientTypeAllowed(form.client_type_id, user);
+        if (clientTypeDenied)
+            return clientTypeDenied;
         // Resolve profile.id from cognito_id so the FK constraint is satisfied
         const profileRow = await (0, db_1.queryOne)('SELECT id FROM public.profiles WHERE cognito_id = $1', [user.sub]);
         const profileId = profileRow?.id ?? null;
@@ -97,7 +124,8 @@ async function createProject(body, user) {
             sanitize(form.client_name) ?? form.client_name,
             sanitize(form.requestor),
             form.date_received,
-            form.expected_delivery_date || null,
+            // Only admins/analysts set the expected delivery date; requesters get an ETA after review
+            (0, auth_1.isAdmin)(user) ? (form.expected_delivery_date || null) : null,
             form.date_delivered || null,
             sanitize(form.project_summary),
             form.job_count ? parseInt(form.job_count) : null,
@@ -133,10 +161,18 @@ async function updateProject(projectId, body, user) {
     try {
         const form = body;
         // Capture before state for notifications
-        const current = await (0, db_1.queryOne)('SELECT project_owner, analyst, created_by, notifications_enabled, client_name, status_id FROM public.projects WHERE id = $1', [projectId]);
+        const current = await (0, db_1.queryOne)('SELECT project_owner, analyst, created_by, notifications_enabled, client_name, status_id, client_type_id FROM public.projects WHERE id = $1', [projectId]);
+        // Client Type gate applies only when the type is being changed, so an existing
+        // project already on a gated type can still be edited by its requester.
+        if (current && String(form.client_type_id ?? '') !== String(current.client_type_id ?? '')) {
+            const clientTypeDenied = await assertClientTypeAllowed(form.client_type_id, user);
+            if (clientTypeDenied)
+                return clientTypeDenied;
+        }
         await (0, db_1.query)(`UPDATE public.projects SET
         project_owner=$1, analyst=$2, client_type_id=$3, client_name=$4,
-        requestor=$5, date_received=$6, expected_delivery_date=$7,
+        requestor=$5, date_received=$6,
+        expected_delivery_date=CASE WHEN $17 THEN $7::date ELSE expected_delivery_date END,
         date_delivered=$8, project_summary=$9, job_count=$10,
         status_id=$11, country_id=$12, industry_id=$13, project_type=$14,
         time_allocation=$15, updated_at=NOW()
@@ -157,6 +193,8 @@ async function updateProject(projectId, body, user) {
             form.project_type || null,
             form.time_allocation != null && form.time_allocation !== '' ? parseFloat(form.time_allocation) : null,
             projectId,
+            // Non-admins cannot change the expected delivery date; the stored value is kept
+            (0, auth_1.isAdmin)(user),
         ]);
         await syncCountries(projectId, form.project_countries || []);
         await syncTasks(projectId, form.project_tasks || []);

@@ -24,6 +24,7 @@ import type { BackupFile, LoginAttempt } from '../lib/data'
 import type { Analyst, ClientType, ProjectType, Client, ClientRequest } from '../lib/data'
 import type { UserProfile } from '../types'
 import { AdminEntraSSO } from '../components/sso/AdminEntraSSO'
+import { AiEstimateSetting } from '../components/AiEstimateSetting'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 const S3_FILES_URL = (import.meta.env.VITE_S3_FILES_BUCKET_URL ?? '').replace(/\/$/, '')
@@ -1785,6 +1786,9 @@ export const AdminPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ── AI Delivery Estimate on/off — super-admin only ────────────────── */}
+      {isSuperAdmin && <AiEstimateSetting />}
 
       {/* ── Database & Backups — super-admin only ─────────────────────────── */}
       {isSuperAdmin && (

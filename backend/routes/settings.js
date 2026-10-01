@@ -17,7 +17,9 @@ const auth_1 = require("../shared/auth");
 const response_1 = require("../shared/response");
 // ── App Settings ──────────────────────────────────────────────────────────────
 // ── Public settings keys (returned without auth) ─────────────────────────────
-const PUBLIC_SETTINGS_KEYS = new Set(['logo_url', 'sso_enabled', 'company_name', 'primary_color', 'theme', 'app_name']);
+const PUBLIC_SETTINGS_KEYS = new Set(['logo_url', 'sso_enabled', 'company_name', 'primary_color', 'theme', 'app_name', 'ai_estimate_enabled']);
+// Settings only a super admin may change (they stay readable per PUBLIC_SETTINGS_KEYS above).
+const SUPER_ADMIN_ONLY_SETTINGS = new Set(['ai_estimate_enabled']);
 async function getAppSettings(_body, _user) {
     try {
         const rows = await (0, db_1.query)('SELECT key, value FROM public.app_settings');
@@ -36,6 +38,22 @@ async function getAppSettings(_body, _user) {
 async function updateAppSetting(key, body, user) {
     if (!(0, auth_1.isAdmin)(user))
         return (0, response_1.forbidden)();
+    if (SUPER_ADMIN_ONLY_SETTINGS.has(key)) {
+        if (!(0, auth_1.isSuperAdmin)(user))
+            return (0, response_1.forbidden)();
+        const value = String(body?.value);
+        if (value !== 'true' && value !== 'false')
+            return (0, response_1.err)('value must be "true" or "false"', 400);
+        try {
+            const prof = await (0, db_1.queryOne)('SELECT id FROM public.profiles WHERE cognito_id=$1', [user.sub]);
+            // Upsert so the toggle works even if the seed row is missing
+            await (0, db_1.query)('INSERT INTO public.app_settings (key, value, updated_at, updated_by) VALUES ($1,$2,NOW(),$3) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=NOW(), updated_by=EXCLUDED.updated_by', [key, value, prof?.id ?? null]);
+            return (0, response_1.ok)({ success: true });
+        }
+        catch (e) {
+            return (0, response_1.serverError)(e);
+        }
+    }
     try {
         await (0, db_1.query)('UPDATE public.app_settings SET value=$1, updated_at=NOW() WHERE key=$2', [body.value, key]);
         return (0, response_1.ok)({ success: true });

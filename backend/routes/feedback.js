@@ -12,6 +12,20 @@ exports.submitForReReview = submitForReReview;
  */
 const db_1 = require("../shared/db");
 const response_1 = require("../shared/response");
+// Resolve profiles.id from the Cognito identity (feedback FKs reference profiles.id, never user.sub).
+// Falls back to email so SSO users with a second Cognito identity still resolve. Read-only.
+async function resolveProfileId(user) {
+    try {
+        let row = await (0, db_1.queryOne)('SELECT id FROM public.profiles WHERE cognito_id = $1 LIMIT 1', [user.sub]);
+        if (!row && user.email) {
+            row = await (0, db_1.queryOne)('SELECT id FROM public.profiles WHERE lower(email) = lower($1) LIMIT 1', [user.email]);
+        }
+        return row?.id ?? null;
+    }
+    catch {
+        return null;
+    }
+}
 async function notifyUser(userId, type, title, body, projectId, projectName) {
     try {
         await (0, db_1.query)('INSERT INTO public.notifications (user_id, type, title, body, project_id, project_name) VALUES ($1,$2,$3,$4,$5,$6)', [userId, type, title, body, projectId, projectName ?? null]);
@@ -52,11 +66,12 @@ async function getUnresolvedCount(projectId, _user) {
 }
 async function createFeedback(projectId, body, user) {
     try {
+        const profileId = await resolveProfileId(user);
         const entry = await (0, db_1.queryOne)(`INSERT INTO public.project_feedback
         (project_id, author_id, author_name, author_role, action_type, message,
          status_change_to_id, status_change_to_name, notify_requester)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`, [
-            projectId, user.sub, body.author_name, body.author_role ?? 'admin',
+            projectId, profileId, body.author_name, body.author_role ?? 'admin',
             body.action_type, body.message ?? null,
             body.status_change_to_id ?? null, body.status_change_to_name ?? null,
             body.notify_requester ?? false,
@@ -71,7 +86,7 @@ async function createFeedback(projectId, body, user) {
         }
         // In-app notification for requester
         const proj = await (0, db_1.queryOne)('SELECT created_by, project_owner FROM public.projects WHERE id=$1', [projectId]);
-        if (proj?.created_by && proj.created_by !== user.sub) {
+        if (proj?.created_by && proj.created_by !== profileId) {
             const typeMap = {
                 hold: 'feedback_hold', request_changes: 'feedback_changes',
                 reject: 'feedback_reject', approve: 'feedback_approve',
@@ -95,10 +110,11 @@ async function createFeedback(projectId, body, user) {
 }
 async function resolveItem(itemId, body, user) {
     try {
+        const profileId = await resolveProfileId(user);
         await (0, db_1.query)(`UPDATE public.project_feedback_items SET
         is_resolved=true, resolved_by=$1, resolved_by_name=$2,
         resolved_at=NOW(), resolution_note=$3
-       WHERE id=$4`, [user.sub, body.resolved_by_name ?? null, body.note ?? null, itemId]);
+       WHERE id=$4`, [profileId, body.resolved_by_name ?? null, body.note ?? null, itemId]);
         return (0, response_1.ok)({ success: true });
     }
     catch (e) {
@@ -119,13 +135,14 @@ async function unresolveItem(itemId, _body, _user) {
 }
 async function submitUserResponse(projectId, body, user) {
     try {
+        const profileId = await resolveProfileId(user);
         const entry = await (0, db_1.queryOne)(`INSERT INTO public.project_feedback
         (project_id, author_id, author_name, author_role, action_type, message,
          status_change_to_id, status_change_to_name, notify_requester)
-       VALUES ($1,$2,$3,'user','user_response',$4,null,null,false) RETURNING *`, [projectId, user.sub, body.author_name, body.message]);
+       VALUES ($1,$2,$3,'user','user_response',$4,null,null,false) RETURNING *`, [projectId, profileId, body.author_name, body.message]);
         const proj = await (0, db_1.queryOne)('SELECT project_owner, client_name, id_number FROM public.projects WHERE id=$1', [projectId]);
         const label = proj?.client_name || proj?.project_owner || (proj?.id_number ? `#${proj.id_number}` : projectId);
-        await notifyAdmins('user_response', 'User replied to feedback', `${body.author_name} responded on "${label}".`, projectId, label, user.sub);
+        await notifyAdmins('user_response', 'User replied to feedback', `${body.author_name} responded on "${label}".`, projectId, label, profileId);
         return (0, response_1.ok)(entry, 201);
     }
     catch (e) {
@@ -134,13 +151,14 @@ async function submitUserResponse(projectId, body, user) {
 }
 async function submitForReReview(projectId, body, user) {
     try {
+        const profileId = await resolveProfileId(user);
         await (0, db_1.query)(`INSERT INTO public.project_feedback
         (project_id, author_id, author_name, author_role, action_type, message,
          status_change_to_id, status_change_to_name, notify_requester)
-       VALUES ($1,$2,$3,'user','resubmit','Project submitted for re-review.',null,null,false)`, [projectId, user.sub, body.author_name]);
+       VALUES ($1,$2,$3,'user','resubmit','Project submitted for re-review.',null,null,false)`, [projectId, profileId, body.author_name]);
         const proj = await (0, db_1.queryOne)('SELECT project_owner, client_name, id_number FROM public.projects WHERE id=$1', [projectId]);
         const label = proj?.client_name || proj?.project_owner || (proj?.id_number ? `#${proj.id_number}` : projectId);
-        await notifyAdmins('resubmit', 'Project submitted for re-review', `${body.author_name} submitted "${label}" for re-review.`, projectId, label, user.sub);
+        await notifyAdmins('resubmit', 'Project submitted for re-review', `${body.author_name} submitted "${label}" for re-review.`, projectId, label, profileId);
         return (0, response_1.ok)({ success: true });
     }
     catch (e) {

@@ -5,6 +5,7 @@ exports.getProject = getProject;
 exports.createProject = createProject;
 exports.updateProject = updateProject;
 exports.updateProjectStatus = updateProjectStatus;
+exports.updateProjectExpectedDelivery = updateProjectExpectedDelivery;
 exports.bulkUpdateStatus = bulkUpdateStatus;
 exports.deleteProject = deleteProject;
 exports.getProjectCountries = getProjectCountries;
@@ -278,6 +279,35 @@ async function updateProjectStatus(projectId, body, user) {
             console.error('audit error:', auditErr.message);
         }
         return (0, response_1.ok)({ date_delivered: dateDelivered, days_to_complete: daysToComplete });
+    }
+    catch (e) {
+        return (0, response_1.serverError)(e);
+    }
+}
+/** PATCH /api/projects/:id/expected-delivery — admin/analyst only; sets or clears just the expected delivery date */
+async function updateProjectExpectedDelivery(projectId, body, user) {
+    if (!(0, auth_1.isAdmin)(user))
+        return (0, response_1.forbidden)();
+    try {
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(projectId)))
+            return (0, response_1.notFound)();
+        // The field must be sent explicitly (a date, or null/'' to clear) so a malformed call can never clear it by accident
+        if (!body || typeof body !== 'object' || !('expected_delivery_date' in body))
+            return (0, response_1.err)('expected_delivery_date is required (YYYY-MM-DD, or null to clear)', 400);
+        const raw = body.expected_delivery_date;
+        let value = null;
+        if (raw !== null && raw !== undefined && raw !== '') {
+            const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(raw));
+            const d = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
+            if (!m || !d || d.getUTCFullYear() !== +m[1] || d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[3])
+                return (0, response_1.err)('expected_delivery_date must be a valid YYYY-MM-DD date or null', 400);
+            value = String(raw);
+        }
+        // The audit trigger on projects records the old/new value; updated_at is set by its own trigger.
+        const row = await (0, db_1.queryOne)('UPDATE public.projects SET expected_delivery_date=$1::date WHERE id=$2 RETURNING to_char(expected_delivery_date, \'YYYY-MM-DD\') AS expected_delivery_date', [value, projectId]);
+        if (!row)
+            return (0, response_1.notFound)();
+        return (0, response_1.ok)({ expected_delivery_date: row.expected_delivery_date });
     }
     catch (e) {
         return (0, response_1.serverError)(e);

@@ -94,6 +94,8 @@ const handler = async (event) => {
             }
             if (segs[2] === 'status' && method === 'PATCH')
                 return (0, projects_1.updateProjectStatus)(pid, b(), user);
+            if (segs[2] === 'expected-delivery' && method === 'PATCH')
+                return (0, projects_1.updateProjectExpectedDelivery)(pid, b(), user);
             if (segs[2] === 'notifications' && method === 'PATCH')
                 return (0, projects_1.updateProjectNotificationsEnabled)(pid, b(), user);
             if (segs[2] === 'countries') {

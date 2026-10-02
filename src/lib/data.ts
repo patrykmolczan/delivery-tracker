@@ -257,6 +257,15 @@ export async function updateProjectStatus(
   })
 }
 
+/** Admin/analyst only — sets (YYYY-MM-DD) or clears (null) just the expected delivery date. */
+export async function updateProjectExpectedDelivery(id: string, date: string | null): Promise<string | null> {
+  const res = await api<{ expected_delivery_date: string | null }>(`projects/${id}/expected-delivery`, {
+    method: 'PATCH',
+    body: { expected_delivery_date: date },
+  })
+  return res.expected_delivery_date ?? null
+}
+
 export async function bulkUpdateProjectStatus(ids: string[], statusId: number): Promise<void> {
   if (ids.length === 0) return
   await api('projects/bulk-status', { method: 'POST', body: { ids, status_id: statusId } })

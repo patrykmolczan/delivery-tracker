@@ -10,7 +10,7 @@ import {
 import type { Project, ProjectCountry, ProjectTask, ProjectETAHistory, ProjectFeedback, ProjectFeedbackItem } from '../types'
 import {
   formatDate, getStatusColor,
-  updateProjectStatus, fetchProjectHistory,
+  updateProjectStatus, updateProjectExpectedDelivery, fetchProjectHistory,
   fetchLookups,
   fetchProjectFiles, uploadProjectFile, deleteProjectFile, getProjectFileUrl,
   formatFileSize, MAX_FILES_PER_PROJECT,
@@ -186,6 +186,12 @@ export const ProjectDetail: React.FC<{
   const [etaNotify, setEtaNotify] = useState(false)
   const [etaSaving, setEtaSaving] = useState(false)
   const [etaSaveError, setEtaSaveError] = useState<string | null>(null)
+
+  // ── Expected Delivery inline edit (admins/analysts) ───────────────────────
+  const [edEditing, setEdEditing] = useState(false)
+  const [edValue, setEdValue] = useState('')
+  const [edSaving, setEdSaving] = useState(false)
+  const [edError, setEdError] = useState<string | null>(null)
 
   // ── Review / Feedback state ──────────────────────────────────────────────
   const [feedbackEntries, setFeedbackEntries] = useState<ProjectFeedback[]>([])
@@ -700,6 +706,22 @@ export const ProjectDetail: React.FC<{
     const history = await fetchDeliveryFileDownloads(fileId)
     setDownloadHistory(history)
     setDownloadHistoryLoading(false)
+  }
+
+  const saveExpectedDelivery = async (date: string | null) => {
+    setEdSaving(true)
+    setEdError(null)
+    try {
+      const saved = await updateProjectExpectedDelivery(localProject.id, date)
+      const updated: Project = { ...localProject, expected_delivery_date: saved }
+      setLocalProject(updated)
+      onStatusUpdated?.(updated)
+      setEdEditing(false)
+    } catch (e) {
+      setEdError(e instanceof Error && e.message ? e.message : 'Could not save the expected delivery date')
+    } finally {
+      setEdSaving(false)
+    }
   }
 
   const isOverdue = () => {
@@ -1224,7 +1246,59 @@ export const ProjectDetail: React.FC<{
             {/* ──────────────────────────────────────────────────────────────── */}
 
             <Field icon={<Calendar size={14} />} label="Date Received" value={formatDate(localProject.date_received)} />
-            <Field icon={<Calendar size={14} />} label="Expected Delivery" value={formatDate(localProject.expected_delivery_date)} />
+            {isAdmin && edEditing ? (
+              <div className="flex items-start gap-3 py-2">
+                <span className="mt-0.5 opacity-40"><Calendar size={14} /></span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-base-content/50 uppercase tracking-wider">Expected Delivery</div>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <input
+                      type="date"
+                      className="input input-bordered input-sm"
+                      value={edValue}
+                      onChange={e => setEdValue(e.target.value)}
+                      disabled={edSaving}
+                    />
+                    <button
+                      className="btn btn-primary btn-sm gap-1"
+                      disabled={edSaving || !edValue}
+                      onClick={() => saveExpectedDelivery(edValue)}
+                    >
+                      {edSaving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} Save
+                    </button>
+                    {localProject.expected_delivery_date && (
+                      <button className="btn btn-ghost btn-sm" disabled={edSaving} onClick={() => saveExpectedDelivery(null)}>
+                        Clear date
+                      </button>
+                    )}
+                    <button className="btn btn-ghost btn-sm" disabled={edSaving} onClick={() => { setEdEditing(false); setEdError(null) }}>
+                      Cancel
+                    </button>
+                  </div>
+                  {edError && <p className="text-xs text-error mt-1">{edError}</p>}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start">
+                <div className="flex-1 min-w-0">
+                  <Field icon={<Calendar size={14} />} label="Expected Delivery" value={formatDate(localProject.expected_delivery_date)} />
+                </div>
+                {isAdmin && (
+                  <button
+                    className="btn btn-ghost btn-xs btn-circle shrink-0 mt-2"
+                    title="Set expected delivery date"
+                    aria-label="Edit expected delivery date"
+                    onClick={() => {
+                      setEdValue(localProject.expected_delivery_date ? String(localProject.expected_delivery_date).slice(0, 10) : '')
+                      setEdError(null)
+                      setEdEditing(true)
+                    }}
+                  >
+                    <Edit2 size={12} />
+                  </button>
+                )}
+              </div>
+            )}
             <Field icon={<Calendar size={14} />} label="Date Delivered" value={formatDate(localProject.date_delivered)} />
             <Field icon={<Clock size={14} />} label="Days to Complete" value={localProject.days_to_complete != null ? `${localProject.days_to_complete} days` : null} />
             <Field icon={<Hash size={14} />} label="Job Count" value={localProject.job_count} />

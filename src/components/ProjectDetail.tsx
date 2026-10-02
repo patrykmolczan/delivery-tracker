@@ -23,6 +23,7 @@ import {
 } from '../lib/data'
 import type { AuditEntry, ProjectFile, DeliveryFile, DeliveryFileDownload, DeliveryNote } from '../lib/data'
 import RichTextEditor, { isRichTextEmpty, type RichTextEditorRef } from './RichTextEditor'
+import { useAiEstimateEnabled } from '../hooks/useAiEstimateEnabled'
 import {
   fetchDeliveryNotes, createDeliveryNote, updateDeliveryNote, deleteDeliveryNote,
   deleteProject, fetchProjectFeedback, fetchProjectFeedbackUnresolvedCount,
@@ -167,6 +168,8 @@ export const ProjectDetail: React.FC<{
   const [togglingCountryId, setTogglingCountryId] = useState<number | null>(null)
 
   // ── AI ETA state ───────────────────────────────────────────────────────────
+  // The whole AI Delivery Estimate box below is hidden unless a super admin has the feature on
+  const aiEstimateEnabled = useAiEstimateEnabled()
   const [etaData, setEtaData] = useState<{
     ai_eta_days: number | null
     ai_eta_confidence: string | null
@@ -1250,7 +1253,7 @@ export const ProjectDetail: React.FC<{
             )}
 
             {/* ── AI Delivery Estimate Box ──────────────────────────────── */}
-            <>
+            {aiEstimateEnabled && <>
               <div className="divider my-1"></div>
               <div className="text-xs font-semibold uppercase tracking-wider text-base-content/40 pt-2 pb-1 flex items-center gap-1.5">
                 <Zap size={12} />
@@ -1403,7 +1406,7 @@ export const ProjectDetail: React.FC<{
                   ))}
                 </div>
               )}
-            </>
+            </>}
           </div>
         </div>
       )}

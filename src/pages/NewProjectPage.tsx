@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { getSession as cognitoGetSession } from '../lib/cognitoAuth'
 import {
   fetchLookups, createProject, updateProject, fetchProjects,
-  buildLookupMaps, buildPredictionStats, predictDeliveryTime,
+  buildLookupMaps, buildPredictionStats, predictDeliveryTime, PREDICTION_WINDOW_DAYS,
   uploadProjectFile, MAX_FILE_SIZE_BYTES, MAX_FILES_PER_PROJECT,
   fetchProjectCountries, fetchProjectTasks, formatFileSize,
   fetchAnalysts, fetchProjectTypes, fetchClients, submitClientRequest,
@@ -23,6 +23,7 @@ import { parseTemplateFile, type DBCountry } from '../lib/templateParser'
 import { analyzeTemplateQuality, type TemplateQualityResult } from '../lib/templateQualityAnalyzer'
 import { TemplateQualityReview } from '../components/TemplateQualityReview'
 import { useAnnouncements } from '../hooks/useAnnouncements'
+import { useAiEstimateEnabled } from '../hooks/useAiEstimateEnabled'
 import { AnnouncementSlot } from '../components/AnnouncementBanner'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -30,8 +31,8 @@ import { AnnouncementSlot } from '../components/AnnouncementBanner'
 /** Minimum quality score to submit a new project. Change this one number to raise/lower the bar. */
 const PASSING_QUALITY_SCORE = 70
 
-/** Role ranking for the Client Type min_role gate (build plan §2.4). */
-const ROLE_RANK: Record<string, number> = { user: 0, admin: 1, super_admin: 2 }
+/** Client types only admins/analysts may pick — shown greyed out for everyone else. Mirrors routes/projects.js. */
+const ADMIN_ONLY_CLIENT_TYPES = ['pay intel']
 
 
 const EMPTY_FORM: ProjectFormData = {
@@ -133,7 +134,7 @@ interface Props {
 }
 
 export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel }) => {
-  const { user, profile, isAdmin, isSuperAdmin, signOut } = useAuth()
+  const { user, profile, isAdmin, signOut } = useAuth()
   const [form, setForm] = useState<ProjectFormData>(EMPTY_FORM)
   const [lookups, setLookups] = useState<{ statuses: LookupItem[]; clientTypes: ClientTypeLookupItem[]; industries: LookupItem[]; countries: LookupItem[] } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -182,7 +183,8 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   // Client/Project type announcement banner — see src/lib/announcements.ts
   const clientAnnouncements = useAnnouncements('new-project-client')
 
-  // ETA prediction
+  // ETA prediction — shown only while a super admin has the AI Delivery Estimate switched on
+  const aiEstimateEnabled = useAiEstimateEnabled()
   const [predStats, setPredStats] = useState<ReturnType<typeof buildPredictionStats> | null>(null)
   const [eta, setEta] = useState<{ estimate: number; confidence: string; breakdown: string } | null>(null)
 
@@ -245,13 +247,14 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     }
   }, [isAdmin, editProject, lookups])
 
-  // Load prediction stats in background — wait for lookups so client_type/industry/status are resolved
+  // Load prediction stats in background — wait for lookups so client_type/industry/status are resolved.
+  // Skipped entirely while the AI Delivery Estimate is off, so no project download happens for it.
   useEffect(() => {
-    if (!lookups) return
+    if (!lookups || !aiEstimateEnabled) return
     fetchProjects(buildLookupMaps(lookups))
       .then(projects => setPredStats(buildPredictionStats(projects)))
       .catch(() => {})
-  }, [lookups])
+  }, [lookups, aiEstimateEnabled])
 
   // Populate form when editing
   useEffect(() => {
@@ -303,7 +306,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
 
   // Recompute ETA when relevant fields change
   useEffect(() => {
-    if (!predStats || !form.client_type_id || !form.industry_id) {
+    if (!aiEstimateEnabled || !predStats || !form.client_type_id || !form.industry_id) {
       setEta(null)
       return
     }
@@ -315,7 +318,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
     const jobCount = form.job_count ? parseInt(form.job_count) : undefined
 
     setEta(predictDeliveryTime(predStats, clientTypeName, industryName, countryName, jobCount))
-  }, [predStats, form.client_type_id, form.industry_id, form.project_countries, form.country_id, form.job_count, lookups])
+  }, [aiEstimateEnabled, predStats, form.client_type_id, form.industry_id, form.project_countries, form.country_id, form.job_count, lookups])
 
   const set = useCallback((field: keyof ProjectFormData, value: any) => {
     setForm(f => ({ ...f, [field]: value }))
@@ -326,27 +329,26 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   // - is_active !== false: /api/lookups now returns retired types too, so
   //   historical projects still resolve a name; the create/edit form must
   //   filter them out itself.
-  // - min_role: gates a type (e.g. "Pay Intel") to admins/super_admins. The
-  //   backend enforces this independently (routes/projects.js
-  //   assertClientTypeAllowed) — this is UX, not the security boundary.
-  // The currently-selected value is always included, even if it wouldn't
-  // otherwise qualify (deactivated, or gated above this user's role), so
-  // opening an existing project never silently blanks the field just by
+  // - ADMIN_ONLY_CLIENT_TYPES (e.g. "Pay Intel"): stay in the list but are
+  //   rendered disabled (greyed out) for non-admins — see the Client Type
+  //   <select> below. The backend enforces this independently
+  //   (routes/projects.js assertClientTypeAllowed) — this is UX, not the
+  //   security boundary.
+  // The currently-selected value is always included, even if it is deactivated,
+  // so opening an existing project never silently blanks the field just by
   // rendering the form — it's shown disabled instead, and the save handler
   // only rejects it if the user actually changes it to something new they
   // can't use.
   const visibleClientTypes = React.useMemo(() => {
-    const rank = isSuperAdmin ? 2 : isAdmin ? 1 : 0
     const all = lookups?.clientTypes ?? []
-    const qualifies = (ct: ClientTypeLookupItem) =>
-      ct.is_active !== false && ROLE_RANK[ct.min_role ?? 'user'] <= rank
+    const qualifies = (ct: ClientTypeLookupItem) => ct.is_active !== false
     const visible = all.filter(qualifies)
     if (form.client_type_id != null && !visible.some(ct => ct.id === form.client_type_id)) {
       const current = all.find(ct => ct.id === form.client_type_id)
       if (current) return [...visible, current]
     }
     return visible
-  }, [lookups, isAdmin, isSuperAdmin, form.client_type_id])
+  }, [lookups, form.client_type_id])
 
   // ── Validation ───────────────────────────────────────────────────────────────
 
@@ -883,11 +885,14 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                     >
                       <option value="">— Select client type —</option>
                       {visibleClientTypes.map(ct => {
-                        const rank = isSuperAdmin ? 2 : isAdmin ? 1 : 0
-                        const outOfReach = ct.is_active === false || ROLE_RANK[ct.min_role ?? 'user'] > rank
+                        const roleLocked = !isAdmin && ADMIN_ONLY_CLIENT_TYPES.includes(ct.name.trim().toLowerCase())
+                        const outOfReach = ct.is_active === false || roleLocked
+                        const suffix = roleLocked
+                          ? ' (Analysts & Admins only)'
+                          : outOfReach ? ' (current — read only)' : ''
                         return (
                           <option key={ct.id} value={ct.id} disabled={outOfReach}>
-                            {ct.name}{outOfReach ? ' (current — read only)' : ''}
+                            {ct.name}{suffix}
                           </option>
                         )
                       })}
@@ -1197,13 +1202,18 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                         {form.date_received || new Date().toISOString().slice(0, 10)}
                       </div>
                     </Field>
-                    <Field label="Expected Delivery">
+                    <Field label="Expected Delivery" hint="Set by Analyst">
                       <input
                         type="date"
-                        className="input input-bordered w-full"
+                        className="input input-bordered w-full bg-base-300/50 cursor-not-allowed text-base-content/40"
                         value={form.expected_delivery_date}
-                        onChange={e => set('expected_delivery_date', e.target.value)}
+                        disabled
                       />
+                      {!form.expected_delivery_date && (
+                        <p className="text-xs text-base-content/50">
+                          Once your project is reviewed and approved, an Analyst will provide the ETA.
+                        </p>
+                      )}
                     </Field>
                   </div>
                 )}
@@ -1362,7 +1372,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
           </div>
 
           {/* ── AI ETA Card ───────────────────────────────────────────────── */}
-          {eta && !editProject && (
+          {aiEstimateEnabled && eta && !editProject && (
             <div className="card bg-base-200 border border-base-300">
               <div className="card-body py-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -1371,7 +1381,7 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                 </div>
                 <ETABadge {...eta} />
                 <p className="text-xs text-base-content/40 mt-2">
-                  Based on {predStats?.overall.count ?? 0} completed projects. This is an estimate — actual delivery time may vary.
+                  Based on {predStats?.overall.count ?? 0} projects completed in the last {PREDICTION_WINDOW_DAYS} days. This is an estimate — actual delivery time may vary.
                 </p>
               </div>
             </div>

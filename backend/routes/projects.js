@@ -45,28 +45,17 @@ function sanitize(v) {
     return String(v).replace(/<[^>]*>/g, '').trim() || null;
 }
 // ── Client Type role gate ─────────────────────────────────────────────────────
-// client_types.min_role gates a type (e.g. "Pay Intel") to admins/super_admins.
+// Client types only admins/super_admins (the analysts) may assign to a project.
+// Name-based on purpose: no database column or migration is involved.
+const ADMIN_ONLY_CLIENT_TYPES = ['pay intel'];
 // Returns null when allowed, or a 403 response when the caller's role is too low.
-const ROLE_RANK = { user: 0, admin: 1, super_admin: 2 };
 async function assertClientTypeAllowed(clientTypeId, user) {
-    if (clientTypeId == null || clientTypeId === '')
+    if (clientTypeId == null || clientTypeId === '' || (0, auth_1.isAdmin)(user))
         return null;
-    let row;
-    try {
-        row = await (0, db_1.queryOne)('SELECT min_role FROM public.client_types WHERE id=$1', [clientTypeId]);
-    }
-    catch (e) {
-        // 42703 = undefined_column: the min_role migration has not been applied yet,
-        // so no type is gated. Any other error is a real failure and must surface.
-        if (e && e.code === '42703')
-            return null;
-        throw e;
-    }
-    if (!row)
-        return null;
-    if ((ROLE_RANK[user?.role] ?? 0) >= (ROLE_RANK[row.min_role] ?? 0))
-        return null;
-    return (0, response_1.err)('This client type is restricted to Admins and Analysts', 403);
+    const row = await (0, db_1.queryOne)('SELECT name FROM public.client_types WHERE id=$1', [clientTypeId]);
+    if (row && ADMIN_ONLY_CLIENT_TYPES.includes(String(row.name).trim().toLowerCase()))
+        return (0, response_1.err)('This client type is restricted to Admins and Analysts', 403);
+    return null;
 }
 /** GET /api/projects — paginated fetch (avoids 6MB Lambda limit)
  *  Query params: limit (default 2000), offset (default 0), count_only (boolean)

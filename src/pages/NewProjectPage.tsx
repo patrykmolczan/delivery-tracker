@@ -31,8 +31,8 @@ import { AnnouncementSlot } from '../components/AnnouncementBanner'
 /** Minimum quality score to submit a new project. Change this one number to raise/lower the bar. */
 const PASSING_QUALITY_SCORE = 70
 
-/** Role ranking for the Client Type min_role gate (build plan §2.4). */
-const ROLE_RANK: Record<string, number> = { user: 0, admin: 1, super_admin: 2 }
+/** Client types only admins/analysts may pick — shown greyed out for everyone else. Mirrors routes/projects.js. */
+const ADMIN_ONLY_CLIENT_TYPES = ['pay intel']
 
 
 const EMPTY_FORM: ProjectFormData = {
@@ -134,7 +134,7 @@ interface Props {
 }
 
 export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel }) => {
-  const { user, profile, isAdmin, isSuperAdmin, signOut } = useAuth()
+  const { user, profile, isAdmin, signOut } = useAuth()
   const [form, setForm] = useState<ProjectFormData>(EMPTY_FORM)
   const [lookups, setLookups] = useState<{ statuses: LookupItem[]; clientTypes: ClientTypeLookupItem[]; industries: LookupItem[]; countries: LookupItem[] } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -329,11 +329,11 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
   // - is_active !== false: /api/lookups now returns retired types too, so
   //   historical projects still resolve a name; the create/edit form must
   //   filter them out itself.
-  // - min_role: gates a type (e.g. "Pay Intel") to admins/super_admins. Gated
-  //   types stay in the list but are rendered disabled (greyed out) for users
-  //   below the required role — see the Client Type <select> below. The backend
-  //   enforces this independently (routes/projects.js assertClientTypeAllowed) —
-  //   this is UX, not the security boundary.
+  // - ADMIN_ONLY_CLIENT_TYPES (e.g. "Pay Intel"): stay in the list but are
+  //   rendered disabled (greyed out) for non-admins — see the Client Type
+  //   <select> below. The backend enforces this independently
+  //   (routes/projects.js assertClientTypeAllowed) — this is UX, not the
+  //   security boundary.
   // The currently-selected value is always included, even if it is deactivated,
   // so opening an existing project never silently blanks the field just by
   // rendering the form — it's shown disabled instead, and the save handler
@@ -885,11 +885,10 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
                     >
                       <option value="">— Select client type —</option>
                       {visibleClientTypes.map(ct => {
-                        const rank = isSuperAdmin ? 2 : isAdmin ? 1 : 0
-                        const roleLocked = ROLE_RANK[ct.min_role ?? 'user'] > rank
+                        const roleLocked = !isAdmin && ADMIN_ONLY_CLIENT_TYPES.includes(ct.name.trim().toLowerCase())
                         const outOfReach = ct.is_active === false || roleLocked
                         const suffix = roleLocked
-                          ? (ct.min_role === 'super_admin' ? ' (Super Admins only)' : ' (Analysts & Admins only)')
+                          ? ' (Analysts & Admins only)'
                           : outOfReach ? ' (current — read only)' : ''
                         return (
                           <option key={ct.id} value={ct.id} disabled={outOfReach}>

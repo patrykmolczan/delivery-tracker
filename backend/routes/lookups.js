@@ -12,7 +12,7 @@ async function getLookups(_body, _user) {
     try {
         const [statuses, clientTypes, industries, countries] = await Promise.all([
             (0, db_1.query)("SELECT id, name FROM public.project_statuses WHERE is_active=true ORDER BY display_order"),
-            (0, db_1.query)("SELECT id, name, min_role FROM public.client_types WHERE is_active=true ORDER BY name"),
+            (0, db_1.query)("SELECT id, name FROM public.client_types WHERE is_active=true ORDER BY name"),
             (0, db_1.query)("SELECT id, name FROM public.industries WHERE is_active=true ORDER BY name"),
             (0, db_1.query)("SELECT id, name FROM public.countries WHERE is_active=true ORDER BY name"),
         ]);

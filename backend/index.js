@@ -225,6 +225,10 @@ const handler = async (event) => {
             if (segs[2] === 'unread' && method === 'POST')
                 return (0, notifications_1.markUnread)(nid, user);
         }
+        // ── /branding/:name (public — no auth) ───────────────────────────────────
+        // Logo / login icon, shown on the login page before any session exists.
+        if (segs[0] === 'branding' && segs[1] && method === 'GET')
+            return (0, storage_1.getBrandingImage)(segs[1]);
         // ── Storage (S3 presigned URLs) ──────────────────────────────────────────
         if (segs[0] === 'storage') {
             if (segs[1] === 'upload-url' && method === 'POST')

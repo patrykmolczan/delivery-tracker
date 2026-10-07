@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getS3UploadUrl = getS3UploadUrl;
 exports.getS3DownloadUrl = getS3DownloadUrl;
 exports.deleteStorageObject = deleteStorageObject;
+exports.getBrandingImage = getBrandingImage;
 /**
  * routes/storage.ts — S3 presigned URL endpoints
  *
@@ -112,6 +113,34 @@ async function deleteStorageObject(body, _user) {
             await s3.send(new client_s3_1.DeleteObjectCommand({ Bucket: BUCKET, Key: safeKey }));
         }
         return (0, response_1.ok)({ success: true });
+    }
+    catch (e) {
+        return (0, response_1.serverError)(e);
+    }
+}
+/**
+ * GET /api/branding/:name — PUBLIC (no auth). Serves the company logo / login icon
+ * without making the bucket public: 302-redirects to a short-lived presigned GET URL.
+ * Only the two fixed keys below can ever be served (strict allowlist, no user input in the key).
+ */
+const BRANDING_KEYS = {
+    'logo': 'branding/logo.png',
+    'logo.png': 'branding/logo.png',
+    'login_icon': 'branding/login_icon.png',
+    'login_icon.png': 'branding/login_icon.png',
+};
+async function getBrandingImage(name) {
+    try {
+        const key = Object.prototype.hasOwnProperty.call(BRANDING_KEYS, name) ? BRANDING_KEYS[name] : null;
+        if (!key)
+            return (0, response_1.err)('Not found', 404);
+        const cmd = new client_s3_2.GetObjectCommand({ Bucket: BUCKET, Key: key });
+        const location = await (0, s3_request_presigner_1.getSignedUrl)(s3, cmd, { expiresIn: 3600 });
+        return {
+            statusCode: 302,
+            headers: { ...response_1.CORS_HEADERS, Location: location, 'Cache-Control': 'public, max-age=300' },
+            body: '',
+        };
     }
     catch (e) {
         return (0, response_1.serverError)(e);

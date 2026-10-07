@@ -27,7 +27,6 @@ import { AdminEntraSSO } from '../components/sso/AdminEntraSSO'
 import { AiEstimateSetting } from '../components/AiEstimateSetting'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
-const S3_FILES_URL = (import.meta.env.VITE_S3_FILES_BUCKET_URL ?? '').replace(/\/$/, '')
 
 // ─── Reusable inline-editable list section ────────────────────────────────────
 
@@ -381,7 +380,7 @@ export const AdminPage: React.FC = () => {
         method: 'PUT', headers: { 'Content-Type': file.type || 'image/png' }, body: logoBlob,
       })
       if (!logoUploadRes.ok) throw new Error('Logo upload failed')
-      const newUrl = `${S3_FILES_URL}/branding/logo.png?v=${Date.now()}`
+      const newUrl = `${API_BASE}/api/branding/logo?v=${Date.now()}`
       await updateAppSetting('logo_url', newUrl)
       setCurrentLogoUrl(newUrl)
       setLogoSuccess('Logo updated successfully!')
@@ -425,7 +424,7 @@ export const AdminPage: React.FC = () => {
         method: 'PUT', headers: { 'Content-Type': file.type || 'image/png' }, body: iconBlob,
       })
       if (!iconUploadRes.ok) throw new Error('Icon upload failed')
-      const newUrl = `${S3_FILES_URL}/branding/login_icon.png?v=${Date.now()}`
+      const newUrl = `${API_BASE}/api/branding/login_icon?v=${Date.now()}`
       await updateAppSetting('login_icon_url', newUrl)
       setCurrentLoginIconUrl(newUrl)
       setLoginIconSuccess('Login icon updated!')

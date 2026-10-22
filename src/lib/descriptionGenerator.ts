@@ -4,7 +4,7 @@
  *
  * Flow:
  *   1. findRowsMissingDescriptions(file)   — scan Excel, return rows with empty description
- *   2. generateDescriptions(titles)         — call /api/generate-descriptions (GPT-4.1)
+ *   2. generateDescriptions(titles)         — call /api/generate-descriptions (GPT-6 Luna)
  *   3. buildExcelWithDescriptions(file, …)  — write descriptions into a new Excel Blob
  */
 import * as XLSX from 'xlsx'

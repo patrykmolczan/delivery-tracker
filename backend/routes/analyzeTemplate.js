@@ -77,14 +77,15 @@ async function handleAnalyzeTemplate(body, user) {
                 Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: 'gpt-4.1',
-                temperature: 0.1,
+                model: 'gpt-6-luna',
+                // gpt-6-luna only accepts the default temperature; low reasoning keeps latency near gpt-4.1
+                reasoning_effort: 'low',
                 response_format: { type: 'json_object' },
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT },
                     { role: 'user', content: userPrompt },
                 ],
-                max_tokens: 4096,
+                max_completion_tokens: 8192, // includes reasoning tokens
             }),
         });
         if (!response.ok) {

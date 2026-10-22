@@ -72,8 +72,9 @@ async function handleAiChat(event, user) {
 
   try {
     const payload = {
-      model: "gpt-4.1",
-      max_tokens: 1024,
+      model: "gpt-6-luna",
+      reasoning_effort: "low",
+      max_completion_tokens: 2048, // includes reasoning tokens
       messages: [
         ...(systemPrompt ? [{ role: "system", content: systemPrompt }] : []),
         ...messages.map(m => ({ role: m.role, content: m.content })),

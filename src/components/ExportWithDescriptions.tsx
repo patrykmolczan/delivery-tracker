@@ -81,7 +81,7 @@ export default function ExportWithDescriptions({ originalFile }: Props) {
       {step === 'loading' && (
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-violet-50 border border-violet-200 text-xs text-violet-800">
           <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />
-          Generating descriptions with GPT-4.1…
+          Generating descriptions with GPT-6 Luna…
         </div>
       )}
 

@@ -190,6 +190,56 @@ export async function extractRawRows(file: File, _projectType: string): Promise<
   return result
 }
 
+// ─── Network helper: per-attempt timeout + one retry ─────────────────────────
+// API Gateway cuts requests off at 30 s, so each attempt is aborted at 35 s.
+// One automatic retry for timeouts, network errors and 502/503/504 only.
+// 4xx responses and other server errors are never retried.
+
+const ANALYSIS_TIMEOUT_MS = 35_000
+const ANALYSIS_RETRY_DELAY_MS = 2_000
+const ANALYSIS_MAX_ATTEMPTS = 2
+const RETRYABLE_STATUSES = new Set([502, 503, 504])
+
+async function postAnalysisRequest(
+  headers: Record<string, string>,
+  userPrompt: string,
+): Promise<{ ok: boolean; status: number; statusText: string; json: () => Promise<{ content?: string; error?: string }> }> {
+  let lastMessage = ''
+  for (let attempt = 1; attempt <= ANALYSIS_MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), ANALYSIS_TIMEOUT_MS)
+    try {
+      const response = await fetch(`${API_BASE}/api/analyze-template`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ userPrompt }),
+        signal: controller.signal,
+      })
+      // Read the body inside the timeout window so a stalled download is also caught
+      const text = await response.text()
+      if (!RETRYABLE_STATUSES.has(response.status)) {
+        return {
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+          json: async () => JSON.parse(text),
+        }
+      }
+      lastMessage = `The analysis server was temporarily unavailable (${response.status}).`
+    } catch {
+      lastMessage = controller.signal.aborted
+        ? 'The analysis timed out. Your internet connection may be slow \u2014 please try again.'
+        : 'Could not reach the analysis server. Please check your connection and try again.'
+    } finally {
+      clearTimeout(timer)
+    }
+    if (attempt < ANALYSIS_MAX_ATTEMPTS) {
+      await new Promise(r => setTimeout(r, ANALYSIS_RETRY_DELAY_MS))
+    }
+  }
+  throw new Error(lastMessage)
+}
+
 // ─── Main analysis function ──────────────────────────────────────────────────
 
 export async function analyzeTemplateQuality(file: File, projectType: string): Promise<TemplateQualityResult> {
@@ -298,11 +348,7 @@ Rules:
     // Call via serverless proxy — avoids browser CORS + keeps API key server-side only
     // systemPrompt is now built server-side; client sends only the template data (userPrompt)
     const authHeaders = await getAuthHeaders()
-    const response = await fetch(`${API_BASE}/api/analyze-template`, {
-      method: 'POST',
-      headers: authHeaders,
-      body: JSON.stringify({ userPrompt }),
-    })
+    const response = await postAnalysisRequest(authHeaders, userPrompt)
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({ error: response.statusText }))

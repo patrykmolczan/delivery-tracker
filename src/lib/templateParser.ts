@@ -807,6 +807,20 @@ function parseRateCard(
   // Run document-level validation (all rows scanned together)
   const locationWarnings = validateAllLocationRows(locationRows)
 
+  // A Country value that does not resolve to any known country is an invalid value.
+  // Skipped when the country list is unavailable, and for multi-value cells
+  // (e.g. "USA or United States"), which the multi-location check reports separately.
+  if (dbCountries.length > 0) {
+    for (const lr of locationRows) {
+      if (!lr.country || /\s*[&;]\s*|\s+(?:and|or)\s+|^[a-zA-Z\s]{3,}\s*\/\s*[a-zA-Z\s]{3,}$/i.test(lr.country)) continue
+      if (resolveCountry(lr.country, dbCountries).confidence === 'unmatched') {
+        locationWarnings.push(
+          `Row ${lr.rowNum}: Country "${lr.country}" is not a recognised country name — please enter a valid country name.`
+        )
+      }
+    }
+  }
+
   const result = buildResult(countryCounts, totalJobs, dbCountries)
   result.locationWarnings = locationWarnings
   return result

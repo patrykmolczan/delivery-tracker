@@ -78,7 +78,7 @@ export interface TemplateQualityResult {
 // "Texas and Florida", "CA; NY" in state, city, or country fields.
 // Runs instantly — no GPT needed for this structural check.
 
-const MULTI_SEP_PATTERN = /\s*[&;]\s*|\s+and\s+/i
+const MULTI_SEP_PATTERN = /\s*[&;]\s*|\s+(?:and|or)\s+/i
 // For slash: only flag if both sides look like state/country names (3+ chars each)
 const SLASH_MULTI_PATTERN = /^[a-zA-Z\s]{3,}\s*\/\s*[a-zA-Z\s]{3,}$/
 
@@ -232,11 +232,24 @@ export async function analyzeTemplateQuality(file: File, projectType: string): P
       if (compactRows.length >= 120) break
     }
 
+    // Unique country/state/city combinations that include a city, so the model can check
+    // city spelling even when the title+country de-dupe above dropped the row.
+    const seenLoc = new Set<string>()
+    const locRows: Array<{ r: number; t: string; c: string; s: string; ci: string }> = []
+    for (const row of rows) {
+      if (!row.city) continue
+      const lk = `${row.country}|${row.state}|${row.city}`.toLowerCase()
+      if (seenLoc.has(lk)) continue
+      seenLoc.add(lk)
+      locRows.push({ r: row.rowIndex, t: row.jobTitle, c: row.country || '', s: row.state || '', ci: row.city })
+      if (locRows.length >= 150) break
+    }
+
     const userPrompt = `Analyze this Pay Intel template data. Total rows in file: ${rows.length}. Unique combos being analyzed: ${compactRows.length}.
-${multiLocationRows.length > 0 ? `\nNOTE: Client-side scan already detected ${multiLocationRows.length} multi-location rows (e.g., "${multiLocationRows[0]?.value}" in ${multiLocationRows[0]?.field} field). Do NOT re-flag these in locationIssues — they are handled separately. Focus your locationIssues on missing country/state or other location problems.\n` : ''}
+${multiLocationRows.length > 0 ? `\nNOTE: Client-side scan already detected ${multiLocationRows.length} multi-location rows (e.g., "${multiLocationRows[0]?.value}" in ${multiLocationRows[0]?.field} field). Do NOT re-flag those specific multi-location values in locationIssues — they are handled separately — but still check every OTHER field on those same rows (state, city, etc.) normally. Focus your locationIssues on missing country/state or other location problems.\n` : ''}
 DATA (fields: r=rowNum, t=jobTitle, c=country, s=state/city, d=description preview):
 ${JSON.stringify(compactRows)}
-
+${locRows.length > 0 ? `\nCITIES (unique locations; fields: r=rowNum, t=jobTitle, c=country, s=state, ci=city):\n${JSON.stringify(locRows)}\n` : ''}
 Return a JSON object with EXACTLY this structure:
 {
   "overallScore": <integer 0-100, where 100=perfect quality, 70+=acceptable, below 50=needs rework>,

@@ -617,8 +617,9 @@ export const NewProjectPage: React.FC<Props> = ({ editProject, onSaved, onCancel
       setShowNoTemplateWarning(true)
       return
     }
-    // Quality gate — new projects only, only when template was analysed
-    if (!editProject && qualityResult && qualityResult.overallScore < PASSING_QUALITY_SCORE) {
+    // Quality gate — new projects only, only when template was analysed.
+    // overallScore -1 means the analysis itself failed (not a real score), so it must not block submit.
+    if (!editProject && qualityResult && qualityResult.overallScore >= 0 && qualityResult.overallScore < PASSING_QUALITY_SCORE) {
       setShowQualityWarning(true)
       return
     }

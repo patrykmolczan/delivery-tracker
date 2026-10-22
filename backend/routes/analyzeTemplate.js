@@ -55,8 +55,11 @@ Rules:
 - duplicates: only flag clear semantic duplicates; don't flag different seniority levels of the same title as duplicates (Sr. Engineer vs Engineer is expected)
 - levelingIssues: flag ANY job title that contains a level modifier (Jr., Sr., Senior, Junior, II, III, IV, Lead as modifier, Staff as modifier, Principal as modifier, SME, Associate as entry-level modifier, Mid-Level, Entry-Level). These should be removed — Pay Intel delivers all 5 levels automatically. EXCEPTION: do NOT flag titles where the level IS the job (Manager, Director, VP, Head of, Senior Manager, Senior Director, C-suite, Team Lead). For each flagged title, provide the clean base title as the suggestion.
 - missingDataRows: ONLY include rows where country is blank/empty OR state/province is blank/empty OR description is blank/empty. Country and State/Province are both required fields. Do NOT include rows where only the Job Title column has data and all other fields are blank — those are annotation rows, not data rows.
-- locationIssues: flag rows missing country; flag rows where state/province is blank or contains a region/metro name instead of an actual state (e.g. "Bay Area" -> flag and suggest "California"). Do NOT re-flag multi-location rows — those are handled separately. Do NOT suggest "remote" as a valid state/province value.
+- locationIssues: flag rows missing country; flag rows where state/province is blank or contains a region/metro name instead of an actual state (e.g. "Bay Area" -> flag and suggest "California"). Do NOT re-flag multi-location rows — those are handled separately. Do NOT suggest "remote" as a valid state/province value. A state/province must be a full name or a standard 2-3 letter code written plainly (e.g. "AL", "TX", "ON", "NSW"): flag any value with periods, stray punctuation, digits or spaces inside the code (e.g. "A.L", "T.X", "N Y") and suggest the correct code.
 - contentIssues: You are a Senior Compensation Data Analyst deciding if this title can be benchmarked as-is. Flag as severity "critical" (suggestion: empty string) any Job Title that either (a) contains HTML/script markup, JavaScript event handlers, or code/SQL injection patterns (e.g. <script>, onerror=, onload=, javascript:, </, DROP TABLE, --, ; --), or (b) does not describe any real occupation — profanity, insults, offensive/nonsensical text, or gibberish (e.g. "asdf", random keyboard mashing) — because there is no genuine job function to price. Flag as severity "warning" WITH a cleaned-up suggestion in these two cases: (c) vague/generic placeholder titles (e.g. "TBD", "Various", "Multiple Roles") — suggestion may be empty string if no real title can be inferred; (d) job ad / recruiter-style text embedded in the title cell — postings mixed with location, comp/perks, or filler language (e.g. "seeking Sr. Java Dev in Houston, TX - Sign on Bonus", "Now Hiring: Accountant, $25/hr") — extract and suggest the clean canonical base title only, e.g. "Java Developer", "Accountant" (strip level modifiers, location, pay, and filler words the same way levelingIssues does). Do NOT flag legitimate job titles just because they are unusual, non-English, or contain uncommon words.
+- locationIssues (country): flag a Country cell that holds more than one country, or extra words around a country name (e.g. "USA or united states"), and suggest the single correct country name.
+- locationIssues (city): if the data includes a CITIES list, check each city. Flag a city that is misspelled or contains stray punctuation or digits (e.g. "Hunt..sville" -> suggest "Huntsville"), and suggest the corrected name. Accept valid names with periods, hyphens, apostrophes or abbreviations (e.g. "St. Louis", "Saint Louis", "Winston-Salem", "O'Fallon", "Mt. Pleasant"). City is optional, so never flag a blank city.
+- In every "suggestion", expand abbreviations to the full standard job title (e.g. "PM" -> "Project Manager", "Dev" -> "Developer", "Eng" -> "Engineer", "Admin" -> "Administrator"); never suggest a bare abbreviation.
 - Be concise in messages — max 120 chars per message field
 - overallScore: start at 100, subtract: 15 per critical duplicate group, 10 per warning duplicate, 5 per missing description row (max -30 total for descriptions), 10 per missing country row (max -20), 8 per leveling issue (title contains unnecessary level modifier that Pay Intel handles automatically), 25 per critical content issue (title cannot be benchmarked: injection pattern, profanity, or gibberish), 10 per warning content issue (vague/placeholder title)
 - issueCount: sum all items across all categories by their severity field`;
@@ -77,14 +80,15 @@ async function handleAnalyzeTemplate(body, user) {
                 Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: 'gpt-4.1',
-                temperature: 0.1,
+                model: 'gpt-6-luna',
+                // gpt-6-luna only accepts the default temperature; low reasoning keeps latency near gpt-4.1
+                reasoning_effort: 'low',
                 response_format: { type: 'json_object' },
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT },
                     { role: 'user', content: userPrompt },
                 ],
-                max_tokens: 4096,
+                max_completion_tokens: 8192, // includes reasoning tokens
             }),
         });
         if (!response.ok) {

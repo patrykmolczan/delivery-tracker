@@ -117,14 +117,15 @@ async function callOpenAIOnce(apiKey, unique) {
                 Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: 'gpt-4.1',
-                temperature: 0.3,
+                model: 'gpt-6-luna',
+                // gpt-6-luna only accepts the default temperature; low reasoning keeps latency near gpt-4.1
+                reasoning_effort: 'low',
                 response_format: { type: 'json_object' },
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT },
                     { role: 'user', content: userPrompt },
                 ],
-                max_tokens: Math.max(1500, 600 * unique.length),
+                max_completion_tokens: Math.max(3000, 1000 * unique.length), // includes reasoning tokens
             }),
             signal: controller.signal,
         });
@@ -258,7 +259,7 @@ async function handleGenerateDescriptions(body, user) {
         // reaches OpenAI, success or not, so spend is never a guess.
         if (result.usage) {
             console.log('[generateDescriptions] usage', JSON.stringify({
-                model: 'gpt-4.1',
+                model: 'gpt-6-luna',
                 titleCount: validTitles.length,
                 promptTokens: result.usage.prompt_tokens,
                 completionTokens: result.usage.completion_tokens,

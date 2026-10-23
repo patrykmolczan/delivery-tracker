@@ -325,6 +325,19 @@ const handler = async (event) => {
         }
         // ── /settings ───────────────────────────────────────────────────────────
         if (segs[0] === 'settings') {
+            // Frontend calls settings/text-presets[/:id]; must match before the generic PATCH settings/:key below.
+            if (segs[1] === 'text-presets') {
+                if (!segs[2]) {
+                    if (method === 'GET')
+                        return (0, settings_1.getTextPresets)(null, user);
+                    if (method === 'POST')
+                        return (0, settings_1.createTextPreset)(b(), user);
+                }
+                if (segs[2] && !segs[3] && method === 'PATCH')
+                    return (0, settings_1.updateTextPreset)(segs[2], b(), user);
+                if (segs[2] && !segs[3] && method === 'DELETE')
+                    return (0, settings_1.deleteTextPreset)(segs[2], b(), user);
+            }
             if (!segs[1] && method === 'GET')
                 return (0, settings_1.getAppSettings)(null, user);
             if (!segs[1] && method === 'PATCH')

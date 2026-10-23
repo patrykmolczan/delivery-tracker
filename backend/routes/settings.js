@@ -63,9 +63,21 @@ async function updateAppSetting(key, body, user) {
     }
 }
 // ── Text Presets ──────────────────────────────────────────────────────────────
+// Resolve profiles.id from the Cognito identity (text_presets.user_id references profiles.id, never user.sub).
+// Falls back to email so SSO users with a second Cognito identity still resolve. Read-only.
+async function resolvePresetOwnerId(user) {
+    let row = await (0, db_1.queryOne)('SELECT id FROM public.profiles WHERE cognito_id = $1 LIMIT 1', [user.sub]);
+    if (!row && user.email) {
+        row = await (0, db_1.queryOne)('SELECT id FROM public.profiles WHERE lower(email) = lower($1) LIMIT 1', [user.email]);
+    }
+    return row?.id ?? null;
+}
 async function getTextPresets(_body, user) {
     try {
-        const rows = await (0, db_1.query)('SELECT * FROM public.text_presets WHERE user_id=$1 ORDER BY sort_order ASC', [user.sub]);
+        const ownerId = await resolvePresetOwnerId(user);
+        if (!ownerId)
+            return (0, response_1.ok)([]);
+        const rows = await (0, db_1.query)('SELECT * FROM public.text_presets WHERE user_id=$1 ORDER BY sort_order ASC', [ownerId]);
         return (0, response_1.ok)(rows);
     }
     catch (e) {
@@ -74,7 +86,10 @@ async function getTextPresets(_body, user) {
 }
 async function createTextPreset(body, user) {
     try {
-        const row = await (0, db_1.queryOne)('INSERT INTO public.text_presets (user_id, name, content, sort_order) VALUES ($1,$2,$3,$4) RETURNING *', [user.sub, body.name, body.content, body.sort_order ?? 0]);
+        const ownerId = await resolvePresetOwnerId(user);
+        if (!ownerId)
+            return (0, response_1.forbidden)();
+        const row = await (0, db_1.queryOne)('INSERT INTO public.text_presets (user_id, name, content, sort_order) VALUES ($1,$2,$3,$4) RETURNING *', [ownerId, body.name, body.content, body.sort_order ?? 0]);
         return (0, response_1.ok)(row, 201);
     }
     catch (e) {
@@ -99,8 +114,11 @@ async function updateTextPreset(id, body, user) {
         }
         if (!parts.length)
             return (0, response_1.ok)({ success: true });
+        const ownerId = await resolvePresetOwnerId(user);
+        if (!ownerId)
+            return (0, response_1.forbidden)();
         params.push(id);
-        params.push(user.sub);
+        params.push(ownerId);
         await (0, db_1.query)(`UPDATE public.text_presets SET ${parts.join(',')} WHERE id=$${params.length - 1} AND user_id=$${params.length}`, params);
         return (0, response_1.ok)({ success: true });
     }
@@ -110,7 +128,10 @@ async function updateTextPreset(id, body, user) {
 }
 async function deleteTextPreset(id, _body, user) {
     try {
-        await (0, db_1.query)('DELETE FROM public.text_presets WHERE id=$1 AND user_id=$2', [id, user.sub]);
+        const ownerId = await resolvePresetOwnerId(user);
+        if (!ownerId)
+            return (0, response_1.forbidden)();
+        await (0, db_1.query)('DELETE FROM public.text_presets WHERE id=$1 AND user_id=$2', [id, ownerId]);
         return (0, response_1.ok)({ success: true });
     }
     catch (e) {

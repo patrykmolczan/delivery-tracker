@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleAnalyzeTemplate = handleAnalyzeTemplate;
 const response_1 = require("../shared/response");
+const AI_BASE_URL = (process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+const AI_MODEL = process.env.AI_MODEL || 'gpt-6-luna';
 const SYSTEM_PROMPT = `You are a Senior Compensation Data Quality Analyst at a global HR consulting firm. You specialize in reviewing Pay Intelligence (pay equity/benchmarking) data templates before submission to the Pay Intel platform.
 
 Return ONLY a valid JSON object (no markdown, no explanation) matching this exact schema:
@@ -67,20 +69,20 @@ async function handleAnalyzeTemplate(body, user) {
     try {
         if (!user)
             return (0, response_1.err)('Unauthorized', 401);
-        const apiKey = process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+        const apiKey = process.env.AI_API_KEY || process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
         if (!apiKey)
             return (0, response_1.err)('OpenAI API key not configured on server', 500);
         const { userPrompt } = body ?? {};
         if (!userPrompt)
             return (0, response_1.err)('Missing userPrompt');
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetch(`${AI_BASE_URL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: 'gpt-6-luna',
+                model: AI_MODEL,
                 // gpt-6-luna only accepts the default temperature; low reasoning keeps latency near gpt-4.1
                 reasoning_effort: 'low',
                 response_format: { type: 'json_object' },

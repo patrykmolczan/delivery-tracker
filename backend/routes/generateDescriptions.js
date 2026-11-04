@@ -2,6 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleGenerateDescriptions = handleGenerateDescriptions;
 const response_1 = require("../shared/response");
+const AI_BASE_URL = (process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+const AI_MODEL = process.env.AI_MODEL || 'gpt-6-luna';
 const { S3Client, GetObjectCommand, PutObjectCommand } = require("@aws-sdk/client-s3");
 
 const REGION = process.env.AWS_REGION || 'us-east-2';
@@ -110,14 +112,14 @@ async function callOpenAIOnce(apiKey, unique) {
     const timeoutId = setTimeout(() => controller.abort(), ATTEMPT_TIMEOUT_MS);
     try {
         const userPrompt = `Generate job descriptions for these job titles:\n${JSON.stringify(unique)}`;
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetch(`${AI_BASE_URL}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
-                model: 'gpt-6-luna',
+                model: AI_MODEL,
                 // gpt-6-luna only accepts the default temperature; low reasoning keeps latency near gpt-4.1
                 reasoning_effort: 'low',
                 response_format: { type: 'json_object' },
@@ -187,7 +189,7 @@ async function handleGenerateDescriptions(body, user) {
     try {
         if (!user)
             return (0, response_1.err)('Unauthorized', 401);
-        const apiKey = process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+        const apiKey = process.env.AI_API_KEY || process.env.VITE_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
         if (!apiKey)
             return (0, response_1.err)('OpenAI API key not configured on server', 500);
         const { titles } = body ?? {};
@@ -259,7 +261,7 @@ async function handleGenerateDescriptions(body, user) {
         // reaches OpenAI, success or not, so spend is never a guess.
         if (result.usage) {
             console.log('[generateDescriptions] usage', JSON.stringify({
-                model: 'gpt-6-luna',
+                model: AI_MODEL,
                 titleCount: validTitles.length,
                 promptTokens: result.usage.prompt_tokens,
                 completionTokens: result.usage.completion_tokens,

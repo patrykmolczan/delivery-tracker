@@ -13,6 +13,9 @@ exports.handleAiChat = handleAiChat;
 
 const { ok, err, serverError } = require("../shared/response");
 
+const AI_BASE_URL = (process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+const AI_MODEL = process.env.AI_MODEL || "gpt-6-luna";
+
 // Simple in-memory rate limiter (per userId, resets per Lambda warm instance)
 // For a stateless rate limit at scale, use DynamoDB or ElastiCache; this is good
 // enough for internal enterprise (<500 users, Lambda concurrency limits apply).
@@ -64,7 +67,7 @@ async function handleAiChat(event, user) {
     return err("messages array required", 400);
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.AI_API_KEY || process.env.OPENAI_API_KEY;
   if (!apiKey) {
     console.error("OPENAI_API_KEY not set");
     return serverError(new Error("OpenAI not configured"), "AI chat");
@@ -72,7 +75,7 @@ async function handleAiChat(event, user) {
 
   try {
     const payload = {
-      model: "gpt-6-luna",
+      model: AI_MODEL,
       reasoning_effort: "low",
       max_completion_tokens: 2048, // includes reasoning tokens
       messages: [
@@ -81,7 +84,7 @@ async function handleAiChat(event, user) {
       ],
     };
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(`${AI_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
